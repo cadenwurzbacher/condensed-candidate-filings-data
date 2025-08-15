@@ -52,6 +52,77 @@ class MissouriCleaner:
         # Ensure output directory exists
         os.makedirs(output_dir, exist_ok=True)
     
+    def _fix_missouri_addresses(self, df: pd.DataFrame, address_column: str = 'address') -> pd.DataFrame:
+        """
+        Fix Missouri-specific address formatting issues.
+        
+        Common issues in Missouri:
+        - Different separator patterns than Kentucky
+        - Rural route addresses (RR, Rural Route)
+        - PO Box variations
+        - County-specific formatting
+        """
+        
+        if address_column not in df.columns:
+            logger.warning(f"Address column '{address_column}' not found in DataFrame")
+            return df
+        
+        logger.info(f"Fixing Missouri addresses in column '{address_column}'")
+        
+        # Create a copy to avoid modifying original
+        df_fixed = df.copy()
+        
+        # Track changes
+        total_fixed = 0
+        
+        for idx, row in df_fixed.iterrows():
+            address = row[address_column]
+            
+            if pd.isna(address) or not isinstance(address, str):
+                continue
+            
+            original_address = address
+            fixed_address = address
+            
+            # Fix 1: Standardize separators (Missouri uses different patterns)
+            # Replace pipes and semicolons with commas
+            fixed_address = re.sub(r'[;|]', ',', fixed_address)
+            
+            # Fix 2: Handle Missouri-specific patterns
+            
+            # Rural Route addresses: "RR 1 Box 123" -> "RR 1, Box 123"
+            fixed_address = re.sub(r'(RR\s+\d+)\s+(Box\s+\d+)', r'\1, \2', fixed_address)
+            
+            # PO Box variations: "PO Box 123" -> "PO Box 123"
+            fixed_address = re.sub(r'(P\.?O\.?\s+Box\s+\d+)', r'\1', fixed_address)
+            
+            # County addresses: "City, County, MO ZIP" -> "City, County, MO, ZIP"
+            fixed_address = re.sub(r'([A-Za-z\s]+),\s*([A-Za-z\s]+),\s*([A-Z]{2})\s+(\d{5}(?:-\d{4})?)', 
+                                  r'\1, \2, \3, \4', fixed_address)
+            
+            # Fix 3: Standardize Missouri ZIP code patterns
+            # Missouri ZIP codes: 63xxx, 64xxx, 65xxx
+            fixed_address = re.sub(r'([A-Z]{2})\s+(6[3-5]\d{3}(?:-\d{4})?)', r'\1, \2', fixed_address)
+            
+            # Fix 4: Handle apartment/unit numbers
+            # "Apt 123" -> ", Apt 123"
+            fixed_address = re.sub(r'\s+(Apt|Unit|Suite|#)\s+(\d+)', r', \1 \2', fixed_address)
+            
+            # Fix 5: Clean up whitespace and normalize
+            fixed_address = re.sub(r'\s+', ' ', fixed_address).strip()
+            
+            # Fix 6: Remove double commas and trailing commas
+            fixed_address = re.sub(r',\s*,', ',', fixed_address)
+            fixed_address = re.sub(r',\s*$', '', fixed_address)
+            
+            # Update if changed
+            if fixed_address != original_address:
+                df_fixed.at[idx, address_column] = fixed_address
+                total_fixed += 1
+        
+        logger.info(f"Fixed {total_fixed} Missouri addresses")
+        return df_fixed
+    
     def _remove_duplicate_columns(self, df: pd.DataFrame) -> pd.DataFrame:
         """Remove duplicate columns that may have been created during processing."""
         logger.info("Removing duplicate columns...")
@@ -93,16 +164,19 @@ class MissouriCleaner:
         # Step 4: Standardize party names
         cleaned_df = self._standardize_parties(cleaned_df)
         
-        # Step 5: Clean contact information
+        # Step 5: Fix Missouri-specific address issues
+        cleaned_df = self._fix_missouri_addresses(cleaned_df)
+        
+        # Step 6: Clean contact information
         cleaned_df = self._clean_contact_info(cleaned_df)
         
-        # Step 6: Add required columns for final schema
+        # Step 7: Add required columns for final schema
         cleaned_df = self._add_required_columns(cleaned_df)
         
-        # Step 7: Generate stable IDs (skipped - will be done later in process)
+        # Step 8: Generate stable IDs (skipped - will be done later in process)
         # cleaned_df = self._generate_stable_ids(cleaned_df)
         
-        # Step 8: Remove duplicate columns
+        # Step 9: Remove duplicate columns
         cleaned_df = self._remove_duplicate_columns(cleaned_df)
         
         # Final step: Ensure column order matches Alaska's exact structure

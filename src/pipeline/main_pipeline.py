@@ -15,6 +15,7 @@ import concurrent.futures
 import glob
 import time
 import sys
+import re
 from pathlib import Path
 
 # Add current directory to Python path for imports
@@ -56,13 +57,6 @@ from state_cleaners.wyoming_cleaner import clean_wyoming_candidates
 # Import processors
 from office_standardizer import OfficeStandardizer
 
-# Import address processing
-from fix_address_separation_issues import AddressFixer
-from address_parsing_audit import audit_address_fields
-from address_separation_audit import analyze_address_separation
-from data_audit import audit_data_quality, audit_column_consistency
-from verify_address_fixes import verify_address_fixes, compare_before_after
-
 # Import database utilities
 sys.path.append(str(current_dir.parent.parent / 'src' / 'config'))
 from database import get_db_connection
@@ -96,7 +90,6 @@ class MainPipeline:
         
         # Initialize processors
         self.office_standardizer = OfficeStandardizer()
-        self.address_fixer = AddressFixer()
         self.db_manager = get_db_connection()
         
         # State cleaner mapping
@@ -147,7 +140,7 @@ class MainPipeline:
         raw_files = self._get_raw_data_files()
         
         if not raw_files:
-            logger.warning("No raw data files found")
+            logger.warning(f"No raw data files found in {self.raw_data_dir}")
             return {}
         
         # Process each state
@@ -191,40 +184,6 @@ class MainPipeline:
             if state_lower in filename:
                 return file_path
         return None
-
-    def run_address_fixing(self, cleaned_files: Dict[str, str]) -> Dict[str, str]:
-        """Fix address separation issues across all states."""
-        logger.info("Starting address fixing process...")
-        
-        # Load all cleaned data
-        all_data = []
-        for state, file_path in cleaned_files.items():
-            try:
-                df = pd.read_excel(file_path)
-                df['state'] = state.title()
-                all_data.append(df)
-            except Exception as e:
-                logger.error(f"Error loading {state} data: {e}")
-                continue
-        
-        if not all_data:
-            logger.warning("No cleaned data to process")
-            return {}
-        
-        # Combine all data
-        combined_df = pd.concat(all_data, ignore_index=True)
-        logger.info(f"Combined {len(combined_df)} records from {len(all_data)} states")
-        
-        # Fix addresses
-        fixed_df = self.address_fixer.fix_addresses_generic(combined_df)
-        
-        # Save fixed data
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        output_file = os.path.join(self.processed_dir, f"all_states_addresses_fixed_{timestamp}.xlsx")
-        fixed_df.to_excel(output_file, index=False)
-        
-        logger.info(f"✅ Address fixing completed. Saved to: {output_file}")
-        return {'all_states': output_file}
 
     def run_office_standardization(self, cleaned_files: Dict[str, str]) -> str:
         """Run office standardization on cleaned data."""
@@ -348,10 +307,10 @@ class MainPipeline:
         logger.info("Starting data audit...")
         
         # Run various audits
-        quality_results = audit_data_quality(self.processed_dir)
-        consistency_results = audit_column_consistency(self.processed_dir)
-        address_audit = audit_address_fields(self.processed_dir)
-        separation_audit = analyze_address_separation(self.processed_dir)
+        quality_results = self._audit_data_quality()
+        consistency_results = self._audit_column_consistency()
+        address_audit = self._audit_address_fields()
+        separation_audit = self._analyze_address_separation()
         
         # Generate comprehensive report
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -365,6 +324,258 @@ class MainPipeline:
         
         logger.info(f"✅ Data audit completed. Report saved to: {audit_file}")
         return audit_file, "audit_completed"
+
+    def _audit_data_quality(self) -> pd.DataFrame:
+        """Audit data quality across all processed state data."""
+        pattern = os.path.join(self.processed_dir, "*_cleaned_*.xlsx")
+        files = glob.glob(pattern)
+        
+        if not files:
+            logger.warning(f"No processed files found in {self.processed_dir}")
+            return pd.DataFrame()
+        
+        audit_results = []
+        
+        for file_path in files:
+            try:
+                df = pd.read_excel(file_path)
+                state = Path(file_path).stem.split('_')[0].title()
+                
+                # Basic data quality metrics
+                total_records = len(df)
+                null_counts = df.isnull().sum()
+                
+                # Check for required columns
+                required_cols = ['candidate_name', 'office', 'party']
+                missing_required = [col for col in required_cols if col not in df.columns]
+                
+                # Check for duplicate records
+                duplicates = df.duplicated().sum()
+                
+                # Check for empty strings
+                empty_strings = 0
+                for col in df.columns:
+                    if df[col].dtype == 'object':
+                        empty_strings += (df[col] == '').sum()
+                
+                # Check for whitespace-only values
+                whitespace_only = 0
+                for col in df.columns:
+                    if df[col].dtype == 'object':
+                        whitespace_only += df[col].astype(str).str.strip().eq('').sum()
+                
+                audit_results.append({
+                    'state': state,
+                    'file': Path(file_path).name,
+                    'total_records': total_records,
+                    'total_columns': len(df.columns),
+                    'missing_required_columns': str(missing_required),
+                    'duplicate_records': duplicates,
+                    'null_values_total': null_counts.sum(),
+                    'empty_strings': empty_strings,
+                    'whitespace_only_values': whitespace_only,
+                    'data_quality_score': self._calculate_quality_score(
+                        total_records, duplicates, null_counts.sum(), empty_strings, whitespace_only
+                    )
+                })
+                
+            except Exception as e:
+                logger.error(f"Error processing {file_path}: {e}")
+        
+        return pd.DataFrame(audit_results)
+
+    def _calculate_quality_score(self, total_records, duplicates, null_values, empty_strings, whitespace_only):
+        """Calculate a data quality score (0-100)."""
+        if total_records == 0:
+            return 0
+        
+        # Penalize various issues
+        duplicate_penalty = (duplicates / total_records) * 30
+        null_penalty = (null_values / (total_records * 10)) * 20  # Assuming ~10 columns
+        empty_penalty = (empty_strings / total_records) * 25
+        whitespace_penalty = (whitespace_only / total_records) * 25
+        
+        score = 100 - duplicate_penalty - null_penalty - empty_penalty - whitespace_penalty
+        return max(0, min(100, score))
+
+    def _audit_column_consistency(self) -> pd.DataFrame:
+        """Audit column consistency across all state data."""
+        pattern = os.path.join(self.processed_dir, "*_cleaned_*.xlsx")
+        files = glob.glob(pattern)
+        
+        if not files:
+            return pd.DataFrame()
+        
+        column_analysis = {}
+        
+        for file_path in files:
+            try:
+                df = pd.read_excel(file_path)
+                state = Path(file_path).stem.split('_')[0].title()
+                
+                for col in df.columns:
+                    if col not in column_analysis:
+                        column_analysis[col] = {
+                            'column_name': col,
+                            'states_with_column': [],
+                            'data_types': set(),
+                            'sample_values': []
+                        }
+                    
+                    column_analysis[col]['states_with_column'].append(state)
+                    column_analysis[col]['data_types'].add(str(df[col].dtype))
+                    
+                    # Sample some values
+                    sample = df[col].dropna().head(3).tolist()
+                    column_analysis[col]['sample_values'].extend(sample)
+                    
+            except Exception as e:
+                logger.error(f"Error processing {file_path}: {e}")
+        
+        # Convert to DataFrame
+        consistency_results = []
+        for col, info in column_analysis.items():
+            consistency_results.append({
+                'column_name': col,
+                'states_with_column': len(info['states_with_column']),
+                'states_list': str(info['states_with_column']),
+                'data_types': str(list(info['data_types'])),
+                'sample_values': str(info['sample_values'][:5])  # Limit to 5 samples
+            })
+        
+        return pd.DataFrame(consistency_results)
+
+    def _audit_address_fields(self) -> pd.DataFrame:
+        """Audit address fields across all state data."""
+        pattern = os.path.join(self.processed_dir, "*_cleaned_*.xlsx")
+        files = glob.glob(pattern)
+        
+        if not files:
+            logger.warning(f"No processed files found in {self.processed_dir}")
+            return pd.DataFrame()
+        
+        audit_results = []
+        
+        for file_path in files:
+            try:
+                df = pd.read_excel(file_path)
+                state = Path(file_path).stem.split('_')[0].title()
+                
+                # Check for address-related columns
+                address_cols = [col for col in df.columns if 'address' in col.lower()]
+                
+                for col in address_cols:
+                    # Sample some values
+                    sample_values = df[col].dropna().head(10).tolist()
+                    
+                    # Check for common issues
+                    issues = []
+                    if df[col].dtype == 'object':
+                        # Check for mixed separators
+                        separators = []
+                        for val in sample_values:
+                            if isinstance(val, str):
+                                if ',' in val:
+                                    separators.append(',')
+                                if ';' in val:
+                                    separators.append(';')
+                                if '|' in val:
+                                    separators.append('|')
+                        
+                        if len(set(separators)) > 1:
+                            issues.append("Mixed separators detected")
+                        
+                        # Check for inconsistent formatting
+                        if any('  ' in str(val) for val in sample_values):
+                            issues.append("Double spaces detected")
+                    
+                    audit_results.append({
+                        'state': state,
+                        'file': Path(file_path).name,
+                        'column': col,
+                        'total_records': len(df),
+                        'non_null_count': df[col].count(),
+                        'null_count': df[col].isnull().sum(),
+                        'sample_values': str(sample_values[:3]),
+                        'issues': '; '.join(issues) if issues else 'None'
+                    })
+                    
+            except Exception as e:
+                logger.error(f"Error processing {file_path}: {e}")
+        
+        return pd.DataFrame(audit_results)
+
+    def _analyze_address_separation(self) -> pd.DataFrame:
+        """Analyze address field separation patterns across all state data."""
+        pattern = os.path.join(self.processed_dir, "*_cleaned_*.xlsx")
+        files = glob.glob(pattern)
+        
+        if not files:
+            return pd.DataFrame()
+        
+        separation_analysis = []
+        
+        for file_path in files:
+            try:
+                df = pd.read_excel(file_path)
+                state = Path(file_path).stem.split('_')[0].title()
+                
+                # Check for address-related columns
+                address_cols = [col for col in df.columns if 'address' in col.lower()]
+                
+                for col in address_cols:
+                    # Get non-null address values
+                    addresses = df[col].dropna()
+                    
+                    if len(addresses) == 0:
+                        continue
+                    
+                    # Analyze separation patterns
+                    separators = {}
+                    field_counts = {}
+                    max_fields = 0
+                    
+                    for addr in addresses:
+                        if isinstance(addr, str):
+                            # Count different separator types
+                            if ',' in addr:
+                                separators[','] = separators.get(',', 0) + 1
+                            if ';' in addr:
+                                separators[';'] = separators.get(';', 0) + 1
+                            if '|' in addr:
+                                separators['|'] = separators.get('|', 0) + 1
+                            if '\n' in addr:
+                                separators['\\n'] = separators.get('\\n', 0) + 1
+                            
+                            # Count fields (split by any separator)
+                            fields = re.split(r'[,;|\n]+', addr.strip())
+                            field_count = len([f for f in fields if f.strip()])
+                            field_counts[field_count] = field_counts.get(field_count, 0) + 1
+                            max_fields = max(max_fields, field_count)
+                    
+                    # Determine most common separator
+                    primary_separator = max(separators.items(), key=lambda x: x[1])[0] if separators else 'None'
+                    
+                    # Determine most common field count
+                    primary_field_count = max(field_counts.items(), key=lambda x: x[1])[0] if field_counts else 0
+                    
+                    separation_analysis.append({
+                        'state': state,
+                        'file': Path(file_path).name,
+                        'column': col,
+                        'total_addresses': len(addresses),
+                        'primary_separator': primary_separator,
+                        'separator_counts': str(separators),
+                        'primary_field_count': primary_field_count,
+                        'field_count_distribution': str(field_counts),
+                        'max_fields_found': max_fields,
+                        'consistency_score': len(set(separators.keys())) if separators else 0
+                    })
+                    
+            except Exception as e:
+                logger.error(f"Error processing {file_path}: {e}")
+        
+        return pd.DataFrame(separation_analysis)
 
     def run_deduplication(self, final_file: str) -> str:
         """Remove exact duplicate records."""
@@ -428,37 +639,33 @@ class MainPipeline:
                 logger.error("State cleaning failed")
                 return False
             
-            # Step 2: Address fixing
-            logger.info("=== STEP 2: Address Fixing ===")
-            address_fixed_files = self.run_address_fixing(cleaned_files)
-            
-            # Step 3: Office standardization
-            logger.info("=== STEP 3: Office Standardization ===")
+            # Step 2: Office standardization
+            logger.info("=== STEP 2: Office Standardization ===")
             office_standardized_file = self.run_office_standardization(cleaned_files)
             if not office_standardized_file:
                 logger.error("Office standardization failed")
                 return False
             
-            # Step 4: National standardization
-            logger.info("=== STEP 4: National Standardization ===")
+            # Step 3: National standardization
+            logger.info("=== STEP 3: National Standardization ===")
             nationally_standardized_file = self.run_national_standardization(office_standardized_file)
             if not nationally_standardized_file:
                 logger.error("National standardization failed")
                 return False
             
-            # Step 5: Deduplication
-            logger.info("=== STEP 5: Deduplication ===")
+            # Step 4: Deduplication
+            logger.info("=== STEP 4: Deduplication ===")
             final_file = self.run_deduplication(nationally_standardized_file)
             if not final_file:
                 logger.error("Deduplication failed")
                 return False
             
-            # Step 6: Data audit
-            logger.info("=== STEP 6: Data Audit ===")
+            # Step 5: Data audit
+            logger.info("=== STEP 5: Data Audit ===")
             audit_file, audit_status = self.run_data_audit()
             
-            # Step 7: Database upload (optional)
-            logger.info("=== STEP 7: Database Upload ===")
+            # Step 6: Database upload (optional)
+            logger.info("=== STEP 6: Database Upload ===")
             db_success = self.upload_to_database(final_file)
             
             logger.info("🎉 Full pipeline completed successfully!")

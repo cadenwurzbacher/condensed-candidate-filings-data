@@ -54,6 +54,69 @@ class KentuckyCleaner:
             os.makedirs(self.output_dir)
             logger.info(f"Created output directory: {self.output_dir}")
         
+    def _fix_kentucky_addresses(self, df: pd.DataFrame, address_column: str = 'address') -> pd.DataFrame:
+        """
+        Fix Kentucky-specific address formatting issues.
+        
+        Common issues in Kentucky:
+        - Mixed separators (commas, semicolons, pipes)
+        - Inconsistent field ordering
+        - Extra whitespace
+        - Missing city/state/zip separations
+        """
+        
+        if address_column not in df.columns:
+            logger.warning(f"Address column '{address_column}' not found in DataFrame")
+            return df
+        
+        logger.info(f"Fixing Kentucky addresses in column '{address_column}'")
+        
+        # Create a copy to avoid modifying original
+        df_fixed = df.copy()
+        
+        # Track changes
+        total_fixed = 0
+        
+        for idx, row in df_fixed.iterrows():
+            address = row[address_column]
+            
+            if pd.isna(address) or not isinstance(address, str):
+                continue
+            
+            original_address = address
+            fixed_address = address
+            
+            # Fix 1: Standardize separators (replace semicolons and pipes with commas)
+            fixed_address = re.sub(r'[;|]', ',', fixed_address)
+            
+            # Fix 2: Remove extra whitespace and normalize
+            fixed_address = re.sub(r'\s+', ' ', fixed_address).strip()
+            
+            # Fix 3: Fix common Kentucky address patterns
+            # Pattern: "City, KY ZIP" -> "City, KY, ZIP"
+            fixed_address = re.sub(r'([A-Z]{2})\s+(\d{5}(?:-\d{4})?)', r'\1, \2', fixed_address)
+            
+            # Pattern: "Street, City KY ZIP" -> "Street, City, KY, ZIP"
+            fixed_address = re.sub(r'([A-Za-z\s]+),\s*([A-Za-z\s]+)\s+([A-Z]{2})\s+(\d{5}(?:-\d{4})?)', 
+                                  r'\1, \2, \3, \4', fixed_address)
+            
+            # Fix 4: Ensure proper comma separation for city, state, zip
+            # Look for patterns like "City KY 12345" and add commas
+            fixed_address = re.sub(r'([A-Za-z\s]+)\s+([A-Z]{2})\s+(\d{5}(?:-\d{4})?)', 
+                                  r'\1, \2, \3', fixed_address)
+            
+            # Fix 5: Remove double commas
+            fixed_address = re.sub(r',\s*,', ',', fixed_address)
+            fixed_address = re.sub(r',\s*$', '', fixed_address)  # Remove trailing comma
+            
+            # Update if changed
+            if fixed_address != original_address:
+                df_fixed.at[idx, address_column] = fixed_address
+                total_fixed += 1
+        
+        logger.info(f"Fixed {total_fixed} Kentucky addresses")
+        return df_fixed
+    
     def _remove_duplicate_columns(self, df: pd.DataFrame) -> pd.DataFrame:
         """Remove original columns that have been replaced by cleaned versions."""
         logger.info("Removing duplicate columns...")
@@ -99,22 +162,16 @@ class KentuckyCleaner:
         # Step 4: Standardize party names
         cleaned_df = self._standardize_parties(cleaned_df)
         
-        # Step 5: Clean contact information
-        cleaned_df = self._clean_contact_info(cleaned_df)
+        # Step 5: Fix Kentucky-specific address issues
+        cleaned_df = self._fix_kentucky_addresses(cleaned_df)
         
-        # Step 6: Add required columns for final schema
-        cleaned_df = self._add_required_columns(cleaned_df)
-        
-        # Step 7: Generate stable IDs (skipped - will be done later in process)
-        # cleaned_df = self._generate_stable_ids(cleaned_df)
-        
-        # Step 8: Remove duplicate columns (AFTER processing names)
+        # Step 6: Remove duplicate columns
         cleaned_df = self._remove_duplicate_columns(cleaned_df)
         
-        # Final step: Ensure column order matches Alaska's exact structure
-        cleaned_df = self.ensure_column_order(cleaned_df)
+        # Step 7: Final validation and cleanup
+        cleaned_df = self._final_validation(cleaned_df)
         
-        logger.info(f"Kentucky data cleaning completed. Final shape: {cleaned_df.shape}")
+        logger.info(f"Kentucky data cleaning completed. Final record count: {len(cleaned_df)}")
         return cleaned_df
     
     def ensure_column_order(self, df: pd.DataFrame) -> pd.DataFrame:
