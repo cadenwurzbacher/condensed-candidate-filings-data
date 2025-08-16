@@ -56,15 +56,45 @@ sys.path.append(str(current_dir.parent.parent / 'src' / 'config'))
 from database import get_db_connection
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(),
-        logging.FileHandler(f'pipeline_run_{datetime.now().strftime("%Y%m%d_%H%M%S")}.log')
-    ]
-)
+# Create logs directory if it doesn't exist
+logs_dir = Path("data/logs")
+logs_dir.mkdir(parents=True, exist_ok=True)
+
+# Clean up old log files (keep only last 5)
+log_files = list(logs_dir.glob("pipeline_run_*.log"))
+if len(log_files) > 5:
+    log_files.sort(key=lambda x: x.stat().st_mtime, reverse=True)
+    for old_log in log_files[5:]:
+        old_log.unlink()
+
+# Create a unique log filename
+log_filename = logs_dir / f'pipeline_run_{datetime.now().strftime("%Y%m%d_%H%M%S")}.log'
+
+# Configure logging with both console and file handlers
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
+# Clear any existing handlers
+logger.handlers.clear()
+
+# Console handler
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging.INFO)
+console_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+console_handler.setFormatter(console_formatter)
+
+# File handler
+file_handler = logging.FileHandler(log_filename)
+file_handler.setLevel(logging.INFO)
+file_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+file_handler.setFormatter(file_formatter)
+
+# Add both handlers
+logger.addHandler(console_handler)
+logger.addHandler(file_handler)
+
+# Log the start of the pipeline
+logger.info(f"Pipeline logging initialized. Log file: {log_filename}")
 
 class MainPipeline:
     """Main pipeline orchestrator for CandidateFilings data processing."""
@@ -114,11 +144,34 @@ class MainPipeline:
             'wyoming': clean_wyoming_candidates
         }
         
-        # Ensure directories exist
-        os.makedirs(self.raw_data_dir, exist_ok=True)
-        os.makedirs(self.processed_dir, exist_ok=True)
-        os.makedirs(self.final_dir, exist_ok=True)
-        os.makedirs("data/reports", exist_ok=True)
+        # Create directories if they don't exist
+        for directory in [self.raw_data_dir, self.processed_dir, self.final_dir, "data/reports"]:
+            Path(directory).mkdir(parents=True, exist_ok=True)
+        
+        # Clean up old processed files before starting
+        self._cleanup_old_files()
+    
+    def _cleanup_old_files(self):
+        """Clean up old processed files, keeping only the latest version per state."""
+        logger.info("Cleaning up old processed files...")
+        
+        # Remove ALL old files first
+        all_old_files = list(Path(self.processed_dir).glob("*_cleaned_*.xlsx"))
+        all_old_files.extend(list(Path(self.processed_dir).glob("*_cleaned_*.csv")))
+        
+        files_removed = 0
+        for old_file in all_old_files:
+            old_file.unlink()
+            files_removed += 1
+            logger.info(f"Removed old file: {old_file.name}")
+        
+        logger.info(f"Cleanup completed. Removed {files_removed} old files.")
+        
+        # Also clean up any temporary merged files
+        temp_files = list(Path(self.processed_dir).glob("*_merged_temp*"))
+        for temp_file in temp_files:
+            temp_file.unlink()
+            logger.info(f"Removed temporary file: {temp_file.name}")
 
     def run_state_cleaners(self) -> Dict[str, str]:
         """Run all state cleaners on raw data."""
@@ -164,7 +217,18 @@ class MainPipeline:
                 continue
         
         logger.info(f"State cleaning completed. {len(cleaned_files)} states processed.")
+        
+        # Clean up temporary merged files
+        self._cleanup_temp_files()
+        
         return cleaned_files
+    
+    def _cleanup_temp_files(self):
+        """Clean up temporary merged files."""
+        temp_files = list(Path(self.processed_dir).glob("*_merged_temp.xlsx"))
+        for temp_file in temp_files:
+            temp_file.unlink()
+            logger.info(f"Cleaned up temporary file: {temp_file.name}")
 
     def _get_raw_data_files(self) -> List[str]:
         """Get all raw data files."""
@@ -174,13 +238,64 @@ class MainPipeline:
         return raw_files
 
     def _find_state_file(self, raw_files: List[str], state: str) -> Optional[str]:
-        """Find raw data file for a specific state."""
+        """Find raw data file(s) for a specific state and merge if multiple exist."""
         state_lower = state.lower()
+        matching_files = []
+        
         for file_path in raw_files:
             filename = os.path.basename(file_path).lower()
             if state_lower in filename:
-                return file_path
-        return None
+                matching_files.append(file_path)
+        
+        if not matching_files:
+            return None
+        
+        if len(matching_files) == 1:
+            return matching_files[0]
+        
+        # Multiple files found - merge them
+        logger.info(f"Found {len(matching_files)} files for {state}, merging...")
+        merged_df = self._merge_state_files(matching_files, state)
+        
+        # Save merged file temporarily
+        temp_file = os.path.join(self.processed_dir, f"{state}_merged_temp.xlsx")
+        merged_df.to_excel(temp_file, index=False)
+        logger.info(f"Merged {len(merged_df)} records from {len(matching_files)} files for {state}")
+        
+        return temp_file
+    
+    def _merge_state_files(self, file_paths: List[str], state: str) -> pd.DataFrame:
+        """Merge multiple raw data files for a state."""
+        all_data = []
+        
+        for file_path in file_paths:
+            try:
+                # Handle different file types
+                if file_path.endswith('.csv'):
+                    df = pd.read_csv(file_path)
+                elif file_path.endswith('.xls'):
+                    df = pd.read_excel(file_path, engine='xlrd')
+                else:
+                    df = pd.read_excel(file_path)
+                
+                # Add source file info
+                df['_source_file'] = os.path.basename(file_path)
+                all_data.append(df)
+                logger.info(f"Loaded {len(df)} records from {os.path.basename(file_path)}")
+                
+            except Exception as e:
+                logger.warning(f"Error reading {file_path}: {e}")
+                continue
+        
+        if not all_data:
+            logger.error(f"No data could be loaded for {state}")
+            return pd.DataFrame()
+        
+        # Merge all data
+        merged_df = pd.concat(all_data, ignore_index=True)
+        logger.info(f"Successfully merged {len(merged_df)} total records for {state}")
+        
+        return merged_df
 
     def run_office_standardization(self, cleaned_files: Dict[str, str]) -> str:
         """Run office standardization on cleaned data."""
@@ -658,11 +773,44 @@ class MainPipeline:
             db_success = self.upload_to_database(final_file)
             
             logger.info("🎉 Full pipeline completed successfully!")
+            
+            # Final cleanup - keep only the latest cleaned file per state
+            self._final_cleanup()
+            
             return True
             
         except Exception as e:
             logger.error(f"❌ Pipeline failed: {e}")
             return False
+
+    def _final_cleanup(self):
+        """Final cleanup to keep only the latest cleaned file per state."""
+        logger.info("Performing final cleanup...")
+        
+        # Group files by state
+        state_files = {}
+        for file_path in Path(self.processed_dir).glob("*_cleaned_*.xlsx"):
+            # Extract state name from filename (e.g., "alaska_candidates_2024_cleaned_20250816_111305.xlsx")
+            parts = file_path.stem.split('_')
+            if len(parts) >= 3 and parts[-2] == 'cleaned':
+                state = parts[0]
+                if state not in state_files:
+                    state_files[state] = []
+                state_files[state].append(file_path)
+        
+        # Keep only the latest file per state
+        files_removed = 0
+        for state, files in state_files.items():
+            if len(files) > 1:
+                # Sort by modification time (newest first)
+                files.sort(key=lambda x: x.stat().st_mtime, reverse=True)
+                # Remove all but the newest
+                for old_file in files[1:]:
+                    old_file.unlink()
+                    files_removed += 1
+                    logger.info(f"Final cleanup: Removed old file: {old_file.name}")
+        
+        logger.info(f"Final cleanup completed. Removed {files_removed} old files.")
 
 def main():
     """Main function to run the pipeline."""

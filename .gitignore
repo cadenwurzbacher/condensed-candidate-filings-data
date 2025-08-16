@@ -104,3 +104,30 @@ pipeline_run_*.log
 *.gz
 *.rar
 *.7z 
+
+# Data directories
+data/
+data/raw/
+data/processed/
+data/final/
+data/reports/
+data/logs/
+
+# Data files
+*.xlsx
+*.xls
+*.csv
+*.tsv
+*.json
+*.xml
+*.txt
+
+# Log files
+*.log
+pipeline_run_*.log
+data/logs/
+
+# Report and output directories
+reports/
+output/
+temp/ 

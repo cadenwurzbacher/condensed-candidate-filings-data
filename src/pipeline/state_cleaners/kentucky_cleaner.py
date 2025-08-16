@@ -174,6 +174,26 @@ class KentuckyCleaner:
         logger.info(f"Kentucky data cleaning completed. Final record count: {len(cleaned_df)}")
         return cleaned_df
     
+    def _final_validation(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Perform final validation and cleanup of the cleaned data."""
+        logger.info("Performing final validation...")
+        
+        # Ensure all required columns exist
+        cleaned_df = self.ensure_column_order(df)
+        
+        # Add state column
+        cleaned_df['state'] = 'Kentucky'
+        
+        # Final data type checks
+        if 'election_year' in cleaned_df.columns:
+            cleaned_df['election_year'] = pd.to_numeric(cleaned_df['election_year'], errors='coerce')
+        
+        # Remove any completely empty rows
+        cleaned_df = cleaned_df.dropna(how='all')
+        
+        logger.info(f"Final validation completed. Shape: {cleaned_df.shape}")
+        return cleaned_df
+    
     def ensure_column_order(self, df: pd.DataFrame) -> pd.DataFrame:
         """Ensure columns match Alaska's exact order."""
         ALASKA_COLUMN_ORDER = [

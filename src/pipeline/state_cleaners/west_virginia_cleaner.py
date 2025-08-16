@@ -289,7 +289,7 @@ class WestVirginiaCleaner:
         
         for idx, row in df.iterrows():
             name = row['candidate_name']
-            office = row.get('office', None)  # Safely get office column
+            office = row.get('office', None) if 'office' in df.columns else None  # Safely get office column
             original_name = row.get('Name', name)  # Use Name column if available, fallback to candidate_name
             
             if pd.isna(name) or not name:
