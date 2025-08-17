@@ -120,19 +120,61 @@ class DatabaseManager:
                         if_exists: str = 'replace', index: bool = False) -> bool:
         """Upload a DataFrame to a database table."""
         try:
-            df.to_sql(
-                name=table_name,
-                con=self.engine,
-                if_exists=if_exists,
-                index=index,
-                method='multi',
-                chunksize=1000
-            )
-            logger.info(f"Successfully uploaded {len(df)} rows to table '{table_name}'")
-            return True
+            # For large datasets, use chunked upload to avoid memory issues
+            if len(df) > 10000:
+                logger.info(f"Large dataset detected ({len(df)} records), using chunked upload...")
+                return self._upload_dataframe_chunked(df, table_name, if_exists, index)
+            else:
+                # For smaller datasets, use standard upload
+                df.to_sql(
+                    name=table_name,
+                    con=self.engine,
+                    if_exists=if_exists,
+                    index=index,
+                    method='multi',
+                    chunksize=1000
+                )
+                logger.info(f"Successfully uploaded {len(df)} rows to table '{table_name}'")
+                return True
             
         except Exception as e:
             logger.error(f"Failed to upload data to table '{table_name}': {e}")
+            return False
+    
+    def _upload_dataframe_chunked(self, df: pd.DataFrame, table_name: str, 
+                                 if_exists: str = 'replace', index: bool = False) -> bool:
+        """Upload large DataFrame in chunks to avoid memory issues."""
+        try:
+            chunk_size = 5000  # Smaller chunks for better reliability
+            total_chunks = (len(df) + chunk_size - 1) // chunk_size
+            
+            logger.info(f"Uploading {len(df)} records in {total_chunks} chunks of {chunk_size}")
+            
+            for i in range(0, len(df), chunk_size):
+                chunk_num = (i // chunk_size) + 1
+                chunk = df.iloc[i:i + chunk_size]
+                
+                logger.info(f"Uploading chunk {chunk_num}/{total_chunks} ({len(chunk)} records)")
+                
+                # Use replace for first chunk, append for subsequent chunks
+                chunk_if_exists = 'replace' if i == 0 else 'append'
+                
+                chunk.to_sql(
+                    name=table_name,
+                    con=self.engine,
+                    if_exists=chunk_if_exists,
+                    index=index,
+                    method='multi',
+                    chunksize=1000
+                )
+                
+                logger.info(f"✅ Chunk {chunk_num}/{total_chunks} uploaded successfully")
+            
+            logger.info(f"Successfully uploaded all {len(df)} rows to table '{table_name}'")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to upload chunked data to table '{table_name}': {e}")
             return False
     
     def table_exists(self, table_name: str) -> bool:
@@ -190,13 +232,36 @@ class DatabaseManager:
     def upload_to_staging(self, df: pd.DataFrame) -> bool:
         """Upload DataFrame to staging_candidates table."""
         try:
+            # Test database connection before proceeding
+            logger.info("Testing database connection before upload...")
+            if not self.test_connection():
+                logger.error("Database connection test failed")
+                return False
+            
             # Ensure the staging table exists with correct schema
             if not self.table_exists('staging_candidates'):
                 logger.info("Creating staging_candidates table...")
-                self._create_staging_table()
+                if not self._create_staging_table():
+                    logger.error("Failed to create staging table")
+                    return False
+            
+            # Log DataFrame info for debugging
+            logger.info(f"DataFrame shape: {df.shape}")
+            logger.info(f"DataFrame columns: {list(df.columns)}")
+            logger.info(f"DataFrame dtypes: {df.dtypes.to_dict()}")
+            
+            # Check for any problematic data types
+            for col, dtype in df.dtypes.items():
+                if dtype == 'object':
+                    # Check for any extremely long strings that might cause issues
+                    max_length = df[col].astype(str).str.len().max()
+                    if max_length > 1000:
+                        logger.warning(f"Column '{col}' has very long strings (max: {max_length} chars)")
             
             # Upload data to staging
+            logger.info("Starting data upload to staging table...")
             success = self.upload_dataframe(df, 'staging_candidates', if_exists='append', index=False)
+            
             if success:
                 logger.info(f"Successfully uploaded {len(df)} records to staging")
                 return True
@@ -206,6 +271,8 @@ class DatabaseManager:
                 
         except Exception as e:
             logger.error(f"Failed to upload to staging: {e}")
+            import traceback
+            logger.error(f"Full traceback: {traceback.format_exc()}")
             return False
     
     def get_staging_record_count(self) -> int:
