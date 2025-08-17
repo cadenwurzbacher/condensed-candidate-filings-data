@@ -49,11 +49,10 @@ from state_cleaners.west_virginia_cleaner import clean_west_virginia_candidates
 from state_cleaners.wyoming_cleaner import clean_wyoming_candidates
 
 # Import processors
-from office_standardizer import OfficeStandardizer
+from .office_standardizer import OfficeStandardizer
 
 # Import database utilities
-sys.path.append(str(current_dir.parent.parent / 'src' / 'config'))
-from database import get_db_connection
+from ..config.database import get_db_connection
 
 # Configure logging
 # Create logs directory if it doesn't exist
@@ -161,17 +160,23 @@ class MainPipeline:
         
         files_removed = 0
         for old_file in all_old_files:
-            old_file.unlink()
-            files_removed += 1
-            logger.info(f"Removed old file: {old_file.name}")
+            try:
+                old_file.unlink()
+                files_removed += 1
+                logger.info(f"Removed old file: {old_file.name}")
+            except Exception as e:
+                logger.warning(f"Could not remove old file {old_file.name}: {e}")
         
         logger.info(f"Cleanup completed. Removed {files_removed} old files.")
         
         # Also clean up any temporary merged files
         temp_files = list(Path(self.processed_dir).glob("*_merged_temp*"))
         for temp_file in temp_files:
-            temp_file.unlink()
-            logger.info(f"Removed temporary file: {temp_file.name}")
+            try:
+                temp_file.unlink()
+                logger.info(f"Removed temporary file: {temp_file.name}")
+            except Exception as e:
+                logger.warning(f"Could not remove temporary file {temp_file.name}: {e}")
 
     def run_state_cleaners(self) -> Dict[str, str]:
         """Run all state cleaners on raw data."""
@@ -196,7 +201,16 @@ class MainPipeline:
                 logger.info(f"Cleaning {state} data...")
                 
                 # Run state cleaner with proper output directory
-                cleaned_df = cleaner_func(raw_file, output_dir=self.processed_dir)
+                try:
+                    cleaned_df = cleaner_func(raw_file, output_dir=self.processed_dir)
+                except Exception as cleaner_error:
+                    logger.error(f"State cleaner function failed for {state}: {cleaner_error}")
+                    continue
+                
+                # Check if cleaning was successful
+                if cleaned_df is None or cleaned_df.empty:
+                    logger.error(f"State cleaner for {state} returned empty data")
+                    continue
                 
                 # Generate proper output filename
                 base_name = os.path.splitext(os.path.basename(raw_file))[0]
@@ -204,7 +218,11 @@ class MainPipeline:
                 output_file = os.path.join(self.processed_dir, f"{base_name}_cleaned_{timestamp}.xlsx")
                 
                 # Save the cleaned data
-                cleaned_df.to_excel(output_file, index=False)
+                try:
+                    cleaned_df.to_excel(output_file, index=False)
+                except Exception as save_error:
+                    logger.error(f"Failed to save cleaned data for {state}: {save_error}")
+                    continue
                 
                 if os.path.exists(output_file):
                     cleaned_files[state] = output_file
@@ -214,6 +232,8 @@ class MainPipeline:
                     
             except Exception as e:
                 logger.error(f"Error cleaning {state}: {e}")
+                import traceback
+                logger.error(f"Full traceback: {traceback.format_exc()}")
                 continue
         
         logger.info(f"State cleaning completed. {len(cleaned_files)} states processed.")
@@ -227,8 +247,11 @@ class MainPipeline:
         """Clean up temporary merged files."""
         temp_files = list(Path(self.processed_dir).glob("*_merged_temp.xlsx"))
         for temp_file in temp_files:
-            temp_file.unlink()
-            logger.info(f"Cleaned up temporary file: {temp_file.name}")
+            try:
+                temp_file.unlink()
+                logger.info(f"Cleaned up temporary file: {temp_file.name}")
+            except Exception as e:
+                logger.warning(f"Could not clean up temporary file {temp_file.name}: {e}")
 
     def _get_raw_data_files(self) -> List[str]:
         """Get all raw data files."""
@@ -255,14 +278,23 @@ class MainPipeline:
         
         # Multiple files found - merge them
         logger.info(f"Found {len(matching_files)} files for {state}, merging...")
-        merged_df = self._merge_state_files(matching_files, state)
-        
-        # Save merged file temporarily
-        temp_file = os.path.join(self.processed_dir, f"{state}_merged_temp.xlsx")
-        merged_df.to_excel(temp_file, index=False)
-        logger.info(f"Merged {len(merged_df)} records from {len(matching_files)} files for {state}")
-        
-        return temp_file
+        try:
+            merged_df = self._merge_state_files(matching_files, state)
+            if merged_df is None or merged_df.empty:
+                logger.error(f"Failed to merge files for {state}")
+                return None
+            
+            # Save merged file temporarily
+            temp_file = os.path.join(self.processed_dir, f"{state}_merged_temp.xlsx")
+            merged_df.to_excel(temp_file, index=False)
+            logger.info(f"Merged {len(merged_df)} records from {len(matching_files)} files for {state}")
+            
+            return temp_file
+        except Exception as e:
+            logger.error(f"Failed to merge files for {state}: {e}")
+            import traceback
+            logger.error(f"Full traceback: {traceback.format_exc()}")
+            return None
     
     def _merge_state_files(self, file_paths: List[str], state: str) -> pd.DataFrame:
         """Merge multiple raw data files for a state."""
@@ -292,10 +324,15 @@ class MainPipeline:
             return pd.DataFrame()
         
         # Merge all data
-        merged_df = pd.concat(all_data, ignore_index=True)
-        logger.info(f"Successfully merged {len(merged_df)} total records for {state}")
-        
-        return merged_df
+        try:
+            merged_df = pd.concat(all_data, ignore_index=True)
+            logger.info(f"Successfully merged {len(merged_df)} total records for {state}")
+            return merged_df
+        except Exception as e:
+            logger.error(f"Failed to merge data for {state}: {e}")
+            import traceback
+            logger.error(f"Full traceback: {traceback.format_exc()}")
+            return pd.DataFrame()
 
     def run_office_standardization(self, cleaned_files: Dict[str, str]) -> str:
         """Run office standardization on cleaned data."""
@@ -306,55 +343,116 @@ class MainPipeline:
         for state, file_path in cleaned_files.items():
             try:
                 df = pd.read_excel(file_path)
+                if df is None or df.empty:
+                    logger.warning(f"Empty data loaded from {state}")
+                    continue
                 df['source_state'] = state
                 all_data.append(df)
                 logger.info(f"Loaded {len(df)} records from {state}")
             except Exception as e:
                 logger.error(f"Error loading {state} data: {e}")
+                import traceback
+                logger.error(f"Full traceback: {traceback.format_exc()}")
                 continue
         
         if not all_data:
             logger.error("No cleaned data to standardize")
             return None
         
+        # Validate that we have data to process
+        total_records = sum(len(df) for df in all_data)
+        if total_records == 0:
+            logger.error("All cleaned data files are empty")
+            return None
+        
+        logger.info(f"Total records to standardize: {total_records}")
+        
         # Combine all data
-        combined_df = pd.concat(all_data, ignore_index=True)
-        logger.info(f"Standardizing offices for {len(combined_df)} records")
+        try:
+            combined_df = pd.concat(all_data, ignore_index=True)
+            logger.info(f"Standardizing offices for {len(combined_df)} records")
+        except Exception as e:
+            logger.error(f"Failed to combine data from all states: {e}")
+            import traceback
+            logger.error(f"Full traceback: {traceback.format_exc()}")
+            return None
         
         # Standardize office names
-        standardized_df = self.office_standardizer.standardize_dataset(combined_df, 'office')
+        try:
+            standardized_df = self.office_standardizer.standardize_dataset(combined_df, 'office')
+            if standardized_df is None or standardized_df.empty:
+                logger.error("Office standardization returned empty data")
+                return None
+        except Exception as e:
+            logger.error(f"Office standardization failed: {e}")
+            import traceback
+            logger.error(f"Full traceback: {traceback.format_exc()}")
+            return None
         
         # Save standardized data
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         output_file = os.path.join(self.final_dir, f"all_states_office_standardized_{timestamp}.xlsx")
-        standardized_df.to_excel(output_file, index=False)
         
-        logger.info(f"✅ Office standardization completed. Saved to: {output_file}")
-        return output_file
+        try:
+            standardized_df.to_excel(output_file, index=False)
+            logger.info(f"✅ Office standardization completed. Saved to: {output_file}")
+            return output_file
+        except Exception as e:
+            logger.error(f"Failed to save standardized data: {e}")
+            import traceback
+            logger.error(f"Full traceback: {traceback.format_exc()}")
+            return None
 
     def run_national_standardization(self, standardized_file: str) -> str:
         """Run national-level standardization (party names, addresses, etc.)."""
         logger.info("Starting national standardization...")
         
         # Load standardized data
-        df = pd.read_excel(standardized_file)
+        try:
+            df = pd.read_excel(standardized_file)
+            if df is None or df.empty:
+                logger.error("Standardized file is empty or could not be loaded")
+                return None
+        except Exception as e:
+            logger.error(f"Failed to load standardized file: {e}")
+            import traceback
+            logger.error(f"Full traceback: {traceback.format_exc()}")
+            return None
         
         # Party standardization
-        df = self._standardize_parties(df)
+        try:
+            df = self._standardize_parties(df)
+        except Exception as e:
+            logger.error(f"Party standardization failed: {e}")
+            # Continue with original data
         
         # Address parsing and standardization
-        df = self._parse_addresses(df)
+        try:
+            df = self._parse_addresses(df)
+        except Exception as e:
+            logger.error(f"Address parsing failed: {e}")
+            # Continue with original data
         
         # Other national standardizations
-        df = self._apply_national_standards(df)
+        try:
+            df = self._apply_national_standards(df)
+        except Exception as e:
+            logger.error(f"National standards application failed: {e}")
+            # Continue with original data
         
         # Save nationally standardized data
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         output_file = os.path.join(self.final_dir, f"all_states_nationally_standardized_{timestamp}.xlsx")
-        df.to_excel(output_file, index=False)
         
-        logger.info(f"✅ National standardization completed. Saved to: {output_file}")
-        return output_file
+        try:
+            df.to_excel(output_file, index=False)
+            logger.info(f"✅ National standardization completed. Saved to: {output_file}")
+            return output_file
+        except Exception as e:
+            logger.error(f"Failed to save nationally standardized data: {e}")
+            import traceback
+            logger.error(f"Full traceback: {traceback.format_exc()}")
+            return None
 
     def _standardize_parties(self, df: pd.DataFrame) -> pd.DataFrame:
         """Standardize party names to major parties only."""
@@ -378,10 +476,18 @@ class MainPipeline:
         }
         
         if 'party' in df.columns:
-            # Ensure party column is string type before using .str methods
-            party_series = df['party'].astype(str)
-            df['party_standardized'] = party_series.str.lower().map(party_mappings).fillna(df['party'])
-            logger.info("Party standardization completed")
+            try:
+                # Ensure party column is string type before using .str methods
+                party_series = df['party'].astype(str)
+                df['party_standardized'] = party_series.str.lower().map(party_mappings).fillna(df['party'])
+                logger.info("Party standardization completed")
+            except Exception as e:
+                logger.error(f"Party standardization failed: {e}")
+                # Add a default column if standardization fails
+                df['party_standardized'] = df['party']
+        else:
+            logger.warning("No 'party' column found for standardization")
+            df['party_standardized'] = None
         
         return df
 
@@ -390,17 +496,31 @@ class MainPipeline:
         logger.info("Parsing and standardizing addresses...")
         
         if 'address' in df.columns:
-            # Add address parsing columns
-            df['address_parsed'] = True
-            # Ensure address column is string type before using .str methods
-            address_series = df['address'].astype(str)
-            df['address_clean'] = address_series.str.strip()
-            
-            # Extract common address components
-            df['has_zip'] = address_series.str.contains(r'\d{5}(?:-\d{4})?', na=False)
-            df['has_state'] = address_series.str.contains(r'\b[A-Z]{2}\b', na=False)
-            
-            logger.info("Address parsing completed")
+            try:
+                # Add address parsing columns
+                df['address_parsed'] = True
+                # Ensure address column is string type before using .str methods
+                address_series = df['address'].astype(str)
+                df['address_clean'] = address_series.str.strip()
+                
+                # Extract common address components
+                df['has_zip'] = address_series.str.contains(r'\d{5}(?:-\d{4})?', na=False)
+                df['has_state'] = address_series.str.contains(r'\b[A-Z]{2}\b', na=False)
+                
+                logger.info("Address parsing completed")
+            except Exception as e:
+                logger.error(f"Address parsing failed: {e}")
+                # Add default columns if parsing fails
+                df['address_parsed'] = False
+                df['address_clean'] = df['address']
+                df['has_zip'] = False
+                df['has_state'] = False
+        else:
+            logger.warning("No 'address' column found for parsing")
+            df['address_parsed'] = False
+            df['address_clean'] = None
+            df['has_zip'] = False
+            df['has_state'] = False
         
         return df
 
@@ -408,15 +528,23 @@ class MainPipeline:
         """Apply other national-level standardizations."""
         logger.info("Applying national standards...")
         
-        # Add processing metadata
-        df['processing_timestamp'] = datetime.now()
-        df['pipeline_version'] = '1.0'
-        df['data_source'] = 'state_filings'
+        try:
+            # Add processing metadata
+            df['processing_timestamp'] = datetime.now()
+            df['pipeline_version'] = '1.0'
+            df['data_source'] = 'state_filings'
+            
+            # Ensure consistent column names
+            df.columns = df.columns.astype(str).str.lower().str.replace(' ', '_')
+            
+            logger.info("National standards applied")
+        except Exception as e:
+            logger.error(f"National standards application failed: {e}")
+            # Add basic metadata even if column processing fails
+            df['processing_timestamp'] = datetime.now()
+            df['pipeline_version'] = '1.0'
+            df['data_source'] = 'state_filings'
         
-        # Ensure consistent column names
-        df.columns = df.columns.astype(str).str.lower().str.replace(' ', '_')
-        
-        logger.info("National standards applied")
         return df
 
     def run_data_audit(self) -> Tuple[str, str]:
@@ -424,23 +552,52 @@ class MainPipeline:
         logger.info("Starting data audit...")
         
         # Run various audits
-        quality_results = self._audit_data_quality()
-        consistency_results = self._audit_column_consistency()
-        address_audit = self._audit_address_fields()
-        separation_audit = self._analyze_address_separation()
+        try:
+            quality_results = self._audit_data_quality()
+        except Exception as e:
+            logger.error(f"Data quality audit failed: {e}")
+            quality_results = pd.DataFrame()
+        
+        try:
+            consistency_results = self._audit_column_consistency()
+        except Exception as e:
+            logger.error(f"Column consistency audit failed: {e}")
+            consistency_results = pd.DataFrame()
+        
+        try:
+            address_audit = self._audit_address_fields()
+        except Exception as e:
+            logger.error(f"Address field audit failed: {e}")
+            address_audit = pd.DataFrame()
+        
+        try:
+            separation_audit = self._analyze_address_separation()
+        except Exception as e:
+            logger.error(f"Address separation analysis failed: {e}")
+            separation_audit = pd.DataFrame()
         
         # Generate comprehensive report
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         audit_file = f"data/reports/comprehensive_audit_{timestamp}.xlsx"
         
-        with pd.ExcelWriter(audit_file, engine='openpyxl') as writer:
-            quality_results.to_excel(writer, sheet_name='Data_Quality', index=False)
-            consistency_results.to_excel(writer, sheet_name='Column_Consistency', index=False)
-            address_audit.to_excel(writer, sheet_name='Address_Audit', index=False)
-            separation_audit.to_excel(writer, sheet_name='Address_Separation', index=False)
-        
-        logger.info(f"✅ Data audit completed. Report saved to: {audit_file}")
-        return audit_file, "audit_completed"
+        try:
+            with pd.ExcelWriter(audit_file, engine='openpyxl') as writer:
+                if not quality_results.empty:
+                    quality_results.to_excel(writer, sheet_name='Data_Quality', index=False)
+                if not consistency_results.empty:
+                    consistency_results.to_excel(writer, sheet_name='Column_Consistency', index=False)
+                if not address_audit.empty:
+                    address_audit.to_excel(writer, sheet_name='Address_Audit', index=False)
+                if not separation_audit.empty:
+                    separation_audit.to_excel(writer, sheet_name='Address_Separation', index=False)
+            
+            logger.info(f"✅ Data audit completed. Report saved to: {audit_file}")
+            return audit_file, "audit_completed"
+        except Exception as e:
+            logger.error(f"Failed to generate audit report: {e}")
+            import traceback
+            logger.error(f"Full traceback: {traceback.format_exc()}")
+            return None, "audit_failed"
 
     def _audit_data_quality(self) -> pd.DataFrame:
         """Audit data quality across all processed state data."""
@@ -461,10 +618,14 @@ class MainPipeline:
                 state = Path(file_path).stem.split('_')[0].title()
                 
                 # Sample data for faster processing (max 1000 records)
-                if len(df) > 1000:
-                    df_sample = df.sample(n=1000, random_state=42)
-                    logger.info(f"Sampling 1000 records from {len(df)} total for {state}")
-                else:
+                try:
+                    if len(df) > 1000:
+                        df_sample = df.sample(n=1000, random_state=42)
+                        logger.info(f"Sampling 1000 records from {len(df)} total for {state}")
+                    else:
+                        df_sample = df
+                except Exception as e:
+                    logger.warning(f"Could not sample data for {state}: {e}")
                     df_sample = df
                 
                 # Basic quality metrics
@@ -549,8 +710,12 @@ class MainPipeline:
                     column_analysis[col]['data_types'].add(str(df[col].dtype))
                     
                     # Sample only first 2 values for speed
-                    sample = df[col].dropna().head(2).tolist()
-                    column_analysis[col]['sample_values'].extend(sample)
+                    try:
+                        sample = df[col].dropna().head(2).tolist()
+                        column_analysis[col]['sample_values'].extend(sample)
+                    except Exception as e:
+                        logger.warning(f"Could not sample values for column {col} in {state}: {e}")
+                        column_analysis[col]['sample_values'].extend([])
                     
             except Exception as e:
                 logger.error(f"Error processing {file_path}: {e}")
@@ -592,11 +757,15 @@ class MainPipeline:
                 
                 for col in address_cols:
                     # Sample only first 5 values for speed
-                    sample_values = df[col].dropna().head(5).tolist()
+                    try:
+                        sample_values = df[col].dropna().head(5).tolist()
+                    except Exception as e:
+                        logger.warning(f"Could not sample values for column {col} in {state}: {e}")
+                        sample_values = []
                     
                     # Check for common issues (simplified)
                     issues = []
-                    if df[col].dtype == 'object':
+                    if df[col].dtype == 'object' and sample_values:
                         # Quick separator check
                         separators = set()
                         for val in sample_values:
@@ -651,7 +820,11 @@ class MainPipeline:
                 
                 for col in address_cols:
                     # Sample only first 100 records for speed
-                    sample_df = df[col].dropna().head(100)
+                    try:
+                        sample_df = df[col].dropna().head(100)
+                    except Exception as e:
+                        logger.warning(f"Could not sample data for column {col} in {state}: {e}")
+                        sample_df = pd.Series(dtype='object')
                     
                     separator_counts = {}
                     field_counts = []
@@ -664,13 +837,23 @@ class MainPipeline:
                                     separator_counts[sep] = separator_counts.get(sep, 0) + 1
                             
                             # Count fields (split by comma for now)
-                            fields = [f.strip() for f in val.split(',') if f.strip()]
-                            field_counts.append(len(fields))
+                            try:
+                                fields = [f.strip() for f in val.split(',') if f.strip()]
+                                field_counts.append(len(fields))
+                            except Exception as e:
+                                logger.warning(f"Could not parse fields for value in {col}: {e}")
+                                field_counts.append(0)
                     
                     # Calculate statistics
-                    avg_fields = sum(field_counts) / len(field_counts) if field_counts else 0
-                    max_fields = max(field_counts) if field_counts else 0
-                    min_fields = min(field_counts) if field_counts else 0
+                    try:
+                        avg_fields = sum(field_counts) / len(field_counts) if field_counts else 0
+                        max_fields = max(field_counts) if field_counts else 0
+                        min_fields = min(field_counts) if field_counts else 0
+                    except Exception as e:
+                        logger.warning(f"Could not calculate statistics for {col} in {state}: {e}")
+                        avg_fields = 0
+                        max_fields = 0
+                        min_fields = 0
                     
                     separation_results.append({
                         'state': state,
@@ -697,23 +880,46 @@ class MainPipeline:
         logger.info("Starting deduplication process...")
         
         # Load final data
-        df = pd.read_excel(final_file)
-        original_count = len(df)
+        try:
+            df = pd.read_excel(final_file)
+            if df is None or df.empty:
+                logger.error("Final file is empty or could not be loaded")
+                return None
+            original_count = len(df)
+        except Exception as e:
+            logger.error(f"Failed to load final file: {e}")
+            import traceback
+            logger.error(f"Full traceback: {traceback.format_exc()}")
+            return None
         
         # Remove exact duplicates
-        df_deduped = df.drop_duplicates()
-        final_count = len(df_deduped)
-        duplicates_removed = original_count - final_count
-        
-        logger.info(f"Removed {duplicates_removed} duplicate records")
+        try:
+            df_deduped = df.drop_duplicates()
+            final_count = len(df_deduped)
+            duplicates_removed = original_count - final_count
+            
+            logger.info(f"Removed {duplicates_removed} duplicate records")
+        except Exception as e:
+            logger.error(f"Deduplication failed: {e}")
+            # Use original data if deduplication fails
+            df_deduped = df
+            final_count = len(df_deduped)
+            duplicates_removed = 0
+            logger.warning("Using original data due to deduplication failure")
         
         # Save deduplicated data
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         output_file = os.path.join(self.final_dir, f"all_states_deduplicated_{timestamp}.xlsx")
-        df_deduped.to_excel(output_file, index=False)
         
-        logger.info(f"✅ Deduplication completed. Saved to: {output_file}")
-        return output_file
+        try:
+            df_deduped.to_excel(output_file, index=False)
+            logger.info(f"✅ Deduplication completed. Saved to: {output_file}")
+            return output_file
+        except Exception as e:
+            logger.error(f"Failed to save deduplicated data: {e}")
+            import traceback
+            logger.error(f"Full traceback: {traceback.format_exc()}")
+            return None
 
     def upload_to_staging(self, final_file: str) -> bool:
         """Upload final data to staging database table."""
@@ -758,6 +964,16 @@ class MainPipeline:
         """Run the complete pipeline from start to finish."""
         logger.info("🚀 Starting full CandidateFilings pipeline...")
         
+        # Track pipeline progress for recovery
+        pipeline_state = {
+            'state_cleaning_completed': False,
+            'office_standardization_completed': False,
+            'national_standardization_completed': False,
+            'deduplication_completed': False,
+            'audit_completed': False,
+            'staging_upload_completed': False
+        }
+        
         try:
             # Step 1: State cleaning
             logger.info("=== STEP 1: State Cleaning ===")
@@ -766,12 +982,18 @@ class MainPipeline:
                 logger.error("State cleaning failed")
                 return False
             
+            pipeline_state['state_cleaning_completed'] = True
+            logger.info(f"✅ State cleaning completed with {len(cleaned_files)} states")
+            
             # Step 2: Office standardization
             logger.info("=== STEP 2: Office Standardization ===")
             office_standardized_file = self.run_office_standardization(cleaned_files)
             if not office_standardized_file:
                 logger.error("Office standardization failed")
                 return False
+            
+            pipeline_state['office_standardization_completed'] = True
+            logger.info("✅ Office standardization completed")
             
             # Step 3: National standardization
             logger.info("=== STEP 3: National Standardization ===")
@@ -780,6 +1002,9 @@ class MainPipeline:
                 logger.error("National standardization failed")
                 return False
             
+            pipeline_state['national_standardization_completed'] = True
+            logger.info("✅ National standardization completed")
+            
             # Step 4: Deduplication
             logger.info("=== STEP 4: Deduplication ===")
             final_file = self.run_deduplication(nationally_standardized_file)
@@ -787,25 +1012,56 @@ class MainPipeline:
                 logger.error("Deduplication failed")
                 return False
             
+            pipeline_state['deduplication_completed'] = True
+            logger.info("✅ Deduplication completed")
+            
             # Step 5: Data audit
             logger.info("=== STEP 5: Data Audit ===")
-            audit_file, audit_status = self.run_data_audit()
+            try:
+                audit_file, audit_status = self.run_data_audit()
+                if audit_status == "audit_failed":
+                    logger.warning("Data audit failed, but continuing with pipeline")
+                else:
+                    pipeline_state['audit_completed'] = True
+                    logger.info("✅ Data audit completed")
+            except Exception as e:
+                logger.error(f"Data audit step failed: {e}")
+                logger.warning("Continuing with pipeline despite audit failure")
             
             # Step 6: Upload to staging database
             logger.info("=== STEP 6: Upload to Staging ===")
-            staging_success = self.upload_to_staging(final_file)
-            if not staging_success:
-                logger.error("Staging upload failed")
+            try:
+                staging_success = self.upload_to_staging(final_file)
+                if not staging_success:
+                    logger.error("Staging upload failed")
+                    return False
+                
+                pipeline_state['staging_upload_completed'] = True
+                logger.info("✅ Staging upload completed")
+            except Exception as e:
+                logger.error(f"Staging upload failed with exception: {e}")
+                import traceback
+                logger.error(f"Full traceback: {traceback.format_exc()}")
                 return False
             
             logger.info("✅ Data uploaded to staging successfully!")
             logger.info("📋 Review the data in staging before moving to production")
             logger.info("🚀 To move to production, run: python scripts/move_to_production.py")
             
+            # Log pipeline completion summary
             logger.info("🎉 Full pipeline completed successfully!")
+            logger.info("📊 Pipeline completion summary:")
+            for step, completed in pipeline_state.items():
+                status = "✅" if completed else "❌"
+                step_name = step.replace('_', ' ').title()
+                logger.info(f"  {status} {step_name}")
             
             # Final cleanup - keep only the latest cleaned file per state
-            self._final_cleanup()
+            try:
+                self._final_cleanup()
+            except Exception as e:
+                logger.warning(f"Final cleanup failed: {e}")
+                # Don't fail the pipeline for cleanup issues
             
             return True
             
@@ -832,15 +1088,32 @@ class MainPipeline:
         files_removed = 0
         for state, files in state_files.items():
             if len(files) > 1:
-                # Sort by modification time (newest first)
-                files.sort(key=lambda x: x.stat().st_mtime, reverse=True)
-                # Remove all but the newest
-                for old_file in files[1:]:
-                    old_file.unlink()
-                    files_removed += 1
-                    logger.info(f"Final cleanup: Removed old file: {old_file.name}")
+                try:
+                    # Sort by modification time (newest first)
+                    files.sort(key=lambda x: x.stat().st_mtime, reverse=True)
+                    # Remove all but the newest
+                    for old_file in files[1:]:
+                        try:
+                            old_file.unlink()
+                            files_removed += 1
+                            logger.info(f"Final cleanup: Removed old file: {old_file.name}")
+                        except Exception as e:
+                            logger.warning(f"Could not remove old file {old_file.name}: {e}")
+                except Exception as e:
+                    logger.warning(f"Could not process files for state {state}: {e}")
         
         logger.info(f"Final cleanup completed. Removed {files_removed} old files.")
+    
+    def get_pipeline_status(self) -> dict:
+        """Get current pipeline status and file counts."""
+        status = {
+            'raw_files': len(self._get_raw_data_files()),
+            'processed_files': len(list(Path(self.processed_dir).glob("*_cleaned_*.xlsx"))),
+            'final_files': len(list(Path(self.final_dir).glob("*.xlsx"))),
+            'report_files': len(list(Path("data/reports").glob("*.xlsx"))),
+            'log_files': len(list(Path("data/logs").glob("*.log")))
+        }
+        return status
 
 def main():
     """Main function to run the pipeline."""

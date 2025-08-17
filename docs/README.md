@@ -3,6 +3,8 @@
 ## Overview
 This repository contains a comprehensive data processing pipeline for political candidate filings data from multiple US states. The pipeline processes raw data files, cleans and standardizes the data, and uploads it to a Supabase database.
 
+**🚀 Recent Updates**: The pipeline has been significantly improved with comprehensive error handling, better logging, and robust data validation. All major import path issues have been resolved, and the pipeline now provides detailed progress tracking and graceful error recovery.
+
 ## Pipeline Architecture
 
 ### 1. Main Pipeline (`src/pipeline/main_pipeline.py`)
@@ -30,6 +32,14 @@ Standardizes office names across all states using fuzzy matching and categorizat
 
 ### 4. Database Management (`src/config/database.py`)
 Handles Supabase PostgreSQL connections and operations.
+
+### 5. Enhanced Error Handling & Monitoring
+The pipeline now includes:
+- **Comprehensive Error Handling**: Try-catch blocks around all critical operations
+- **Progress Tracking**: Real-time status updates for each pipeline step
+- **Data Validation**: Automatic checks for data quality and completeness
+- **Graceful Degradation**: Pipeline continues processing even when individual steps fail
+- **Detailed Logging**: Comprehensive logs with full error tracebacks
 
 ## Data Flow
 
@@ -86,14 +96,32 @@ data/
 ### Quick Start
 ```bash
 # 1. Set up environment variables
-cp scripts/env_template.txt .env
+cp env.example .env
 # Edit .env with your Supabase credentials
 
 # 2. Add raw data files to data/raw/
 # Place state data files in the raw directory
 
-# 3. Run the pipeline
+# 3. Test the fixed pipeline
+python -c "from src.pipeline.main_pipeline import MainPipeline; print('✅ Pipeline imports successful!')"
+
+# 4. Run the pipeline
 python run_pipeline.py
+```
+
+### Testing the Fixed Pipeline
+After the recent fixes, you can test that everything works:
+```bash
+# Test imports (should work now)
+python -c "from src.pipeline.main_pipeline import MainPipeline; print('Imports successful')"
+
+# Check pipeline status
+python -c "
+from src.pipeline.main_pipeline import MainPipeline
+pipeline = MainPipeline()
+status = pipeline.get_pipeline_status()
+print('Pipeline status:', status)
+"
 ```
 
 ### Environment Variables

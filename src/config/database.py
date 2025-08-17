@@ -37,13 +37,9 @@ class DatabaseManager:
         password = os.getenv('SUPABASE_PASSWORD')
         
         if not all([host, user, password]):
-            logger.warning("Missing Supabase environment variables. Using fallback defaults.")
-            # Fallback defaults (these won't work but provide clear error)
-            host = 'localhost'
-            port = '5432'
-            user = 'postgres'
-            password = 'missing_password'
-            database = 'postgres'
+            logger.error("Missing required Supabase environment variables")
+            logger.error("Please set SUPABASE_HOST, SUPABASE_USER, and SUPABASE_PASSWORD")
+            raise ValueError("SUPABASE_HOST, SUPABASE_USER, and SUPABASE_PASSWORD must be set")
         else:
             logger.info(f"Using environment variables: {host}:{port}")
         
