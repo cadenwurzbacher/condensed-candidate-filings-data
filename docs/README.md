@@ -34,8 +34,27 @@ Handles Supabase PostgreSQL connections and operations.
 ## Data Flow
 
 ```
-Raw Data → State Cleaners → Office Standardization → National Standardization → Deduplication → Data Audit → Database Upload
+Raw Data → State Cleaners → Office Standardization → National Standardization → Deduplication → Data Audit → Staging Database → Production Database
 ```
+
+## Database Workflow
+
+The pipeline uses a **two-phase approach** for safe database updates:
+
+### Phase 1: Staging Upload (Automatic)
+- Main pipeline automatically uploads processed data to `staging_candidates` table
+- Data is available for review before going live
+- Run with: `python scripts/run_pipeline.py`
+
+### Phase 2: Production Upload (Manual Review)
+- After reviewing staging data, manually promote to production
+- Moves data from `staging_candidates` to `filings` table
+- Run with: `python scripts/move_to_production.py`
+
+### Review Staging Data
+- Check staging data without moving to production: `python scripts/check_staging.py`
+- Review record counts, data quality, and sample records
+- Only promote to production when you're satisfied with the data
 
 ## File Structure
 
@@ -49,6 +68,8 @@ src/
 │   └── database.py              # Database connection management
 └── scripts/
     ├── run_pipeline.py          # Pipeline runner script
+    ├── move_to_production.py    # Move staging data to production
+    ├── check_staging.py         # Review staging data
     ├── setup_supabase.py        # Supabase setup helper
     └── test_db_connection.py    # Database connection tester
 

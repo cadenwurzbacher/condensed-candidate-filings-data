@@ -168,6 +168,110 @@ class DatabaseManager:
             logger.error(f"Failed to get table info for '{table_name}': {e}")
             return pd.DataFrame()
 
+    def clear_staging_table(self) -> bool:
+        """Clear all data from the staging_candidates table."""
+        try:
+            if not self.table_exists('staging_candidates'):
+                logger.warning("staging_candidates table does not exist")
+                return True  # Consider this a success if table doesn't exist
+            
+            query = "DELETE FROM staging_candidates"
+            with self.engine.connect() as conn:
+                conn.execute(text(query))
+                conn.commit()
+            
+            logger.info("Staging table cleared successfully")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to clear staging table: {e}")
+            return False
+    
+    def upload_to_staging(self, df: pd.DataFrame) -> bool:
+        """Upload DataFrame to staging_candidates table."""
+        try:
+            # Ensure the staging table exists with correct schema
+            if not self.table_exists('staging_candidates'):
+                logger.info("Creating staging_candidates table...")
+                self._create_staging_table()
+            
+            # Upload data to staging
+            success = self.upload_dataframe(df, 'staging_candidates', if_exists='append', index=False)
+            if success:
+                logger.info(f"Successfully uploaded {len(df)} records to staging")
+                return True
+            else:
+                logger.error("Failed to upload data to staging")
+                return False
+                
+        except Exception as e:
+            logger.error(f"Failed to upload to staging: {e}")
+            return False
+    
+    def get_staging_record_count(self) -> int:
+        """Get the number of records in the staging_candidates table."""
+        try:
+            query = "SELECT COUNT(*) FROM staging_candidates"
+            result = self.execute_query(query)
+            if not result.empty:
+                return int(result.iloc[0, 0])
+            return 0
+        except Exception as e:
+            logger.error(f"Failed to get staging record count: {e}")
+            return 0
+    
+    def _create_staging_table(self) -> bool:
+        """Create the staging_candidates table with the correct schema."""
+        try:
+            create_table_sql = """
+            CREATE TABLE IF NOT EXISTS staging_candidates (
+                id SERIAL PRIMARY KEY,
+                election_year INTEGER,
+                election_type VARCHAR(50),
+                office VARCHAR(255),
+                district VARCHAR(100),
+                candidate_name VARCHAR(255),
+                first_name VARCHAR(100),
+                middle_name VARCHAR(100),
+                last_name VARCHAR(100),
+                prefix VARCHAR(50),
+                suffix VARCHAR(50),
+                nickname VARCHAR(100),
+                full_name_display VARCHAR(255),
+                party VARCHAR(100),
+                phone VARCHAR(50),
+                email VARCHAR(255),
+                address TEXT,
+                website VARCHAR(255),
+                state VARCHAR(50),
+                original_name VARCHAR(255),
+                original_state VARCHAR(50),
+                original_election_year INTEGER,
+                original_office VARCHAR(255),
+                original_filing_date DATE,
+                stable_id VARCHAR(100),
+                county VARCHAR(100),
+                city VARCHAR(100),
+                zip_code VARCHAR(20),
+                filing_date DATE,
+                election_date DATE,
+                facebook VARCHAR(255),
+                twitter VARCHAR(255),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+            """
+            
+            with self.engine.connect() as conn:
+                conn.execute(text(create_table_sql))
+                conn.commit()
+            
+            logger.info("staging_candidates table created successfully")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to create staging table: {e}")
+            return False
+
 # Global database manager instance
 db_manager = DatabaseManager()
 

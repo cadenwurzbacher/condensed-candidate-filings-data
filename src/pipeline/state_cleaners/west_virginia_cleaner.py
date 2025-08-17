@@ -551,8 +551,8 @@ class WestVirginiaCleaner:
         
         df['original_name'] = df[name_column].copy() if name_column in df.columns else df['candidate_name'].copy()
         df['original_state'] = df['state'].copy()
-        df['original_election_year'] = df['election_year'].copy()
-        df['original_office'] = df[office_column].copy() if office_column in df.columns else df['office'].copy()
+        df['original_election_year'] = df['election_year'].copy() if 'election_year' in df.columns else pd.NA
+        df['original_office'] = df[office_column].copy() if office_column in df.columns else pd.NA
         df['original_filing_date'] = pd.NA  # Not available in WV data
         
         # Add missing columns with None values

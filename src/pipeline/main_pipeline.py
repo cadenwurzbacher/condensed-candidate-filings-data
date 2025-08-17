@@ -378,7 +378,9 @@ class MainPipeline:
         }
         
         if 'party' in df.columns:
-            df['party_standardized'] = df['party'].str.lower().map(party_mappings).fillna(df['party'])
+            # Ensure party column is string type before using .str methods
+            party_series = df['party'].astype(str)
+            df['party_standardized'] = party_series.str.lower().map(party_mappings).fillna(df['party'])
             logger.info("Party standardization completed")
         
         return df
@@ -390,11 +392,13 @@ class MainPipeline:
         if 'address' in df.columns:
             # Add address parsing columns
             df['address_parsed'] = True
-            df['address_clean'] = df['address'].astype(str).str.strip()
+            # Ensure address column is string type before using .str methods
+            address_series = df['address'].astype(str)
+            df['address_clean'] = address_series.str.strip()
             
             # Extract common address components
-            df['has_zip'] = df['address'].str.contains(r'\d{5}(?:-\d{4})?', na=False)
-            df['has_state'] = df['address'].str.contains(r'\b[A-Z]{2}\b', na=False)
+            df['has_zip'] = address_series.str.contains(r'\d{5}(?:-\d{4})?', na=False)
+            df['has_state'] = address_series.str.contains(r'\b[A-Z]{2}\b', na=False)
             
             logger.info("Address parsing completed")
         
@@ -410,7 +414,7 @@ class MainPipeline:
         df['data_source'] = 'state_filings'
         
         # Ensure consistent column names
-        df.columns = df.columns.str.lower().str.replace(' ', '_')
+        df.columns = df.columns.astype(str).str.lower().str.replace(' ', '_')
         
         logger.info("National standards applied")
         return df
@@ -468,7 +472,14 @@ class MainPipeline:
                 duplicates = df.duplicated().sum()
                 null_values = df.isnull().sum().sum()
                 empty_strings = (df == '').sum().sum()
-                whitespace_only = (df.astype(str).str.strip() == '').sum().sum()
+                # Check for whitespace-only strings safely
+                try:
+                    # Convert to string and check for whitespace-only
+                    df_str = df.astype(str)
+                    whitespace_only = (df_str.str.strip() == '').sum().sum()
+                except Exception as e:
+                    logger.warning(f"Could not check whitespace for {state}: {e}")
+                    whitespace_only = 0
                 
                 # Calculate quality score
                 quality_score = self._calculate_quality_score(
@@ -704,9 +715,9 @@ class MainPipeline:
         logger.info(f"✅ Deduplication completed. Saved to: {output_file}")
         return output_file
 
-    def upload_to_database(self, final_file: str) -> bool:
-        """Upload final data to database."""
-        logger.info("Starting database upload...")
+    def upload_to_staging(self, final_file: str) -> bool:
+        """Upload final data to staging database table."""
+        logger.info("Starting staging database upload...")
         
         try:
             # Connect to database
@@ -716,17 +727,29 @@ class MainPipeline:
             
             # Load final data
             df = pd.read_excel(final_file)
-            logger.info(f"Loaded {len(df)} records for database upload")
+            logger.info(f"Loaded {len(df)} records for staging upload")
             
-            # TODO: Implement staging table upload
-            # TODO: Implement production table migration
-            # TODO: Implement conflict resolution
+            # Clear existing staging data (replace all)
+            logger.info("Clearing existing staging data...")
+            clear_success = self.db_manager.clear_staging_table()
+            if not clear_success:
+                logger.error("Failed to clear staging table")
+                return False
             
-            logger.info("✅ Database upload completed successfully")
+            # Upload new data to staging
+            logger.info("Uploading data to staging table...")
+            upload_success = self.db_manager.upload_to_staging(df)
+            if not upload_success:
+                logger.error("Failed to upload to staging table")
+                return False
+            
+            # Verify upload
+            record_count = self.db_manager.get_staging_record_count()
+            logger.info(f"✅ Staging upload completed successfully: {record_count} records in staging")
             return True
             
         except Exception as e:
-            logger.error(f"❌ Database upload failed: {e}")
+            logger.error(f"❌ Staging upload failed: {e}")
             return False
         finally:
             self.db_manager.disconnect()
@@ -768,9 +791,16 @@ class MainPipeline:
             logger.info("=== STEP 5: Data Audit ===")
             audit_file, audit_status = self.run_data_audit()
             
-            # Step 6: Database upload (optional)
-            logger.info("=== STEP 6: Database Upload ===")
-            db_success = self.upload_to_database(final_file)
+            # Step 6: Upload to staging database
+            logger.info("=== STEP 6: Upload to Staging ===")
+            staging_success = self.upload_to_staging(final_file)
+            if not staging_success:
+                logger.error("Staging upload failed")
+                return False
+            
+            logger.info("✅ Data uploaded to staging successfully!")
+            logger.info("📋 Review the data in staging before moving to production")
+            logger.info("🚀 To move to production, run: python scripts/move_to_production.py")
             
             logger.info("🎉 Full pipeline completed successfully!")
             
