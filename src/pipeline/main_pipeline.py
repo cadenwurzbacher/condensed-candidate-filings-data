@@ -103,13 +103,15 @@ class MainPipeline:
                  processed_dir: str = "data/processed",
                  final_dir: str = "data/final",
                  staging_table: str = "staging_candidates",
-                 production_table: str = "filings"):
+                 production_table: str = "filings",
+                 final_filename: Optional[str] = "candidate_filings.xlsx"):
         
         self.raw_data_dir = raw_data_dir
         self.processed_dir = processed_dir
         self.final_dir = final_dir
         self.staging_table = staging_table
         self.production_table = production_table
+        self.final_filename = final_filename
         
         # Initialize processors
         self.office_standardizer = OfficeStandardizer()
@@ -908,8 +910,11 @@ class MainPipeline:
             logger.warning("Using original data due to deduplication failure")
         
         # Save deduplicated data
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        output_file = os.path.join(self.final_dir, f"all_states_deduplicated_{timestamp}.xlsx")
+        if self.final_filename:
+            output_file = os.path.join(self.final_dir, self.final_filename)
+        else:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            output_file = os.path.join(self.final_dir, f"all_states_deduplicated_{timestamp}.xlsx")
         
         try:
             df_deduped.to_excel(output_file, index=False)
@@ -1063,6 +1068,12 @@ class MainPipeline:
                 logger.warning(f"Final cleanup failed: {e}")
                 # Don't fail the pipeline for cleanup issues
             
+            # Remove intermediate final outputs so only one final file remains
+            try:
+                self._cleanup_final_outputs(file_to_keep=final_file)
+            except Exception as e:
+                logger.warning(f"Could not clean up intermediate final outputs: {e}")
+            
             return True
             
         except Exception as e:
@@ -1103,6 +1114,35 @@ class MainPipeline:
                     logger.warning(f"Could not process files for state {state}: {e}")
         
         logger.info(f"Final cleanup completed. Removed {files_removed} old files.")
+    
+    def _cleanup_final_outputs(self, file_to_keep: Optional[str]) -> None:
+        """Keep only the specified final output in `final_dir`, remove the rest.
+        
+        Parameters
+        ----------
+        file_to_keep: Optional[str]
+            Absolute or relative path to the file that should be preserved. If None,
+            all `.xlsx` files in `final_dir` will be removed.
+        """
+        logger.info("Cleaning up intermediate final outputs...")
+        try:
+            keep_path = None
+            if file_to_keep:
+                keep_path = Path(file_to_keep).resolve()
+            removed = 0
+            for path in Path(self.final_dir).glob("*.xlsx"):
+                try:
+                    # Skip the file we want to keep
+                    if keep_path and path.resolve() == keep_path:
+                        continue
+                    path.unlink()
+                    removed += 1
+                    logger.info(f"Removed intermediate final file: {path.name}")
+                except Exception as e:
+                    logger.warning(f"Could not remove final file {path.name}: {e}")
+            logger.info(f"Final outputs cleanup completed. Removed {removed} files.")
+        except Exception as e:
+            logger.warning(f"Final outputs cleanup encountered an error: {e}")
     
     def get_pipeline_status(self) -> dict:
         """Get current pipeline status and file counts."""
