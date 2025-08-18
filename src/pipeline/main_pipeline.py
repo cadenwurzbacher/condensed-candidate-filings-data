@@ -110,7 +110,7 @@ class MainPipeline:
                  final_dir: str = "data/final",
                  staging_table: str = "staging_candidates",
                  production_table: str = "filings",
-                 final_filename: Optional[str] = "candidate_filings.xlsx"):
+                 final_filename: Optional[str] = None):
         
         self.raw_data_dir = raw_data_dir
         self.processed_dir = processed_dir
@@ -947,12 +947,9 @@ class MainPipeline:
             duplicates_removed = 0
             logger.warning("Using original data due to deduplication failure")
         
-        # Save deduplicated data
-        if self.final_filename:
-            output_file = os.path.join(self.final_dir, self.final_filename)
-        else:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            output_file = os.path.join(self.final_dir, f"all_states_deduplicated_{timestamp}.xlsx")
+        # Save deduplicated data with timestamp
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_file = os.path.join(self.final_dir, f"candidate_filings_{timestamp}.xlsx")
         
         try:
             df_deduped.to_excel(output_file, index=False)
@@ -1112,6 +1109,12 @@ class MainPipeline:
             except Exception as e:
                 logger.warning(f"Could not clean up intermediate final outputs: {e}")
             
+            # Clean up old candidate_filings files, keep only the most recent
+            try:
+                self._cleanup_old_candidate_filings()
+            except Exception as e:
+                logger.warning(f"Could not clean up old candidate_filings files: {e}")
+            
             return True
             
         except Exception as e:
@@ -1154,33 +1157,55 @@ class MainPipeline:
         logger.info(f"Final cleanup completed. Removed {files_removed} old files.")
     
     def _cleanup_final_outputs(self, file_to_keep: Optional[str]) -> None:
-        """Keep only the specified final output in `final_dir`, remove the rest.
+        """Keep only the final candidate_filings file in `final_dir`, remove all others.
         
         Parameters
         ----------
         file_to_keep: Optional[str]
-            Absolute or relative path to the file that should be preserved. If None,
-            all `.xlsx` files in `final_dir` will be removed.
+            Path to the final candidate_filings file that should be preserved.
         """
         logger.info("Cleaning up intermediate final outputs...")
         try:
-            keep_path = None
-            if file_to_keep:
-                keep_path = Path(file_to_keep).resolve()
             removed = 0
             for path in Path(self.final_dir).glob("*.xlsx"):
                 try:
-                    # Skip the file we want to keep
-                    if keep_path and path.resolve() == keep_path:
+                    # Keep only candidate_filings files, remove all intermediate files
+                    if "candidate_filings_" in path.name:
+                        # This is a final output file, keep it
                         continue
-                    path.unlink()
-                    removed += 1
-                    logger.info(f"Removed intermediate final file: {path.name}")
+                    else:
+                        # This is an intermediate file, remove it
+                        path.unlink()
+                        removed += 1
+                        logger.info(f"Removed intermediate final file: {path.name}")
                 except Exception as e:
                     logger.warning(f"Could not remove final file {path.name}: {e}")
             logger.info(f"Final outputs cleanup completed. Removed {removed} files.")
         except Exception as e:
             logger.warning(f"Final outputs cleanup encountered an error: {e}")
+    
+    def _cleanup_old_candidate_filings(self) -> None:
+        """Keep only the most recent candidate_filings file, remove older ones."""
+        logger.info("Cleaning up old candidate_filings files...")
+        try:
+            candidate_files = list(Path(self.final_dir).glob("candidate_filings_*.xlsx"))
+            if len(candidate_files) > 1:
+                # Sort by modification time (newest first)
+                candidate_files.sort(key=lambda x: x.stat().st_mtime, reverse=True)
+                # Remove all but the newest
+                removed = 0
+                for old_file in candidate_files[1:]:
+                    try:
+                        old_file.unlink()
+                        removed += 1
+                        logger.info(f"Removed old candidate_filings file: {old_file.name}")
+                    except Exception as e:
+                        logger.warning(f"Could not remove old file {old_file.name}: {e}")
+                logger.info(f"Removed {removed} old candidate_filings files, keeping only: {candidate_files[0].name}")
+            else:
+                logger.info("No old candidate_filings files to clean up")
+        except Exception as e:
+            logger.warning(f"Could not clean up old candidate_filings files: {e}")
     
     def get_pipeline_status(self) -> dict:
         """Get current pipeline status and file counts."""
