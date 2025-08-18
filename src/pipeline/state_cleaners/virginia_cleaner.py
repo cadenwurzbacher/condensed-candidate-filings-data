@@ -456,7 +456,14 @@ class VirginiaCleaner:
             cleaned = re.sub(r'\s+', ' ', cleaned)
             return cleaned
         
-        df['phone'] = df['Phone Number'].apply(clean_phone)
+        # Check if Phone Number column exists, if not try alternative names
+        if 'Phone Number' in df.columns:
+            df['phone'] = df['Phone Number'].apply(clean_phone)
+        elif 'Phone' in df.columns:
+            df['phone'] = df['Phone'].apply(clean_phone)
+        else:
+            logger.warning("No phone column found in Virginia data, setting to None")
+            df['phone'] = None
         df['email'] = df['Email'].apply(clean_email)
         df['address'] = df['Address'].apply(clean_address)
         df['website'] = df['Website'].apply(lambda x: str(x).strip() if pd.notna(x) else None)
