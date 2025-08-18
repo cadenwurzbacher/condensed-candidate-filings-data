@@ -32,18 +32,24 @@ from state_cleaners.georgia_cleaner import clean_georgia_candidates
 from state_cleaners.idaho_cleaner import clean_idaho_candidates
 from state_cleaners.illinois_cleaner import clean_illinois_candidates
 from state_cleaners.indiana_cleaner import clean_indiana_candidates
+from state_cleaners.iowa_cleaner import clean_iowa_candidates
 from state_cleaners.kansas_cleaner import clean_kansas_candidates
 from state_cleaners.kentucky_cleaner import clean_kentucky_candidates
 from state_cleaners.louisiana_cleaner import clean_louisiana_candidates
+from state_cleaners.maryland_cleaner import clean_maryland_candidates
 from state_cleaners.missouri_cleaner import clean_missouri_candidates
 from state_cleaners.montana_cleaner import clean_montana_candidates
 from state_cleaners.nebraska_cleaner import clean_nebraska_candidates
 from state_cleaners.new_mexico_cleaner import clean_new_mexico_candidates
+from state_cleaners.new_york_cleaner import clean_new_york_candidates
+from state_cleaners.north_carolina_cleaner import clean_north_carolina_candidates
 from state_cleaners.oklahoma_cleaner import clean_oklahoma_candidates
 from state_cleaners.oregon_cleaner import clean_oregon_candidates
+from state_cleaners.pennsylvania_cleaner import clean_pennsylvania_candidates
 from state_cleaners.south_carolina_cleaner import clean_south_carolina_candidates
 from state_cleaners.south_dakota_cleaner import clean_south_dakota_candidates
 from state_cleaners.vermont_cleaner import clean_vermont_candidates
+from state_cleaners.virginia_cleaner import clean_virginia_candidates
 from state_cleaners.washington_cleaner import clean_washington_candidates
 from state_cleaners.west_virginia_cleaner import clean_west_virginia_candidates
 from state_cleaners.wyoming_cleaner import clean_wyoming_candidates
@@ -128,18 +134,24 @@ class MainPipeline:
             'idaho': clean_idaho_candidates,
             'illinois': clean_illinois_candidates,
             'indiana': clean_indiana_candidates,
+            'iowa': clean_iowa_candidates,
             'kansas': clean_kansas_candidates,
             'kentucky': clean_kentucky_candidates,
             'louisiana': clean_louisiana_candidates,
+            'maryland': clean_maryland_candidates,
             'missouri': clean_missouri_candidates,
             'montana': clean_montana_candidates,
             'nebraska': clean_nebraska_candidates,
             'new_mexico': clean_new_mexico_candidates,
+            'new_york': clean_new_york_candidates,
+            'north_carolina': clean_north_carolina_candidates,
             'oklahoma': clean_oklahoma_candidates,
             'oregon': clean_oregon_candidates,
+            'pennsylvania': clean_pennsylvania_candidates,
             'south_carolina': clean_south_carolina_candidates,
             'south_dakota': clean_south_dakota_candidates,
             'vermont': clean_vermont_candidates,
+            'virginia': clean_virginia_candidates,
             'washington': clean_washington_candidates,
             'west_virginia': clean_west_virginia_candidates,
             'wyoming': clean_wyoming_candidates

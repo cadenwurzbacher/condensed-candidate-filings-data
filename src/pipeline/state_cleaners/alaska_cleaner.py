@@ -71,6 +71,23 @@ class AlaskaCleaner:
             logger.info(f"Removed {len(columns_to_remove)} duplicate columns: {columns_to_remove}")
         
         return df
+    
+    def ensure_column_order(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Ensure columns match the standard 31-column schema."""
+        ALASKA_COLUMN_ORDER = [
+            'election_year', 'election_type', 'office', 'district', 'full_name_display',
+            'first_name', 'middle_name', 'last_name', 'prefix', 'suffix', 'nickname',
+            'party', 'phone', 'email', 'address', 'website',
+            'state', 'original_name', 'original_state', 'original_election_year',
+            'original_office', 'original_filing_date', 'id', 'stable_id', 'county',
+            'city', 'zip_code', 'filing_date', 'election_date', 'facebook', 'twitter'
+        ]
+        
+        for col in ALASKA_COLUMN_ORDER:
+            if col not in df.columns:
+                df[col] = None
+        
+        return df[ALASKA_COLUMN_ORDER]
 
     def clean_alaska_data(self, df: pd.DataFrame) -> pd.DataFrame:
         """

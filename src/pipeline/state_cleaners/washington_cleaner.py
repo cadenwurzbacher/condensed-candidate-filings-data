@@ -122,12 +122,37 @@ class WashingtonCleaner:
     def ensure_column_order(self, df: pd.DataFrame) -> pd.DataFrame:
         """Ensure columns match Alaska's exact order."""
         ALASKA_COLUMN_ORDER = [
-            'election_year', 'election_type', 'office', 'district', 'full_name_display',
-            'first_name', 'middle_name', 'last_name', 'prefix', 'suffix', 'nickname',
-            'full_name_display', 'party', 'phone', 'email', 'address', 'website',
-            'state', 'original_name', 'original_state', 'original_election_year',
-            'original_office', 'original_filing_date', 'id', 'stable_id', 'county',
-            'city', 'zip_code', 'filing_date', 'election_date', 'facebook', 'twitter'
+            'election_year',
+            'election_type',
+            'office',
+            'district',
+            'full_name_display',
+            'first_name',
+            'middle_name',
+            'last_name',
+            'prefix',
+            'suffix',
+            'nickname',
+            'party',
+            'phone',
+            'email',
+            'address',
+            'website',
+            'state',
+            'original_name',
+            'original_state',
+            'original_election_year',
+            'original_office',
+            'original_filing_date',
+            'id',
+            'stable_id',
+            'county',
+            'city',
+            'zip_code',
+            'filing_date',
+            'election_date',
+            'facebook',
+            'twitter'
         ]
         
         for col in ALASKA_COLUMN_ORDER:

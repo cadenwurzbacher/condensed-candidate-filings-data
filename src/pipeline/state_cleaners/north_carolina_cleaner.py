@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Colorado State Data Cleaner
+North Carolina State Data Cleaner
 
-This module contains functions to clean and standardize Colorado political candidate data
+This module contains functions to clean and standardize North Carolina political candidate data
 according to the final database schema requirements.
 """
 
@@ -23,30 +23,30 @@ DEFAULT_INPUT_DIR = "Raw State Data - Current"  # Default input directory
 
 def list_available_input_files(input_dir: str = DEFAULT_INPUT_DIR) -> List[str]:
     """
-    List all available CSV files in the input directory.
+    List all available Excel files in the input directory.
     
     Args:
         input_dir: Directory to search for input files
         
     Returns:
-        List of available CSV file paths
+        List of available Excel file paths
     """
     if not os.path.exists(input_dir):
         logger.warning(f"Input directory {input_dir} does not exist")
         return []
     
-    csv_files = []
+    excel_files = []
     for file in os.listdir(input_dir):
-        if file.endswith('.csv') and 'colorado' in file.lower():
-            csv_files.append(os.path.join(input_dir, file))
+        if file.endswith(('.xlsx', '.xls')) and not file.startswith('~$'):
+            excel_files.append(os.path.join(input_dir, file))
     
-    return sorted(csv_files)
+    return sorted(excel_files)
 
-class ColoradoCleaner:
-    """Handles cleaning and standardization of Colorado political candidate data."""
+class NorthCarolinaCleaner:
+    """Handles cleaning and standardization of North Carolina political candidate data."""
     
     def __init__(self, output_dir: str = DEFAULT_OUTPUT_DIR):
-        self.state_name = "Colorado"
+        self.state_name = "North Carolina"
         self.output_dir = output_dir
         
         # Create output directory if it doesn't exist
@@ -54,21 +54,34 @@ class ColoradoCleaner:
             os.makedirs(self.output_dir)
             logger.info(f"Created output directory: {self.output_dir}")
         
+    def ensure_column_order(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Ensure columns match Alaska's exact order."""
+        ALASKA_COLUMN_ORDER = [
+            'election_year', 'election_type', 'office', 'district', 'full_name_display',
+            'first_name', 'middle_name', 'last_name', 'prefix', 'suffix', 'nickname',
+            'party', 'phone', 'email', 'address', 'website',
+            'state', 'original_name', 'original_state', 'original_election_year',
+            'original_office', 'original_filing_date', 'id', 'stable_id', 'county',
+            'city', 'zip_code', 'filing_date', 'election_date', 'facebook', 'twitter'
+        ]
+        
+        for col in ALASKA_COLUMN_ORDER:
+            if col not in df.columns:
+                df[col] = None
+        
+        return df[ALASKA_COLUMN_ORDER]
+    
     def _remove_duplicate_columns(self, df: pd.DataFrame) -> pd.DataFrame:
         """Remove original columns that have been replaced by cleaned versions."""
         logger.info("Removing duplicate columns...")
         
-        # Columns to remove (original versions) - only remove if we have cleaned versions
-        columns_to_remove = []
+        # Columns to remove (original versions)
+        columns_to_remove = [
+            'Election', 'Office', 'Name', 'Party', 'Address', 'Email', 'Website', 'Phone Number'
+        ]
         
-        # Check if we have cleaned versions before removing originals
-        if 'full_name_display' in df.columns and 'name' in df.columns:
-            columns_to_remove.append('name')
-        if 'office_cleaned' in df.columns and 'original_office' in df.columns:
-            columns_to_remove.append('office_cleaned')
-        if 'district_cleaned' in df.columns:
-            columns_to_remove.append('district_cleaned')
-        # Don't remove party column - we need to keep it
+        # Only remove if they exist and we have cleaned versions
+        columns_to_remove = [col for col in columns_to_remove if col in df.columns]
         
         if columns_to_remove:
             df = df.drop(columns=columns_to_remove)
@@ -76,24 +89,23 @@ class ColoradoCleaner:
         
         return df
 
-    def clean_colorado_data(self, df: pd.DataFrame, filename: str) -> pd.DataFrame:
+    def clean_north_carolina_data(self, df: pd.DataFrame) -> pd.DataFrame:
         """
-        Clean and standardize Colorado candidate data according to final schema.
+        Clean and standardize North Carolina candidate data according to final schema.
         
         Args:
-            df: Raw Colorado candidate data DataFrame
-            filename: Original filename for extracting election year
+            df: Raw North Carolina candidate data DataFrame
             
         Returns:
             Cleaned DataFrame conforming to final schema
         """
-        logger.info(f"Starting Colorado data cleaning for {len(df)} records...")
+        logger.info(f"Starting North Carolina data cleaning for {len(df)} records...")
         
         # Create a copy to avoid modifying original
         cleaned_df = df.copy()
         
-        # Step 1: Handle election year and type from filename
-        cleaned_df = self._process_election_data(cleaned_df, filename)
+        # Step 1: Handle election year and type
+        cleaned_df = self._process_election_data(cleaned_df)
         
         # Step 2: Clean and standardize office and district information
         cleaned_df = self._process_office_and_district(cleaned_df)
@@ -104,7 +116,7 @@ class ColoradoCleaner:
         # Step 4: Standardize party names
         cleaned_df = self._standardize_parties(cleaned_df)
         
-        # Step 5: Clean contact information (Colorado doesn't have much contact info)
+        # Step 5: Clean contact information
         cleaned_df = self._clean_contact_info(cleaned_df)
         
         # Step 6: Add required columns for final schema
@@ -116,39 +128,46 @@ class ColoradoCleaner:
         # Step 8: Remove duplicate columns
         cleaned_df = self._remove_duplicate_columns(cleaned_df)
         
-        # Step 9: Reorder columns to match Alaska's schema
-        cleaned_df = self._reorder_columns(cleaned_df)
+        # Final step: Ensure column order matches Alaska's exact structure
+        cleaned_df = self.ensure_column_order(cleaned_df)
         
-        # Final check: ensure district is string type
-        if 'district' in cleaned_df.columns:
-            # Convert to string first, then to object to ensure proper type
-            cleaned_df['district'] = cleaned_df['district'].astype(str).astype('object')
-            # Replace 'nan' strings with actual NaN
-            cleaned_df['district'] = cleaned_df['district'].replace('nan', pd.NA)
-            logger.info(f"Final district column type: {cleaned_df['district'].dtype}")
-        
-        logger.info(f"Colorado data cleaning completed. Final shape: {cleaned_df.shape}")
+        logger.info(f"North Carolina data cleaning completed. Final shape: {cleaned_df.shape}")
         return cleaned_df
     
-    def _process_election_data(self, df: pd.DataFrame, filename: str) -> pd.DataFrame:
-        """Process election year and type from filename."""
-        logger.info("Processing election data from filename...")
+    def _process_election_data(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Process election year and type from election column."""
+        logger.info("Processing election data...")
         
-        # Extract year from filename (e.g., "colorado_candidates_2024.csv" -> 2024)
-        year_match = re.search(r'(\d{4})', filename)
-        if year_match:
-            election_year = int(year_match.group(1))
-        else:
-            # Default to current year if no year found
-            election_year = datetime.now().year
-            logger.warning(f"No election year found in filename {filename}, using {election_year}")
+        def extract_election_info(election_str: str) -> Tuple[Optional[int], Optional[str]]:
+            if pd.isna(election_str):
+                return None, None
+            
+            election_str = str(election_str).strip()
+            
+            # Extract year from election string
+            year_match = re.search(r'20\d{2}', election_str)
+            if year_match:
+                year = int(year_match.group())
+            else:
+                return None, None
+            
+            # Determine election type
+            election_str_lower = election_str.lower()
+            if 'primary' in election_str_lower:
+                election_type = "Primary"
+            elif 'general' in election_str_lower:
+                election_type = "General"
+            elif 'special' in election_str_lower:
+                election_type = "Special"
+            else:
+                election_type = "General"  # Default
+            
+            return year, election_type
         
-        # For Colorado, assume it's a Primary election unless specified otherwise
-        election_type = "Primary"
-        
-        # Add election columns
-        df['election_year'] = election_year
-        df['election_type'] = election_type
+        # Apply election processing
+        election_results = df['Election'].apply(extract_election_info)
+        df['election_year'] = [result[0] for result in election_results]
+        df['election_type'] = [result[1] for result in election_results]
         
         return df
     
@@ -156,89 +175,50 @@ class ColoradoCleaner:
         """Clean and standardize office and district information."""
         logger.info("Processing office and district information...")
         
-        def process_office_district(office_str: str, district_str: str) -> Tuple[str, Optional[str]]:
+        def process_office_district(office_str: str) -> Tuple[str, Optional[str]]:
             if pd.isna(office_str):
                 return None, None
             
             office_str = str(office_str).strip()
-            district_str = str(district_str).strip() if pd.notna(district_str) else ""
+            
+            # Handle US President/Vice President
+            if "US PRESIDENT" in office_str or "US VICE PRESIDENT" in office_str:
+                return "US President", None
             
             # Handle US Representative
-            if "Representative to the" in office_str and "United States Congress" in office_str:
-                # Extract district number from the office string
-                district_match = re.search(r'District (\d+)', office_str)
+            if "UNITED STATES REPRESENTATIVE" in office_str or "US REPRESENTATIVE" in office_str:
+                # Extract district number if present
+                district_match = re.search(r'DISTRICT (\d+)', office_str, re.IGNORECASE)
                 if district_match:
                     district = district_match.group(1)
                 else:
-                    district = None
+                    district = "At Large"
                 return "US Representative", district
             
-            # Handle State Senator
-            if "State Senator" in office_str:
-                # Extract district from office string (e.g., "State Senator - District X")
-                district_match = re.search(r'District\s+(\d+)', office_str, re.IGNORECASE)
-                if district_match:
-                    district = district_match.group(1)
-                    return "State Senator", district
-                else:
-                    return "State Senator", district_str if district_str else None
+            # Handle US Senate
+            if "UNITED STATES SENATOR" in office_str or "US SENATOR" in office_str:
+                return "US Senator", None
             
-            # Handle State Representative
-            if "State Representative" in office_str:
-                # Extract district from office string (e.g., "State Representative - District X")
-                district_match = re.search(r'District\s+(\d+)', office_str, re.IGNORECASE)
-                if district_match:
-                    district = district_match.group(1)
-                    return "State Representative", district
-                else:
-                    return "State Representative", district_str if district_str else None
+            # Handle State Senate districts
+            senate_match = re.match(r'STATE SENATE DISTRICT (\d+)', office_str, re.IGNORECASE)
+            if senate_match:
+                district = senate_match.group(1)
+                return "State Senate", district
             
-            # Handle State Board of Education Member
-            if "State Board of Education Member" in office_str:
-                # Extract district from office string (e.g., "State Board of Education Member - Congressional District X")
-                district_match = re.search(r'Congressional\s+District\s+(\d+)', office_str, re.IGNORECASE)
-                if district_match:
-                    district = district_match.group(1)
-                    return "State Board of Education Member", district
-                else:
-                    return "State Board of Education Member", district_str if district_str else None
+            # Handle State House districts
+            house_match = re.match(r'STATE HOUSE DISTRICT (\d+)', office_str, re.IGNORECASE)
+            if house_match:
+                district = house_match.group(1)
+                return "State House", district
             
-            # Handle Regent of the University of Colorado
-            if "Regent of the University of Colorado" in office_str:
-                # Extract district from office string (e.g., "Regent of the University of Colorado - Congressional District X")
-                district_match = re.search(r'Congressional\s+District\s+(\d+)', office_str, re.IGNORECASE)
-                if district_match:
-                    district = district_match.group(1)
-                    return "Regent of the University of Colorado", district
-                else:
-                    return "Regent of the University of Colorado", district_str if district_str else None
-            
-            # Handle District Attorney
-            if "District Attorney" in office_str:
-                # Extract district from office string (e.g., "District Attorney - 1st Judicial District")
-                district_match = re.search(r'(\d+)(?:st|nd|rd|th)\s+Judicial\s+District', office_str, re.IGNORECASE)
-                if district_match:
-                    district = district_match.group(1)
-                    return "District Attorney", district
-                else:
-                    return "District Attorney", district_str if district_str else None
-            
-            # For other offices, keep as is
-            return office_str, district_str if district_str else None
+            # Handle other offices (keep as is)
+            return office_str, None
         
         # Apply office and district processing
-        office_results = df.apply(lambda row: process_office_district(row['office'], row['district']), axis=1)
-        df['office_cleaned'] = [result[0] for result in office_results]
-        df['district_cleaned'] = [result[1] for result in office_results]
-        
-        # Ensure district_cleaned is string type to prevent auto-conversion
-        df['district_cleaned'] = df['district_cleaned'].fillna('').astype(str).replace('nan', '')
-        # Clean up decimal places to prevent pandas auto-conversion to float
-        df['district_cleaned'] = df['district_cleaned'].apply(lambda x: x.split('.')[0] if x and x != 'nan' else "")
-        
-        # Ensure we have the cleaned columns
-        logger.info(f"Created office_cleaned column with {df['office_cleaned'].notna().sum()} non-null values")
-        logger.info(f"Created district_cleaned column with {df['district_cleaned'].notna().sum()} non-null values")
+        office_results = df['Office'].apply(process_office_district)
+        df['office'] = [result[0] for result in office_results]
+        df['district'] = [result[1] for result in office_results]
+        df['district'] = df['district'].astype('object')
         
         return df
     
@@ -246,18 +226,39 @@ class ColoradoCleaner:
         """Clean and process candidate names."""
         logger.info("Processing candidate names...")
         
-        def clean_name(name_str: str) -> str:
+        def clean_name(name_str: str, office_str: str) -> str:
             if pd.isna(name_str):
                 return None
             
             name_str = str(name_str).strip()
+            office_str = str(office_str).strip() if pd.notna(office_str) else ""
             
+            # Handle US President cases - keep only first name
+            if "US PRESIDENT" in office_str or "US VICE PRESIDENT" in office_str:
+                # Extract first name from president candidates
+                if '/' in name_str:
+                    # Handle cases like "Trump, Donald J./Vance, JD"
+                    first_part = name_str.split('/')[0].strip()
+                    if ',' in first_part:
+                        last_name, first_name = first_part.split(',', 1)
+                        return first_name.strip()
+                    else:
+                        return first_part
+                else:
+                    # Handle single names
+                    if ',' in name_str:
+                        last_name, first_name = name_str.split(',', 1)
+                        return first_name.strip()
+                    else:
+                        return name_str
+            
+            # For non-president cases, clean the name
             # Remove extra whitespace and quotes
             cleaned = re.sub(r'\s+', ' ', name_str).strip().strip('"\'')
             return cleaned
         
-        # Apply name cleaning
-        df['full_name_display'] = df['name'].apply(clean_name)
+        # Apply name cleaning with office context
+        df['full_name_display'] = df.apply(lambda row: clean_name(row['Name'], row['Office']), axis=1)
         
         # Parse names into components
         df = self._parse_names(df)
@@ -279,13 +280,25 @@ class ColoradoCleaner:
         
         for idx, row in df.iterrows():
             name = row['full_name_display']
-            original_name = row['name']
+            office = row['office']
+            original_name = row['Name']
             
             if pd.isna(name) or not name:
                 continue
             
-            # Parse the name
-            parsed = self._parse_standard_name(original_name, original_name)
+            # Handle US President cases - these have special formatting like "Last, First Middle / Running Mate"
+            if office == "US President" and pd.notna(original_name):
+                original_str = str(original_name)
+                if '/' in original_str:
+                    # Extract only the first part (the actual candidate)
+                    first_part = original_str.split('/')[0].strip()
+                    parsed = self._parse_standard_name(first_part, original_name)
+                else:
+                    # Fallback for president candidates without running mates
+                    parsed = self._parse_standard_name(original_name, original_name)
+            else:
+                # For all other cases, use the original name for parsing
+                parsed = self._parse_standard_name(original_name, original_name)
             
             # Assign parsed components
             df.at[idx, 'first_name'] = parsed[0]
@@ -326,16 +339,13 @@ class ColoradoCleaner:
                 # Remove nickname from the name for further processing
                 name = re.sub(r'["""\'\u201c\u201d\u2018\u2019][^""""\'\u201c\u201d\u2018\u2019]+["""\'\u201c\u201d\u2018\u2019]', '', name).strip()
         
-        # Extract suffix from the end of the name (including optional period)
-        suffix_pattern = r'\b(Jr\.?|Sr\.?|II|III|IV|V|VI|VII|VIII|IX|X)\b'
+        # Extract suffix from the end of the name
+        suffix_pattern = r'\b(Jr|Sr|II|III|IV|V|VI|VII|VIII|IX|X)\b'
         suffix_match = re.search(suffix_pattern, name, re.IGNORECASE)
         if suffix_match:
             suffix = suffix_match.group(1)
             # Remove suffix from the name for further processing
-            # Also remove any trailing period that might be left behind
             name = re.sub(suffix_pattern, '', name, flags=re.IGNORECASE).strip()
-            # Clean up any trailing periods or extra spaces
-            name = re.sub(r'\.\s*$', '', name).strip()
         
         # Handle names with commas (Last, First Middle format)
         if ',' in name:
@@ -352,6 +362,10 @@ class ColoradoCleaner:
                     if self._is_initial(second_part):
                         first_name = first_middle[0]
                         middle_name = second_part
+                    elif '"' in second_part or '"' in second_part or '"' in second_part or "'" in second_part or "'" in second_part or "'" in second_part or '\u201c' in second_part or '\u201d' in second_part or '\u2018' in second_part or '\u2019' in second_part:
+                        # This is a nickname, not a middle name
+                        first_name = first_middle[0]
+                        # Nickname should already be extracted above
                     else:
                         first_name = first_middle[0]
                         middle_name = second_part
@@ -412,8 +426,8 @@ class ColoradoCleaner:
         logger.info("Standardizing party names...")
         
         party_mapping = {
-            'democratic party': 'Democratic',
-            'republican party': 'Republican',
+            'democrat': 'Democratic',
+            'republican': 'Republican',
             'independent': 'Independent',
             'libertarian': 'Libertarian',
             'green': 'Green',
@@ -447,19 +461,59 @@ class ColoradoCleaner:
             party_lower = str(party_str).strip().lower()
             return party_mapping.get(party_lower, party_str)
         
-        df['party'] = df['party'].apply(standardize_party)
+        df['party'] = df['Party'].apply(standardize_party)
         
         return df
     
     def _clean_contact_info(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Clean contact information (Colorado doesn't have much contact info)."""
+        """Clean contact information (phone, email, address, website)."""
         logger.info("Cleaning contact information...")
         
-        # Colorado data doesn't have contact information, so set to None
-        df['phone'] = pd.NA
-        df['email'] = pd.NA
-        df['address'] = pd.NA
-        df['website'] = pd.NA
+        # Clean phone numbers
+        def clean_phone(phone_str: str) -> str:
+            if pd.isna(phone_str):
+                return None
+            
+            # Remove all non-digit characters
+            digits = re.sub(r'[^\d]', '', str(phone_str))
+            
+            # Validate US phone number
+            if len(digits) == 10:
+                return digits
+            elif len(digits) == 11 and digits.startswith('1'):
+                return digits[1:]
+            
+            return None
+        
+        # Clean email addresses
+        def clean_email(email_str: str) -> str:
+            if pd.isna(email_str):
+                return None
+            
+            email = str(email_str).strip().lower()
+            
+            # Basic email validation
+            if '@' in email and '.' in email.split('@')[1]:
+                return email
+            
+            return None
+        
+        # Clean addresses
+        def clean_address(address_str: str) -> str:
+            if pd.isna(address_str):
+                return None
+            
+            # Remove extra whitespace and quotes
+            cleaned = str(address_str).strip().strip('"\'')
+            # Remove multiple spaces
+            cleaned = re.sub(r'\s+', ' ', cleaned)
+            return cleaned
+        
+        # Apply cleaning
+        df['phone'] = df['Phone Number'].apply(clean_phone)
+        df['email'] = df['Email'].apply(clean_email)
+        df['address'] = df['Address'].apply(clean_address)
+        df['website'] = df['Website'].apply(lambda x: str(x).strip() if pd.notna(x) else None)
         
         return df
     
@@ -471,15 +525,15 @@ class ColoradoCleaner:
         df['state'] = self.state_name
         
         # Add original data preservation columns
-        df['original_name'] = df['name'].copy()
+        df['original_name'] = df['Name'].copy()
         df['original_state'] = df['state'].copy()
         df['original_election_year'] = df['election_year'].copy()
-        df['original_office'] = df['office'].copy()
-        df['original_filing_date'] = pd.NA  # Not available in Colorado data
+        df['original_office'] = df['Office'].copy()
+        df['original_filing_date'] = pd.NA  # Not available in North Carolina data
         
         # Add missing columns with None values
         required_columns = [
-            'county', 'city', 'zip_code', 'filing_date', 
+            'id', 'stable_id', 'county', 'city', 'zip_code', 'filing_date', 
             'election_date', 'facebook', 'twitter', 'prefix', 'suffix', 'nickname'
         ]
         
@@ -487,31 +541,8 @@ class ColoradoCleaner:
             if col not in df.columns:
                 df[col] = pd.NA
         
-        # Set ID columns to empty string (will be generated later)
+        # Set id to empty string (will be generated later in process)
         df['id'] = ""
-        df['stable_id'] = ""
-        
-        # Map cleaned columns to final column names
-        if 'office_cleaned' in df.columns:
-            df['office'] = df['office_cleaned']
-        if 'district_cleaned' in df.columns:
-            # Only overwrite district if it doesn't already have the correct values
-            # Check if current district values are correct (no underscore prefixes)
-            current_districts = df['district'].fillna('').astype(str)
-            has_underscore_prefix = current_districts.str.startswith('_').any()
-            
-            if has_underscore_prefix:
-                # Use the cleaned district values (which should be correct)
-                df['district'] = df['district_cleaned'].fillna('').astype(str).replace('nan', '')
-            # If no underscore prefixes, keep the current district values
-            
-            # Force the column to be object (string) type
-            df['district'] = df['district'].astype('object')
-            
-            # Ensure empty strings are properly handled
-            df['district'] = df['district'].replace('', None)
-        
-
         
         return df
     
@@ -528,7 +559,7 @@ class ColoradoCleaner:
             # Key fields for stable ID generation
             key_fields = [
                 'original_name', 'original_state', 'original_election_year',
-                'original_office', 'party', 'district'
+                'original_office', 'party', 'address', 'email', 'phone'
             ]
             
             for field in key_fields:
@@ -547,58 +578,6 @@ class ColoradoCleaner:
         
         df['stable_id'] = df.apply(generate_stable_id, axis=1)
         
-        return df
-    
-    def _reorder_columns(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Reorder columns to match Alaska's exact schema order."""
-        logger.info("Reordering columns to match Alaska schema...")
-        
-        # Alaska's exact column order
-        alaska_column_order = [
-            'election_year',
-            'election_type',
-            'office',
-            'district',
-            'full_name_display',
-            'first_name',
-            'middle_name',
-            'last_name',
-            'prefix',
-            'suffix',
-            'nickname',
-            'party',
-            'phone',
-            'email',
-            'address',
-            'website',
-            'state',
-            'original_name',
-            'original_state',
-            'original_election_year',
-            'original_office',
-            'original_filing_date',
-            'id',
-            'stable_id',
-            'county',
-            'city',
-            'zip_code',
-            'filing_date',
-            'election_date',
-            'facebook',
-            'twitter'
-        ]
-        
-        # Only include columns that exist in the dataframe
-        existing_columns = [col for col in alaska_column_order if col in df.columns]
-        
-        # Add any remaining columns that weren't in the Alaska order
-        remaining_columns = [col for col in df.columns if col not in existing_columns]
-        final_column_order = existing_columns + remaining_columns
-        
-        # Reorder the dataframe
-        df = df[final_column_order]
-        
-        logger.info(f"Reordered columns to match Alaska schema. Final order: {list(df.columns)}")
         return df
 
     def _is_initial_or_suffix(self, part: str) -> bool:
@@ -644,6 +623,18 @@ class ColoradoCleaner:
         
         return False
     
+    def _clean_nickname(self, part: str) -> str:
+        """Clean nickname by removing quotes."""
+        if not part:
+            return part
+        
+        part = part.strip()
+        # Remove quotes from nicknames
+        if (part.startswith('"') and part.endswith('"')) or (part.startswith('"') and part.endswith('"')):
+            return part[1:-1]
+        
+        return part
+    
     def _should_treat_as_middle_name(self, part: str) -> bool:
         """Determine if a part should be treated as a middle name."""
         if not part:
@@ -686,12 +677,12 @@ class ColoradoCleaner:
         
         return ' '.join(parts).strip()
 
-def clean_colorado_candidates(input_file: str, output_file: str = None, output_dir: str = DEFAULT_OUTPUT_DIR) -> pd.DataFrame:
+def clean_north_carolina_candidates(input_file: str, output_file: str = None, output_dir: str = DEFAULT_OUTPUT_DIR) -> pd.DataFrame:
     """
-    Main function to clean Colorado candidate data.
+    Main function to clean North Carolina candidate data.
     
     Args:
-        input_file: Path to the input CSV file
+        input_file: Path to the input Excel file
         output_file: Optional path to save the cleaned data (if None, will use default naming in output_dir)
         output_dir: Directory to save cleaned data (default: "cleaned_data")
         
@@ -699,18 +690,14 @@ def clean_colorado_candidates(input_file: str, output_file: str = None, output_d
         Cleaned DataFrame
     """
     # Load the data
-    logger.info(f"Loading Colorado data from {input_file}...")
-    df = pd.read_csv(input_file)
-    
-    # Convert district column to string to prevent float conversion
-    if 'district' in df.columns:
-        df['district'] = df['district'].fillna('').astype(str).replace('nan', '')
+    logger.info(f"Loading North Carolina data from {input_file}...")
+    df = pd.read_excel(input_file)
     
     # Initialize cleaner with output directory
-    cleaner = ColoradoCleaner(output_dir=output_dir)
+    cleaner = NorthCarolinaCleaner(output_dir=output_dir)
     
     # Clean the data
-    cleaned_df = cleaner.clean_colorado_data(df, os.path.basename(input_file))
+    cleaned_df = cleaner.clean_north_carolina_data(df)
     
     # Generate output filename if not provided
     if output_file is None:
@@ -725,27 +712,20 @@ def clean_colorado_candidates(input_file: str, output_file: str = None, output_d
     
     # Save the cleaned data
     logger.info(f"Saving cleaned data to {output_file}...")
-    
-    # Save as CSV to preserve data types (Excel converts numeric strings to float)
-    csv_output = output_file.replace('.xlsx', '.csv')
-    cleaned_df.to_csv(csv_output, index=False)
-    logger.info(f"Data saved as CSV to preserve data types!")
-    
-    # Also save as Excel for compatibility
     cleaned_df.to_excel(output_file, index=False)
-    logger.info(f"Data also saved as Excel!")
+    logger.info(f"Data saved successfully!")
     
     return cleaned_df
 
 if __name__ == "__main__":
     # Show available input files
-    print("Available Colorado input files:")
+    print("Available input files:")
     available_files = list_available_input_files()
     if available_files:
         for i, file_path in enumerate(available_files, 1):
             print(f"  {i}. {os.path.basename(file_path)}")
     else:
-        print("  No Colorado CSV files found in input directory")
+        print("  No Excel files found in input directory")
         exit(1)
     
     # Example usage - use the first available file
@@ -757,9 +737,9 @@ if __name__ == "__main__":
         print(f"Output directory: {output_dir}")
         
         # Clean the data and save to the new output directory
-        cleaned_data = clean_colorado_candidates(input_file, output_dir=output_dir)
+        cleaned_data = clean_north_carolina_candidates(input_file, output_dir=output_dir)
         print(f"\nCleaned {len(cleaned_data)} records")
         print(f"Columns: {cleaned_data.columns.tolist()}")
         print(f"Data saved to: {output_dir}/")
     else:
-        print("No input files available for processing") 
+        print("No input files available for processing")

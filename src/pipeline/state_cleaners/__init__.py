@@ -13,8 +13,8 @@ __author__ = "Data Cleaning Team"
 AVAILABLE_STATES = [
     'alaska', 'arizona', 'arkansas', 'colorado', 'delaware',
     'georgia', 'idaho', 'illinois', 'indiana', 'kansas',
-    'kentucky', 'louisiana', 'missouri', 'montana', 'nebraska',
-    'new_mexico', 'oklahoma', 'oregon', 'south_carolina',
+    'kentucky', 'louisiana', 'maryland', 'missouri', 'montana', 'nebraska',
+    'new_mexico', 'new_york', 'north_carolina', 'oklahoma', 'oregon', 'pennsylvania', 'south_carolina',
     'south_dakota', 'vermont', 'washington', 'west_virginia', 'wyoming'
 ]
 
