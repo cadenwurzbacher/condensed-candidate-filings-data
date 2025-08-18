@@ -166,7 +166,7 @@ class GeorgiaCleaner:
         )
         district_col = pick(df, ["District", "district", "Office District", "Seat", "Seat/District"])
         party_col = pick(df, ["Candidate Party", "Party", "party", "Party Affiliation", "Party Name", "Party Abbreviation"])
-        election_col = pick(df, ["Election", "Election Name", "Election Description", "Election_Type"])  # free text
+        election_col = pick(df, ["Election", "Election Name", "Election Description", "Election_Type", "Election Date Name"])  # free text
         year_col = pick(df, ["Year", "Election Year", "year"])  # numeric
         filing_date_col = pick(df, ["Date Filed", "Filing Date", "filed_date", "Filing_Date"])
         phone_col = pick(df, ["Phone", "Phone Number", "phone", "PhoneNumber"])

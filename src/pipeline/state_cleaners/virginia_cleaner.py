@@ -409,7 +409,14 @@ class VirginiaCleaner:
             party_lower = str(party_str).strip().lower()
             return party_mapping.get(party_lower, party_str)
         
-        df['party'] = df['Party'].apply(standardize_party)
+        # Check if Party column exists, if not try alternative names
+        if 'Party' in df.columns:
+            df['party'] = df['Party'].apply(standardize_party)
+        elif 'Political Party' in df.columns:
+            df['party'] = df['Political Party'].apply(standardize_party)
+        else:
+            logger.warning("No party column found in Virginia data, setting to None")
+            df['party'] = None
         
         return df
     
