@@ -58,7 +58,7 @@ from state_cleaners.wyoming_cleaner import clean_wyoming_candidates
 from .office_standardizer import OfficeStandardizer
 
 # Import database utilities
-from ..config.database import get_db_connection
+from config.database import get_db_connection
 
 # Configure logging
 # Create logs directory if it doesn't exist

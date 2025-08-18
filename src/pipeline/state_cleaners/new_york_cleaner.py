@@ -676,7 +676,7 @@ def clean_new_york_candidates(input_file: str, output_file: str = None, output_d
     Main function to clean New York candidate data.
     
     Args:
-        input_file: Path to the input Excel file
+        input_file: Path to the input file (CSV or Excel)
         output_file: Optional path to save the cleaned data (if None, will use default naming in output_dir)
         output_dir: Directory to save cleaned data (default: "cleaned_data")
         
@@ -685,7 +685,12 @@ def clean_new_york_candidates(input_file: str, output_file: str = None, output_d
     """
     # Load the data
     logger.info(f"Loading New York data from {input_file}...")
-    df = pd.read_excel(input_file)
+    
+    # Handle both CSV and Excel files
+    if input_file.endswith('.csv'):
+        df = pd.read_csv(input_file)
+    else:
+        df = pd.read_excel(input_file)
     
     # Initialize cleaner with output directory
     cleaner = NewYorkCleaner(output_dir=output_dir)

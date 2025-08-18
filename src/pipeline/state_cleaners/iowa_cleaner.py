@@ -99,6 +99,13 @@ class IowaCleaner:
         """Process election year and type from election column."""
         logger.info("Processing election data...")
         
+        # Check if Election column exists, if not set defaults
+        if 'Election' not in df.columns:
+            logger.warning("Election column not found in Iowa data, setting defaults")
+            df['election_year'] = None
+            df['election_type'] = None
+            return df
+        
         def extract_election_info(election_str: str) -> Tuple[Optional[int], Optional[str]]:
             if pd.isna(election_str):
                 return None, None

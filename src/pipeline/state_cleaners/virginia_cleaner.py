@@ -157,6 +157,13 @@ class VirginiaCleaner:
             
             return year, election_type
         
+        # Check if Election column exists, if not set defaults
+        if 'Election' not in df.columns:
+            logger.warning("Election column not found in Virginia data, setting defaults")
+            df['election_year'] = None
+            df['election_type'] = None
+            return df
+        
         election_results = df['Election'].apply(extract_election_info)
         df['election_year'] = [result[0] for result in election_results]
         df['election_type'] = [result[1] for result in election_results]
