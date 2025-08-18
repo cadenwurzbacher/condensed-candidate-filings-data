@@ -214,23 +214,29 @@ class MainPipeline:
                     logger.error(f"State cleaner for {state} returned empty data")
                     continue
                 
-                # Generate proper output filename
+                # Prefer file saved by the cleaner itself if present; fallback to saving here
                 base_name = os.path.splitext(os.path.basename(raw_file))[0]
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                output_file = os.path.join(self.processed_dir, f"{base_name}_cleaned_{timestamp}.xlsx")
-                
-                # Save the cleaned data
-                try:
-                    cleaned_df.to_excel(output_file, index=False)
-                except Exception as save_error:
-                    logger.error(f"Failed to save cleaned data for {state}: {save_error}")
-                    continue
-                
-                if os.path.exists(output_file):
-                    cleaned_files[state] = output_file
-                    logger.info(f"✅ {state} cleaned successfully and saved to: {output_file}")
+                pattern = f"{base_name}_cleaned_*.xlsx"
+                saved_candidates = sorted(
+                    Path(self.processed_dir).glob(pattern),
+                    key=lambda p: p.stat().st_mtime,
+                    reverse=True
+                )
+                if saved_candidates:
+                    chosen_file = str(saved_candidates[0])
+                    cleaned_files[state] = chosen_file
+                    logger.info(f"✅ {state} cleaned successfully and using existing file: {chosen_file}")
                 else:
-                    logger.error(f"❌ {state} cleaning failed - file not saved")
+                    # Save here if the cleaner didn't write a file
+                    try:
+                        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                        output_file = os.path.join(self.processed_dir, f"{base_name}_cleaned_{timestamp}.xlsx")
+                        cleaned_df.to_excel(output_file, index=False)
+                        cleaned_files[state] = output_file
+                        logger.info(f"✅ {state} cleaned successfully and saved to: {output_file}")
+                    except Exception as save_error:
+                        logger.error(f"❌ Failed to save cleaned data for {state}: {save_error}")
+                        continue
                     
             except Exception as e:
                 logger.error(f"Error cleaning {state}: {e}")
