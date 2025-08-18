@@ -226,6 +226,16 @@ class MainPipeline:
                     chosen_file = str(saved_candidates[0])
                     cleaned_files[state] = chosen_file
                     logger.info(f"✅ {state} cleaned successfully and using existing file: {chosen_file}")
+                    # Remove redundant CSV outputs if a matching Excel file exists
+                    try:
+                        for csv_path in Path(self.processed_dir).glob(f"{base_name}_cleaned_*.csv"):
+                            try:
+                                csv_path.unlink()
+                                logger.info(f"Removed redundant CSV: {csv_path.name}")
+                            except Exception as e:
+                                logger.warning(f"Could not remove redundant CSV {csv_path.name}: {e}")
+                    except Exception as e:
+                        logger.warning(f"Error while scanning redundant CSVs for {state}: {e}")
                 else:
                     # Save here if the cleaner didn't write a file
                     try:
@@ -234,6 +244,16 @@ class MainPipeline:
                         cleaned_df.to_excel(output_file, index=False)
                         cleaned_files[state] = output_file
                         logger.info(f"✅ {state} cleaned successfully and saved to: {output_file}")
+                        # Also remove any CSV that may have been created by the cleaner
+                        try:
+                            for csv_path in Path(self.processed_dir).glob(f"{base_name}_cleaned_*.csv"):
+                                try:
+                                    csv_path.unlink()
+                                    logger.info(f"Removed redundant CSV: {csv_path.name}")
+                                except Exception as e:
+                                    logger.warning(f"Could not remove redundant CSV {csv_path.name}: {e}")
+                        except Exception as e:
+                            logger.warning(f"Error while scanning redundant CSVs for {state}: {e}")
                     except Exception as save_error:
                         logger.error(f"❌ Failed to save cleaned data for {state}: {save_error}")
                         continue
