@@ -87,7 +87,7 @@ class GeorgiaCleaner:
         cleaned_df = self._process_office_and_district(cleaned_df)
 
         # Step 4: Candidate names
-        cleaned_df = self._process_candidate_names(cleaned_df)
+        cleaned_df = self._process_full_name_displays(cleaned_df)
 
         # Step 5: Party normalization
         cleaned_df = self._standardize_parties(cleaned_df)
@@ -342,7 +342,7 @@ class GeorgiaCleaner:
     # -----------------------------
     # Names
     # -----------------------------
-    def _process_candidate_names(self, df: pd.DataFrame) -> pd.DataFrame:
+    def _process_full_name_displays(self, df: pd.DataFrame) -> pd.DataFrame:
         logger.info("Processing candidate names...")
 
         def clean_name(name_str: Optional[str]) -> Optional[str]:
@@ -352,7 +352,7 @@ class GeorgiaCleaner:
             s = re.sub(r"\s+", " ", s)
             return s
 
-        df["candidate_name"] = df["raw_name"].apply(clean_name)
+        df["full_name_display"] = df["raw_name"].apply(clean_name)
 
         # Parse components
         df = self._parse_names(df)
@@ -370,7 +370,7 @@ class GeorgiaCleaner:
         df["full_name_display"] = pd.NA
 
         for idx, row in df.iterrows():
-            name = row.get("candidate_name")
+            name = row.get("full_name_display")
             original_name = row.get("raw_name")
 
             if pd.isna(name) or not name:
@@ -644,7 +644,7 @@ class GeorgiaCleaner:
             "election_type",
             "office",
             "district",
-            "candidate_name",
+            "full_name_display",
             "first_name",
             "middle_name",
             "last_name",

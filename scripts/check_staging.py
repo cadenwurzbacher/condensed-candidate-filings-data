@@ -66,12 +66,12 @@ def check_staging_data():
             
             # Show some sample data
             print("\n📝 Sample Records:")
-            sample_query = "SELECT state, candidate_name, office, party FROM staging_candidates LIMIT 5"
+            sample_query = "SELECT state, full_name_display, office, party FROM staging_candidates LIMIT 5"
             sample_data = db_manager.execute_query(sample_query)
             
             if not sample_data.empty:
                 for _, row in sample_data.iterrows():
-                    print(f"  {row['state']}: {row['candidate_name']} - {row['office']} ({row['party']})")
+                    print(f"  {row['state']}: {row['full_name_display']} - {row['office']} ({row['party']})")
             
             print("\n✅ Staging data looks good!")
             print("🚀 To move to production, run: python scripts/move_to_production.py")

@@ -284,42 +284,72 @@ class DatabaseManager:
             return 0
     
     def _create_staging_table(self) -> bool:
-        """Create the staging_candidates table with the correct schema."""
+        """Create the staging_candidates table with the enhanced schema."""
         try:
             create_table_sql = """
             CREATE TABLE IF NOT EXISTS staging_candidates (
+                -- Core Identifiers
                 id SERIAL PRIMARY KEY,
-                election_year INTEGER,
-                election_type VARCHAR(50),
-                office VARCHAR(255),
-                district VARCHAR(100),
-                candidate_name VARCHAR(255),
+                stable_id VARCHAR(100),
+                external_id VARCHAR(100),
+                
+                -- Basic Candidate Info
                 first_name VARCHAR(100),
                 middle_name VARCHAR(100),
                 last_name VARCHAR(100),
+                nickname VARCHAR(100),
                 prefix VARCHAR(50),
                 suffix VARCHAR(50),
-                nickname VARCHAR(100),
                 full_name_display VARCHAR(255),
+                
+                -- Election Details
+                election_year INTEGER,
+                election_type VARCHAR(50),
+                office VARCHAR(255),                    -- Clean, standardized office names
+                office_confidence DECIMAL(3,2),         -- Standardization confidence (0.00-1.00)
+                office_category VARCHAR(100),           -- Federal/State/Local grouping
+                district VARCHAR(100),
+                
+                -- Party & Contact
                 party VARCHAR(100),
+                party_standardized VARCHAR(100),        -- Cleaned party names
                 phone VARCHAR(50),
                 email VARCHAR(255),
-                address TEXT,
                 website VARCHAR(255),
+                
+                -- Location
                 state VARCHAR(50),
+                county VARCHAR(100),
+                city VARCHAR(100),
+                address TEXT,
+                address_parsed BOOLEAN,                -- Address parsing success
+                address_clean TEXT,                    -- Standardized address
+                zip_code VARCHAR(20),
+                has_zip BOOLEAN,                       -- Data quality flag
+                has_state BOOLEAN,                     -- Data quality flag
+                
+                -- Dates
+                filing_date DATE,
+                election_date DATE,
+                
+                -- Social Media
+                facebook VARCHAR(255),
+                twitter VARCHAR(255),
+                
+                -- Original Data (for audit)
                 original_name VARCHAR(255),
                 original_state VARCHAR(50),
                 original_election_year INTEGER,
-                original_office VARCHAR(255),
+                original_office VARCHAR(255),           -- Original messy office names
                 original_filing_date DATE,
-                stable_id VARCHAR(100),
-                county VARCHAR(100),
-                city VARCHAR(100),
-                zip_code VARCHAR(20),
-                filing_date DATE,
-                election_date DATE,
-                facebook VARCHAR(255),
-                twitter VARCHAR(255),
+                source_state VARCHAR(50),               -- Track origin state
+                
+                -- Processing Metadata
+                processing_timestamp TIMESTAMP,         -- When processed
+                pipeline_version BIGINT,               -- Pipeline version
+                data_source VARCHAR(255),              -- Source file/state
+                
+                -- System Fields
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
             """

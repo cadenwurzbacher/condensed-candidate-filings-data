@@ -62,7 +62,7 @@ class ColoradoCleaner:
         columns_to_remove = []
         
         # Check if we have cleaned versions before removing originals
-        if 'candidate_name' in df.columns and 'name' in df.columns:
+        if 'full_name_display' in df.columns and 'name' in df.columns:
             columns_to_remove.append('name')
         if 'office_cleaned' in df.columns and 'original_office' in df.columns:
             columns_to_remove.append('office_cleaned')
@@ -99,7 +99,7 @@ class ColoradoCleaner:
         cleaned_df = self._process_office_and_district(cleaned_df)
         
         # Step 3: Clean candidate names
-        cleaned_df = self._process_candidate_names(cleaned_df)
+        cleaned_df = self._process_full_name_displays(cleaned_df)
         
         # Step 4: Standardize party names
         cleaned_df = self._standardize_parties(cleaned_df)
@@ -242,7 +242,7 @@ class ColoradoCleaner:
         
         return df
     
-    def _process_candidate_names(self, df: pd.DataFrame) -> pd.DataFrame:
+    def _process_full_name_displays(self, df: pd.DataFrame) -> pd.DataFrame:
         """Clean and process candidate names."""
         logger.info("Processing candidate names...")
         
@@ -257,7 +257,7 @@ class ColoradoCleaner:
             return cleaned
         
         # Apply name cleaning
-        df['candidate_name'] = df['name'].apply(clean_name)
+        df['full_name_display'] = df['name'].apply(clean_name)
         
         # Parse names into components
         df = self._parse_names(df)
@@ -278,7 +278,7 @@ class ColoradoCleaner:
         df['full_name_display'] = pd.NA
         
         for idx, row in df.iterrows():
-            name = row['candidate_name']
+            name = row['full_name_display']
             original_name = row['name']
             
             if pd.isna(name) or not name:
@@ -555,7 +555,7 @@ class ColoradoCleaner:
         
         # Alaska's exact column order
         alaska_column_order = [
-            'election_year', 'election_type', 'office', 'district', 'candidate_name', 
+            'election_year', 'election_type', 'office', 'district', 'full_name_display', 
             'first_name', 'middle_name', 'last_name', 'prefix', 'suffix', 'nickname', 
             'full_name_display', 'party', 'phone', 'email', 'address', 'website', 
             'state', 'original_name', 'original_state', 'original_election_year', 

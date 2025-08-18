@@ -22,7 +22,7 @@ def sample_candidate_data():
         'election_type': ['General', 'General', 'General'],
         'office': ['US Senate', 'State House', 'Mayor'],
         'district': ['Statewide', 'District 5', 'Citywide'],
-        'candidate_name': ['John Smith', 'Jane Doe', 'Bob Johnson'],
+        'full_name_display': ['John Smith', 'Jane Doe', 'Bob Johnson'],
         'first_name': ['John', 'Jane', 'Bob'],
         'last_name': ['Smith', 'Doe', 'Johnson'],
         'party': ['Democratic', 'Republican', 'Independent'],

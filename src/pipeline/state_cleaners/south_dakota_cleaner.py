@@ -95,7 +95,7 @@ class SouthDakotaCleaner:
         cleaned_df = self._process_office_and_district(cleaned_df)
         
         # Step 3: Clean candidate names
-        cleaned_df = self._process_candidate_names(cleaned_df)
+        cleaned_df = self._process_full_name_displays(cleaned_df)
         
         # Step 4: Standardize party names
         cleaned_df = self._standardize_parties(cleaned_df)
@@ -121,7 +121,7 @@ class SouthDakotaCleaner:
     def ensure_column_order(self, df: pd.DataFrame) -> pd.DataFrame:
         """Ensure columns match Alaska's exact order."""
         ALASKA_COLUMN_ORDER = [
-            'election_year', 'election_type', 'office', 'district', 'candidate_name',
+            'election_year', 'election_type', 'office', 'district', 'full_name_display',
             'first_name', 'middle_name', 'last_name', 'prefix', 'suffix', 'nickname',
             'full_name_display', 'party', 'phone', 'email', 'address', 'website',
             'state', 'original_name', 'original_state', 'original_election_year',
@@ -277,7 +277,7 @@ class SouthDakotaCleaner:
         
         return df
     
-    def _process_candidate_names(self, df: pd.DataFrame) -> pd.DataFrame:
+    def _process_full_name_displays(self, df: pd.DataFrame) -> pd.DataFrame:
         """Clean and process candidate names."""
         logger.info("Processing candidate names...")
         
@@ -300,7 +300,7 @@ class SouthDakotaCleaner:
                 return str(name_str) if name_str else None
         
         # Apply name cleaning
-        df['candidate_name'] = df['Name'].apply(clean_name)
+        df['full_name_display'] = df['Name'].apply(clean_name)
         
         # Parse names into components
         df = self._parse_names(df)
@@ -322,7 +322,7 @@ class SouthDakotaCleaner:
         
         for idx, row in df.iterrows():
             try:
-                name = row['candidate_name']
+                name = row['full_name_display']
                 original_name = row['Name']
                 
                 if pd.isna(name) or not name:
@@ -343,9 +343,9 @@ class SouthDakotaCleaner:
             except Exception as e:
                 logger.warning(f"Error parsing name at row {idx}: {e}")
                 # Set default values for this row
-                df.at[idx, 'first_name'] = str(row['candidate_name']) if pd.notna(row['candidate_name']) else None
+                df.at[idx, 'first_name'] = str(row['full_name_display']) if pd.notna(row['full_name_display']) else None
                 df.at[idx, 'last_name'] = None
-                df.at[idx, 'full_name_display'] = str(row['candidate_name']) if pd.notna(row['candidate_name']) else None
+                df.at[idx, 'full_name_display'] = str(row['full_name_display']) if pd.notna(row['full_name_display']) else None
         
         return df
     

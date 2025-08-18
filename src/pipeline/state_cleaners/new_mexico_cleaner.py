@@ -96,7 +96,7 @@ class NewMexicoCleaner:
         cleaned_df = self._process_office_and_district(cleaned_df)
         
         # Step 3: Clean candidate names
-        cleaned_df = self._process_candidate_names(cleaned_df)
+        cleaned_df = self._process_full_name_displays(cleaned_df)
         
         # Step 4: Standardize party names
         cleaned_df = self._standardize_parties(cleaned_df)
@@ -122,7 +122,7 @@ class NewMexicoCleaner:
     def ensure_column_order(self, df: pd.DataFrame) -> pd.DataFrame:
         """Ensure columns match Alaska's exact order."""
         ALASKA_COLUMN_ORDER = [
-            'election_year', 'election_type', 'office', 'district', 'candidate_name',
+            'election_year', 'election_type', 'office', 'district', 'full_name_display',
             'first_name', 'middle_name', 'last_name', 'prefix', 'suffix', 'nickname',
             'full_name_display', 'party', 'phone', 'email', 'address', 'website',
             'state', 'original_name', 'original_state', 'original_election_year',
@@ -222,7 +222,7 @@ class NewMexicoCleaner:
         
         return df
     
-    def _process_candidate_names(self, df: pd.DataFrame) -> pd.DataFrame:
+    def _process_full_name_displays(self, df: pd.DataFrame) -> pd.DataFrame:
         """Clean and process candidate names."""
         logger.info("Processing candidate names...")
         
@@ -242,7 +242,7 @@ class NewMexicoCleaner:
             return ' '.join(parts) if parts else None
         
         # Build candidate name from components
-        df['candidate_name'] = df.apply(build_full_name, axis=1)
+        df['full_name_display'] = df.apply(build_full_name, axis=1)
         
         # Parse names into components
         df = self._parse_names(df)
@@ -394,7 +394,7 @@ class NewMexicoCleaner:
         df['state'] = self.state_name
         
         # Add original data preservation columns
-        df['original_name'] = df['candidate_name'].copy()
+        df['original_name'] = df['full_name_display'].copy()
         df['original_state'] = df['state'].copy()
         df['original_election_year'] = df['election_year'].copy()
         df['original_office'] = df['Contest'].copy()

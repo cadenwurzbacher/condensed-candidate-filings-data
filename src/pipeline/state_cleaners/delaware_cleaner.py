@@ -94,7 +94,7 @@ class DelawareCleaner:
         cleaned_df = self._process_office_and_district(cleaned_df)
         
         # Step 3: Clean candidate names
-        cleaned_df = self._process_candidate_names(cleaned_df)
+        cleaned_df = self._process_full_name_displays(cleaned_df)
         
         # Step 4: Standardize party names (Delaware doesn't have party info, so set to None)
         cleaned_df = self._standardize_parties(cleaned_df)
@@ -629,7 +629,7 @@ class DelawareCleaner:
         
         return df
     
-    def _process_candidate_names(self, df: pd.DataFrame) -> pd.DataFrame:
+    def _process_full_name_displays(self, df: pd.DataFrame) -> pd.DataFrame:
         """Clean and process candidate names."""
         logger.info("Processing candidate names...")
         
@@ -677,7 +677,7 @@ class DelawareCleaner:
             return cleaned
         
         # Apply name cleaning using apply with axis=1 to access both Name and Office columns
-        df['candidate_name'] = df.apply(clean_name, axis=1)
+        df['full_name_display'] = df.apply(clean_name, axis=1)
         
         # Parse names into components
         df = self._parse_names(df)
@@ -698,7 +698,7 @@ class DelawareCleaner:
         df['full_name_display'] = pd.NA
         
         for idx, row in df.iterrows():
-            name = row['candidate_name']
+            name = row['full_name_display']
             original_name = row['Name']
             
             if pd.isna(name) or not name:
@@ -1178,7 +1178,7 @@ class DelawareCleaner:
         
         # Alaska's exact column order
         alaska_column_order = [
-            'election_year', 'election_type', 'office', 'district', 'candidate_name', 
+            'election_year', 'election_type', 'office', 'district', 'full_name_display', 
             'first_name', 'middle_name', 'last_name', 'prefix', 'suffix', 'nickname', 
             'full_name_display', 'party', 'phone', 'email', 'address', 'website', 
             'state', 'original_name', 'original_state', 'original_election_year', 

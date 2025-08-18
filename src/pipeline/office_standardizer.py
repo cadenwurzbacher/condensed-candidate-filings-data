@@ -250,16 +250,22 @@ class OfficeStandardizer:
         return best_match, confidence, original_name
     
     def standardize_dataset(self, df: pd.DataFrame, office_column: str = 'office') -> pd.DataFrame:
-        """Standardize office names in the entire dataset."""
+        """Standardize office names in the entire dataset using consolidated approach."""
         logger.info(f"Starting office name standardization for {len(df):,} records...")
         
         if office_column not in df.columns:
             logger.error(f"Office column '{office_column}' not found in dataset")
             return df
         
-        # Create new columns for standardization
+        # Create a copy to avoid modifying the original
         df_standardized = df.copy()
-        df_standardized['office_standardized'] = None
+        
+        # Ensure we have original_office column for audit trail
+        if 'original_office' not in df_standardized.columns:
+            df_standardized['original_office'] = df_standardized[office_column]
+            logger.info("Created original_office column from existing office data")
+        
+        # Initialize the new columns (no more office_standardized)
         df_standardized['office_confidence'] = None
         df_standardized['office_category'] = None
         
@@ -269,7 +275,8 @@ class OfficeStandardizer:
             office_name = row[office_column]
             standardized, confidence, original = self.standardize_office_name(office_name)
             
-            df_standardized.at[idx, 'office_standardized'] = standardized
+            # Store the standardized result directly in the main office field
+            df_standardized.at[idx, office_column] = standardized
             df_standardized.at[idx, 'office_confidence'] = confidence
             df_standardized.at[idx, 'office_category'] = self.standard_categories.get(standardized, 'Unknown')
             
@@ -283,7 +290,11 @@ class OfficeStandardizer:
         # Generate standardization statistics
         self._generate_standardization_stats(standardization_results)
         
-        logger.info("Office name standardization completed!")
+        logger.info("✅ Office name standardization completed using consolidated approach!")
+        logger.info("  • Main 'office' field now contains standardized names")
+        logger.info("  • 'original_office' preserves raw data for audit")
+        logger.info("  • No duplicate 'office_standardized' column created")
+        
         return df_standardized
     
     def _generate_standardization_stats(self, results: List[Dict]) -> None:
@@ -327,11 +338,11 @@ class OfficeStandardizer:
             f.write(f"Total Records: {len(df):,}\n\n")
             
             # Summary statistics
-            if 'office_standardized' in df.columns:
+            if 'office_confidence' in df.columns:
                 f.write("STANDARDIZATION SUMMARY\n")
                 f.write("-" * 30 + "\n")
                 
-                total_standardized = df['office_standardized'].notna().sum()
+                total_standardized = df['office_confidence'].notna().sum()
                 f.write(f"Records standardized: {total_standardized:,}\n")
                 
                 confidence_stats = df['office_confidence'].describe()
@@ -342,7 +353,7 @@ class OfficeStandardizer:
                 # Category breakdown
                 f.write("CATEGORY BREAKDOWN\n")
                 f.write("-" * 30 + "\n")
-                category_counts = df['office_standardized'].value_counts()
+                category_counts = df['office_category'].value_counts()
                 for category, count in category_counts.head(20).items():
                     percentage = (count / len(df)) * 100
                     f.write(f"{category}: {count:,} records ({percentage:.1f}%)\n")
@@ -357,7 +368,7 @@ class OfficeStandardizer:
                     f.write(f"Records with low confidence (<50%): {len(low_confidence):,}\n")
                     f.write("Sample of low confidence standardizations:\n")
                     for _, row in low_confidence.head(10).iterrows():
-                        f.write(f"  '{row['office']}' → {row['office_standardized']} (confidence: {row['office_confidence']:.2f})\n")
+                        f.write(f"  '{row['original_office']}' → {row['office']} (confidence: {row['office_confidence']:.2f})\n")
                 else:
                     f.write("No low confidence standardizations found.\n")
                 
@@ -366,12 +377,12 @@ class OfficeStandardizer:
                 # Unknown category examples
                 f.write("UNKNOWN CATEGORY EXAMPLES\n")
                 f.write("-" * 30 + "\n")
-                unknown_cat = df[df['office_standardized'] == 'UNKNOWN']
+                unknown_cat = df[df['office_category'] == 'Unknown']
                 if not unknown_cat.empty:
-                    f.write(f"Records in UNKNOWN category: {len(unknown_cat):,}\n")
+                    f.write(f"Records in Unknown category: {len(unknown_cat):,}\n")
                     f.write("Sample of unknown offices:\n")
                     for _, row in unknown_cat.head(10).iterrows():
-                        f.write(f"  '{row['office']}'\n")
+                        f.write(f"  '{row['original_office']}'\n")
                 else:
                     f.write("No unknown category offices found.\n")
             
@@ -419,7 +430,9 @@ def main():
     print(f"\n✅ Standardization completed successfully!")
     print(f"📁 Standardized dataset: {output_file}")
     print(f"📊 Report: {report_file}")
-    print(f"📈 Office names reduced from 6,791 to {df_standardized['office_standardized'].nunique()} categories")
+    print(f"📈 Office names reduced from 6,791 to {df_standardized['office'].nunique()} categories")
+    print(f"💡 Using consolidated approach: standardized names are in 'office' field")
+    print(f"📋 Original names preserved in 'original_office' field for audit")
 
 if __name__ == "__main__":
     main()

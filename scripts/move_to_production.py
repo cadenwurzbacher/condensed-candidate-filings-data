@@ -54,6 +54,10 @@ class ProductionUploader:
                 logger.info("Creating production filings table...")
                 self._create_production_table()
             
+            # Prepare data for production with consolidated office field
+            logger.info("Preparing data for production with consolidated office field...")
+            production_data = self._prepare_production_data(staging_data)
+            
             # Clear existing production data (replace all)
             logger.info("Clearing existing production data...")
             clear_success = self.db_manager.execute_query("DELETE FROM filings")
@@ -61,10 +65,10 @@ class ProductionUploader:
                 logger.error("Failed to clear production table")
                 return False
             
-            # Upload staging data to production
-            logger.info("Uploading staging data to production...")
+            # Upload production data
+            logger.info("Uploading production data...")
             upload_success = self.db_manager.upload_dataframe(
-                staging_data, 'filings', if_exists='append', index=False
+                production_data, 'filings', if_exists='append', index=False
             )
             
             if not upload_success:
@@ -93,42 +97,75 @@ class ProductionUploader:
             self.db_manager.disconnect()
     
     def _create_production_table(self) -> bool:
-        """Create the production filings table with the correct schema."""
+        """Create the production filings table with the enhanced schema."""
         try:
             create_table_sql = """
             CREATE TABLE IF NOT EXISTS filings (
+                -- Core Identifiers
                 id SERIAL PRIMARY KEY,
-                election_year INTEGER,
-                election_type VARCHAR(50),
-                office VARCHAR(255),
-                district VARCHAR(100),
-                candidate_name VARCHAR(255),
+                staging_id BIGINT,
+                stable_id VARCHAR(100),
+                external_id VARCHAR(100),
+                
+                -- Basic Candidate Info
                 first_name VARCHAR(100),
                 middle_name VARCHAR(100),
                 last_name VARCHAR(100),
+                nickname VARCHAR(100),
                 prefix VARCHAR(50),
                 suffix VARCHAR(50),
-                nickname VARCHAR(100),
                 full_name_display VARCHAR(255),
+                
+                -- Election Details
+                election_year INTEGER,
+                election_type VARCHAR(50),
+                office VARCHAR(255),                    -- Clean, standardized office names
+                office_confidence DECIMAL(3,2),         -- Standardization confidence (0.00-1.00)
+                office_category VARCHAR(100),           -- Federal/State/Local grouping
+                district VARCHAR(100),
+                
+                -- Party & Contact
                 party VARCHAR(100),
+                party_standardized VARCHAR(100),        -- Cleaned party names
                 phone VARCHAR(50),
                 email VARCHAR(255),
-                address TEXT,
                 website VARCHAR(255),
+                
+                -- Location
                 state VARCHAR(50),
+                county VARCHAR(100),
+                city VARCHAR(100),
+                address TEXT,
+                address_parsed BOOLEAN,                -- Address parsing success
+                address_clean TEXT,                    -- Standardized address
+                zip_code VARCHAR(20),
+                has_zip BOOLEAN,                       -- Data quality flag
+                has_state BOOLEAN,                     -- Data quality flag
+                
+                -- Dates
+                filing_date DATE,
+                election_date DATE,
+                
+                -- Social Media
+                facebook VARCHAR(255),
+                twitter VARCHAR(255),
+                
+                -- Original Data (for audit)
                 original_name VARCHAR(255),
                 original_state VARCHAR(50),
                 original_election_year INTEGER,
-                original_office VARCHAR(255),
+                original_office VARCHAR(255),           -- Original messy office names
                 original_filing_date DATE,
-                stable_id VARCHAR(100),
-                county VARCHAR(100),
-                city VARCHAR(100),
-                zip_code VARCHAR(20),
-                filing_date DATE,
-                election_date DATE,
-                facebook VARCHAR(255),
-                twitter VARCHAR(255),
+                source_state VARCHAR(50),               -- Track origin state
+                
+                -- Processing Metadata
+                processing_timestamp TIMESTAMP,         -- When processed
+                pipeline_version BIGINT,               -- Pipeline version
+                data_source VARCHAR(255),              -- Source file/state
+                data_version VARCHAR(50),              -- Already exists
+                batch_id VARCHAR(100),                 -- Already exists
+                
+                -- System Fields
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
@@ -144,6 +181,112 @@ class ProductionUploader:
         except Exception as e:
             logger.error(f"Failed to create production table: {e}")
             return False
+    
+    def _prepare_production_data(self, staging_data: pd.DataFrame) -> pd.DataFrame:
+        """Prepare staging data for production with consolidated office field."""
+        logger.info("Preparing production data with consolidated office field...")
+        
+        try:
+            # Create a copy to avoid modifying the original
+            production_data = staging_data.copy()
+            
+            # Consolidate office fields: use standardized office as main office field
+            logger.info("Consolidating office fields...")
+            
+            # If office_standardized exists and has data, use it as the main office field
+            if 'office_standardized' in production_data.columns:
+                # Count how many records will use standardized office
+                standardized_count = production_data['office_standardized'].notna().sum()
+                total_count = len(production_data)
+                logger.info(f"Using standardized office for {standardized_count:,} out of {total_count:,} records")
+                
+                # Replace office with standardized version where available
+                production_data['office'] = production_data['office_standardized'].fillna(production_data['office'])
+                
+                # Log some examples of the consolidation
+                sample_consolidated = production_data[
+                    (production_data['office_standardized'].notna()) & 
+                    (production_data['office_standardized'] != production_data['original_office'])
+                ].head(3)
+                
+                if not sample_consolidated.empty:
+                    logger.info("Sample office consolidations:")
+                    for _, row in sample_consolidated.iterrows():
+                        logger.info(f"  '{row['original_office']}' → '{row['office_standardized']}'")
+            
+            # Ensure we have all required columns for production
+            required_columns = [
+                'staging_id', 'stable_id', 'external_id',
+                'first_name', 'middle_name', 'last_name', 'nickname', 'prefix', 'suffix', 'full_name_display',
+                'election_year', 'election_type', 'office', 'office_confidence', 'office_category', 'district',
+                'party', 'party_standardized', 'phone', 'email', 'website',
+                'state', 'county', 'city', 'address', 'address_parsed', 'address_clean', 'zip_code', 'has_zip', 'has_state',
+                'filing_date', 'election_date', 'facebook', 'twitter',
+                'original_name', 'original_state', 'original_election_year', 'original_office', 'original_filing_date', 'source_state',
+                'processing_timestamp', 'pipeline_version', 'data_source', 'data_version', 'batch_id',
+                'created_at', 'updated_at'
+            ]
+            
+            # Add missing columns with default values
+            for col in required_columns:
+                if col not in production_data.columns:
+                    if col in ['staging_id', 'office_confidence', 'pipeline_version']:
+                        production_data[col] = None  # Numeric columns
+                    elif col in ['address_parsed', 'has_zip', 'has_state']:
+                        production_data[col] = False  # Boolean columns
+                    elif col in ['created_at', 'updated_at', 'processing_timestamp']:
+                        production_data[col] = pd.Timestamp.now()  # Timestamp columns
+                    else:
+                        production_data[col] = ''  # String columns
+                    logger.info(f"Added missing column: {col}")
+            
+            # Set staging_id to the original staging table id
+            if 'id' in production_data.columns:
+                production_data['staging_id'] = production_data['id']
+                logger.info("Set staging_id from original staging table id")
+            
+            # Ensure data types are correct
+            logger.info("Ensuring correct data types...")
+            
+            # Convert date columns
+            date_columns = ['filing_date', 'election_date', 'original_filing_date']
+            for col in date_columns:
+                if col in production_data.columns:
+                    try:
+                        production_data[col] = pd.to_datetime(production_data[col], errors='coerce')
+                        logger.info(f"Converted {col} to datetime")
+                    except Exception as e:
+                        logger.warning(f"Could not convert {col} to datetime: {e}")
+            
+            # Convert numeric columns
+            numeric_columns = ['election_year', 'original_election_year', 'office_confidence', 'pipeline_version']
+            for col in numeric_columns:
+                if col in production_data.columns:
+                    try:
+                        production_data[col] = pd.to_numeric(production_data[col], errors='coerce')
+                        logger.info(f"Converted {col} to numeric")
+                    except Exception as e:
+                        logger.warning(f"Could not convert {col} to numeric: {e}")
+            
+            # Convert boolean columns
+            boolean_columns = ['address_parsed', 'has_zip', 'has_state']
+            for col in boolean_columns:
+                if col in production_data.columns:
+                    try:
+                        production_data[col] = production_data[col].astype(bool)
+                        logger.info(f"Converted {col} to boolean")
+                    except Exception as e:
+                        logger.warning(f"Could not convert {col} to boolean: {e}")
+            
+            logger.info(f"Production data preparation completed. Shape: {production_data.shape}")
+            return production_data
+            
+        except Exception as e:
+            logger.error(f"Failed to prepare production data: {e}")
+            import traceback
+            logger.error(f"Full traceback: {traceback.format_exc()}")
+            # Return original data if preparation fails
+            return staging_data
     
     def preview_staging_data(self) -> bool:
         """Show a preview of staging data before moving to production."""

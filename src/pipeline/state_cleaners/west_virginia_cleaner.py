@@ -94,7 +94,7 @@ class WestVirginiaCleaner:
         cleaned_df = self._process_office_and_district(cleaned_df)
         
         # Step 3: Clean candidate names
-        cleaned_df = self._process_candidate_names(cleaned_df)
+        cleaned_df = self._process_full_name_displays(cleaned_df)
         
         # Step 4: Standardize party names
         cleaned_df = self._standardize_parties(cleaned_df)
@@ -120,7 +120,7 @@ class WestVirginiaCleaner:
     def ensure_column_order(self, df: pd.DataFrame) -> pd.DataFrame:
         """Ensure columns match Alaska's exact order."""
         ALASKA_COLUMN_ORDER = [
-            'election_year', 'election_type', 'office', 'district', 'candidate_name',
+            'election_year', 'election_type', 'office', 'district', 'full_name_display',
             'first_name', 'middle_name', 'last_name', 'prefix', 'suffix', 'nickname',
             'full_name_display', 'party', 'phone', 'email', 'address', 'website',
             'state', 'original_name', 'original_state', 'original_election_year',
@@ -224,7 +224,7 @@ class WestVirginiaCleaner:
         
         return df
     
-    def _process_candidate_names(self, df: pd.DataFrame) -> pd.DataFrame:
+    def _process_full_name_displays(self, df: pd.DataFrame) -> pd.DataFrame:
         """Clean and process candidate names."""
         logger.info("Processing candidate names...")
         
@@ -260,14 +260,14 @@ class WestVirginiaCleaner:
             return cleaned
         
         # Apply name cleaning with office context - adjust column names based on WV data structure
-        name_column = 'Name' if 'Name' in df.columns else 'candidate_name'
+        name_column = 'Name' if 'Name' in df.columns else 'full_name_display'
         office_column = 'Office' if 'Office' in df.columns else 'office'
         
         if name_column in df.columns and office_column in df.columns:
-            df['candidate_name'] = df.apply(lambda row: clean_name(row[name_column], row[office_column]), axis=1)
+            df['full_name_display'] = df.apply(lambda row: clean_name(row[name_column], row[office_column]), axis=1)
         else:
-            # If we don't have the required columns, create a basic candidate_name
-            df['candidate_name'] = df.get(name_column, pd.NA)
+            # If we don't have the required columns, create a basic full_name_display
+            df['full_name_display'] = df.get(name_column, pd.NA)
         
         # Parse names into components
         df = self._parse_names(df)
@@ -288,9 +288,9 @@ class WestVirginiaCleaner:
         df['full_name_display'] = pd.NA
         
         for idx, row in df.iterrows():
-            name = row['candidate_name']
+            name = row['full_name_display']
             office = row.get('office', None) if 'office' in df.columns else None  # Safely get office column
-            original_name = row.get('Name', name)  # Use Name column if available, fallback to candidate_name
+            original_name = row.get('Name', name)  # Use Name column if available, fallback to full_name_display
             
             if pd.isna(name) or not name:
                 continue
@@ -546,10 +546,10 @@ class WestVirginiaCleaner:
         df['state'] = self.state_name
         
         # Add original data preservation columns
-        name_column = 'Name' if 'Name' in df.columns else 'candidate_name'
+        name_column = 'Name' if 'Name' in df.columns else 'full_name_display'
         office_column = 'Office' if 'Office' in df.columns else 'office'
         
-        df['original_name'] = df[name_column].copy() if name_column in df.columns else df['candidate_name'].copy()
+        df['original_name'] = df[name_column].copy() if name_column in df.columns else df['full_name_display'].copy()
         df['original_state'] = df['state'].copy()
         df['original_election_year'] = df['election_year'].copy() if 'election_year' in df.columns else pd.NA
         df['original_office'] = df[office_column].copy() if office_column in df.columns else pd.NA

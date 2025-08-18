@@ -94,7 +94,7 @@ class AlaskaCleaner:
         cleaned_df = self._process_office_and_district(cleaned_df)
         
         # Step 3: Clean candidate names
-        cleaned_df = self._process_candidate_names(cleaned_df)
+        cleaned_df = self._process_full_name_displays(cleaned_df)
         
         # Step 4: Standardize party names
         cleaned_df = self._standardize_parties(cleaned_df)
@@ -196,7 +196,7 @@ class AlaskaCleaner:
         
         return df
     
-    def _process_candidate_names(self, df: pd.DataFrame) -> pd.DataFrame:
+    def _process_full_name_displays(self, df: pd.DataFrame) -> pd.DataFrame:
         """Clean and process candidate names."""
         logger.info("Processing candidate names...")
         
@@ -232,7 +232,7 @@ class AlaskaCleaner:
             return cleaned
         
         # Apply name cleaning with office context
-        df['candidate_name'] = df.apply(lambda row: clean_name(row['Name'], row['Office']), axis=1)
+        df['full_name_display'] = df.apply(lambda row: clean_name(row['Name'], row['Office']), axis=1)
         
         # Parse names into components
         df = self._parse_names(df)
@@ -253,7 +253,7 @@ class AlaskaCleaner:
         df['full_name_display'] = pd.NA
         
         for idx, row in df.iterrows():
-            name = row['candidate_name']
+            name = row['full_name_display']
             office = row['office']
             original_name = row['Name']
             
