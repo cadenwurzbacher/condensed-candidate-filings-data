@@ -408,7 +408,11 @@ class MarylandCleaner:
                 last_name = parts[0]
                 first_middle = parts[1].split()
                 
-                if len(first_middle) == 1:
+                if len(first_middle) == 0:
+                    # Handle empty first_middle list (empty names)
+                    first_name = None
+                    middle_name = None
+                elif len(first_middle) == 1:
                     first_name = first_middle[0]
                 elif len(first_middle) == 2:
                     # Check if second part is an initial or nickname
@@ -424,10 +428,6 @@ class MarylandCleaner:
                         first_name = first_middle[0]
                         middle_name = second_part
                 else:
-            
-            
-            
-            
                     # Handle multiple parts
                     first_name = first_middle[0]
                     middle_parts = []
