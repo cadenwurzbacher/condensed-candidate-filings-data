@@ -464,7 +464,8 @@ class IowaCleaner:
         df['phone'] = df[phone_col].apply(clean_phone)
         df['email'] = df['Email'].apply(clean_email)
         df['address'] = df['Address'].apply(clean_address)
-        df['website'] = df['Website'].apply(lambda x: str(x).strip() if pd.notna(x) else None)
+        # Iowa doesn't have Website column - set to None
+        df['website'] = None
         
         return df
     
@@ -476,7 +477,13 @@ class IowaCleaner:
         df['state'] = self.state_name
         
         # Add original data preservation columns
-        df['original_name'] = df['Name'].copy()
+        # Iowa has 'Ballot Name(s)' instead of 'Name'
+        if 'Name' in df.columns:
+            df['original_name'] = df['Name'].copy()
+        elif 'Ballot Name(s)' in df.columns:
+            df['original_name'] = df['Ballot Name(s)'].copy()
+        else:
+            df['original_name'] = 'Unknown'
         df['original_state'] = df['state'].copy()
         df['original_election_year'] = df['election_year'].copy()
         df['original_office'] = df['Office'].copy()

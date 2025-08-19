@@ -276,10 +276,13 @@ class MarylandCleaner:
         if 'Candidate First Name and Middle Name' in df.columns and 'Candidate Ballot Last Name and Suffix' in df.columns:
             df['full_name_display'] = df.apply(lambda row: clean_name(
                 str(row['Candidate First Name and Middle Name']) + ' ' + str(row['Candidate Ballot Last Name and Suffix']), 
-                row['Office']
+                (row['office'] if 'office' in df.columns else (row['Office Name'] if 'Office Name' in df.columns else (row['Office'] if 'Office' in df.columns else None)))
             ), axis=1)
         elif 'Name' in df.columns:
-            df['full_name_display'] = df.apply(lambda row: clean_name(row['Name'], row['Office']), axis=1)
+            df['full_name_display'] = df.apply(lambda row: clean_name(
+                row['Name'],
+                (row['office'] if 'office' in df.columns else (row['Office Name'] if 'Office Name' in df.columns else (row['Office'] if 'Office' in df.columns else None)))
+            ), axis=1)
         else:
             # Fallback - create a placeholder name
             df['full_name_display'] = 'Unknown Candidate'
@@ -491,7 +494,13 @@ class MarylandCleaner:
             party_lower = str(party_str).strip().lower()
             return party_mapping.get(party_lower, party_str)
         
-        df['party'] = df['Party'].apply(standardize_party)
+        # Maryland 2024 uses 'Office Political Party'
+        party_col = None
+        for candidate in ['Party', 'Office Political Party']:
+            if candidate in df.columns:
+                party_col = candidate
+                break
+        df['party'] = df[party_col].apply(standardize_party) if party_col else None
         
         return df
     
@@ -539,11 +548,26 @@ class MarylandCleaner:
             cleaned = re.sub(r'\s+', ' ', cleaned)
             return cleaned
         
-        # Apply cleaning
-        df['phone'] = df['Phone Number'].apply(clean_phone)
-        df['email'] = df['Email'].apply(clean_email)
-        df['address'] = df['Address'].apply(clean_address)
-        df['website'] = df['Website'].apply(lambda x: str(x).strip() if pd.notna(x) else None)
+        # Apply cleaning with robust column fallbacks
+        phone_col = None
+        for candidate in ['Public Phone', 'Phone Number', 'Phone']:
+            if candidate in df.columns:
+                phone_col = candidate
+                break
+        df['phone'] = df[phone_col].apply(clean_phone) if phone_col else None
+
+        email_col = 'Email' if 'Email' in df.columns else None
+        df['email'] = df[email_col].apply(clean_email) if email_col else None
+
+        address_col = None
+        for candidate in ['Campaign Mailing Address', 'Address']:
+            if candidate in df.columns:
+                address_col = candidate
+                break
+        df['address'] = df[address_col].apply(clean_address) if address_col else None
+
+        website_col = 'Website' if 'Website' in df.columns else None
+        df['website'] = df[website_col].apply(lambda x: str(x).strip() if pd.notna(x) else None) if website_col else None
         
         return df
     
@@ -564,7 +588,15 @@ class MarylandCleaner:
             df['original_name'] = 'Unknown'
         df['original_state'] = df['state'].copy()
         df['original_election_year'] = df['election_year'].copy()
-        df['original_office'] = df['Office'].copy()
+        # Preserve original office using best available source
+        if 'Office Name' in df.columns:
+            df['original_office'] = df['Office Name'].copy()
+        elif 'Office' in df.columns:
+            df['original_office'] = df['Office'].copy()
+        elif 'office' in df.columns:
+            df['original_office'] = df['office'].copy()
+        else:
+            df['original_office'] = pd.NA
         df['original_filing_date'] = pd.NA  # Not available in Maryland data
         
         # Add missing columns with None values
