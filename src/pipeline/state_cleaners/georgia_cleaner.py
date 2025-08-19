@@ -581,6 +581,8 @@ class GeorgiaCleaner:
         else:
             
             
+            
+            
             df['city'] = pd.NA
             
         if 'Zip' in df.columns:
@@ -588,11 +590,15 @@ class GeorgiaCleaner:
         else:
             
             
+            
+            
             df['zip_code'] = pd.NA
             
         if 'County (If Local Contest)' in df.columns:
             df['county'] = df['County (If Local Contest)'].apply(lambda x: str(x).strip() if pd.notna(x) else None)
         else:
+            
+            
             
             
             df['county'] = pd.NA

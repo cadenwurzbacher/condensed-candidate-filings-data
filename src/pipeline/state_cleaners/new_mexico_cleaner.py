@@ -178,6 +178,8 @@ class NewMexicoCleaner:
             else:
             
             
+            
+            
                 # Default to 2024 for New Mexico data
                 year = 2024
             
@@ -190,6 +192,8 @@ class NewMexicoCleaner:
             elif 'special' in contest_lower:
                 election_type = "Special"
             else:
+            
+            
             
             
                 # Default to General for most contests
@@ -224,6 +228,8 @@ class NewMexicoCleaner:
                 if pd.notna(district_str) and district_str:
                     return "US Representative", str(district_str)
                 else:
+            
+            
                     return "US Representative", "At Large"
             
             # Handle State Senate
@@ -231,6 +237,8 @@ class NewMexicoCleaner:
                 if pd.notna(district_str) and district_str:
                     return "State Senate", str(district_str)
                 else:
+            
+            
                     return "State Senate", None
             
             # Handle State House/Representative
@@ -238,6 +246,8 @@ class NewMexicoCleaner:
                 if pd.notna(district_str) and district_str:
                     return "State House", str(district_str)
                 else:
+            
+            
                     return "State House", None
             
             # Handle other offices (keep as is)

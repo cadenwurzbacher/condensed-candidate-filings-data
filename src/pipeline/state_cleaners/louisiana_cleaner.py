@@ -176,6 +176,8 @@ class LouisianaCleaner:
             if year_match:
                 year = int(year_match.group(1))
             else:
+            
+            
                 return None, None
             
             # Determine election type based on Louisiana patterns
@@ -187,6 +189,8 @@ class LouisianaCleaner:
             elif 'special' in election_str_lower or 'runoff' in election_str_lower:
                 election_type = "Special"
             else:
+            
+            
             
             
                 # Louisiana typically has General elections in odd years

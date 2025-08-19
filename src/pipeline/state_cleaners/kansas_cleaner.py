@@ -175,6 +175,8 @@ class KansasCleaner:
             if year_match:
                 year = int(year_match.group())
             else:
+            
+            
                 return None, None
             
             # Determine election type
@@ -196,6 +198,8 @@ class KansasCleaner:
             df['election_year'] = [result[0] for result in election_results]
             df['election_type'] = [result[1] for result in election_results]
         else:
+            
+            
             
             
             # Default values if Election column doesn't exist
@@ -267,6 +271,8 @@ class KansasCleaner:
         if 'Candidate' in df.columns:
             df['full_name_display'] = df['Candidate'].apply(clean_name)
         else:
+            
+            
             
             
         
@@ -362,7 +368,7 @@ class KansasCleaner:
                         elif '"' in second_part or '"' in second_part or '"' in second_part or "'" in second_part or "'" in second_part or "'" in second_part or '\u201c' in second_part or '\u201d' in second_part or '\u2018' in second_part or '\u2019' in second_part:
                             # This is a nickname, not a middle name
                             # Nickname should already be extracted above
-                            pass
+                            
                         else:
                             middle_name = second_part
                         
@@ -392,14 +398,20 @@ class KansasCleaner:
             if self._is_initial_or_suffix(parts[1]):
                 return parts[0], None, None, None, suffix, nickname, parts[0]
             else:
+            
+            
                 return parts[0], None, parts[1], None, suffix, nickname, f"{parts[0]} {parts[1]}"
         elif len(parts) == 3:
             # Check if second part is an initial
             if self._is_initial(parts[1]):
                 return parts[0], parts[1], parts[2], None, suffix, nickname, f"{parts[0]} {parts[1]} {parts[2]}"
             else:
+            
+            
                 return parts[0], parts[1], parts[2], None, suffix, nickname, f"{parts[0]} {parts[1]} {parts[2]}"
         else:
+            
+            
             
             
             # For names with more than 3 parts, treat first as first, last as last, rest as middle
@@ -468,6 +480,8 @@ class KansasCleaner:
         else:
             
             
+            
+            
             df['party'] = pd.NA
         
         return df
@@ -526,11 +540,15 @@ class KansasCleaner:
         else:
             
             
+            
+            
             df['phone'] = pd.NA
             
         if 'Email' in df.columns:
             df['email'] = df['Email'].apply(clean_email)
         else:
+            
+            
             
             
             df['email'] = pd.NA
@@ -540,11 +558,15 @@ class KansasCleaner:
         else:
             
             
+            
+            
             df['address'] = pd.NA
             
         if 'Web Address' in df.columns:
             df['website'] = df['Web Address'].apply(lambda x: str(x).strip() if pd.notna(x) else None)
         else:
+            
+            
             
             
             df['website'] = pd.NA
@@ -555,11 +577,15 @@ class KansasCleaner:
         else:
             
             
+            
+            
             df['city'] = pd.NA
             
         if 'Home Zip' in df.columns:
             df['zip_code'] = df['Home Zip'].apply(lambda x: str(x).strip() if pd.notna(x) else None)
         else:
+            
+            
             
             
             df['zip_code'] = pd.NA
@@ -579,6 +605,8 @@ class KansasCleaner:
         else:
             
             
+            
+            
             df['original_name'] = pd.NA
             
         df['original_state'] = df['state'].copy()
@@ -589,11 +617,15 @@ class KansasCleaner:
         else:
             
             
+            
+            
             df['original_office'] = pd.NA
             
         if 'Date Filed' in df.columns:
             df['original_filing_date'] = df['Date Filed'].copy()
         else:
+            
+            
             
             
             df['original_filing_date'] = pd.NA
@@ -625,6 +657,8 @@ class KansasCleaner:
             
             df['filing_date'] = df['Date Filed'].apply(parse_filing_date)
         else:
+            
+            
             
             
             df['filing_date'] = pd.NA

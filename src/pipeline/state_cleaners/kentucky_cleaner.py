@@ -279,6 +279,8 @@ class KentuckyCleaner:
             elif 'special' in election_type_str:
                 return "Special"
             else:
+            
+            
                 return "General"  # Default
         
         # Apply election processing
@@ -523,6 +525,8 @@ class KentuckyCleaner:
         else:
             
             
+            
+            
             # No party data available
             df['party'] = pd.NA
             logger.info("No party data found in raw data")
@@ -553,6 +557,8 @@ class KentuckyCleaner:
         if 'location' in df.columns:
             df['address'] = df['location'].apply(clean_address)
         else:
+            
+            
             
             
             df['address'] = pd.NA

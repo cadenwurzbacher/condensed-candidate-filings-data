@@ -143,6 +143,8 @@ class VirginiaCleaner:
             if year_match:
                 year = int(year_match.group())
             else:
+            
+            
                 return None, None
             
             election_str_lower = election_str.lower()
@@ -225,12 +227,16 @@ class VirginiaCleaner:
                         last_name, first_name = first_part.split(',', 1)
                         return first_name.strip()
                     else:
+            
+            
                         return first_part
                 else:
                     if ',' in name_str:
                         last_name, first_name = name_str.split(',', 1)
                         return first_name.strip()
                     else:
+            
+            
                         return name_str
             
             cleaned = re.sub(r'\s+', ' ', name_str).strip().strip('"\'')
@@ -347,11 +353,15 @@ class VirginiaCleaner:
             if self._is_initial_or_suffix(parts[1]):
                 return parts[0], None, None, None, suffix, nickname, parts[0]
             else:
+            
+            
                 return parts[0], None, parts[1], None, suffix, nickname, f"{parts[0]} {parts[1]}"
         elif len(parts) == 3:
             if self._is_initial(parts[1]):
                 return parts[0], parts[1], parts[2], None, suffix, nickname, f"{parts[0]} {parts[1]} {parts[2]}"
             else:
+            
+            
                 return parts[0], parts[1], parts[2], None, suffix, nickname, f"{parts[0]} {parts[1]} {parts[2]}"
         else:
             first = parts[0]

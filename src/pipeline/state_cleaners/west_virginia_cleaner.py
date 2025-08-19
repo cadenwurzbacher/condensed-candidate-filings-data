@@ -174,6 +174,8 @@ class WestVirginiaCleaner:
             if year_match:
                 year = int(year_match.group())
             else:
+            
+            
                 return None, None
             
             # Determine election type
@@ -196,6 +198,8 @@ class WestVirginiaCleaner:
             df['election_year'] = [result[0] for result in election_results]
             df['election_type'] = [result[1] for result in election_results]
         else:
+            
+            
             
             
             # If no election column, set default values
@@ -272,8 +276,12 @@ class WestVirginiaCleaner:
                         last_name, first_name = first_part.split(',', 1)
                         return first_name.strip()
                     else:
+            
+            
                         return first_part
                 else:
+            
+            
             
             
                     # Handle single names
@@ -281,6 +289,8 @@ class WestVirginiaCleaner:
                         last_name, first_name = name_str.split(',', 1)
                         return first_name.strip()
                     else:
+            
+            
                         return name_str
             
             # For non-president cases, clean the name
@@ -295,6 +305,8 @@ class WestVirginiaCleaner:
         if name_column in df.columns and office_column in df.columns:
             df['full_name_display'] = df.apply(lambda row: clean_name(row[name_column], row[office_column]), axis=1)
         else:
+            
+            
             
             
             # If we don't have the required columns, create a basic full_name_display
@@ -335,9 +347,13 @@ class WestVirginiaCleaner:
                 else:
             
             
+            
+            
                     # Fallback for president candidates without running mates
                     parsed = self._parse_standard_name(original_name, original_name)
             else:
+            
+            
             
             
                 # For all other cases, use the original name for parsing
@@ -415,6 +431,8 @@ class WestVirginiaCleaner:
                 else:
             
             
+            
+            
                     # Handle multiple parts
                     first_name = first_middle[0]
                     middle_parts = []
@@ -437,14 +455,20 @@ class WestVirginiaCleaner:
             if self._is_initial_or_suffix(parts[1]):
                 return parts[0], None, None, None, suffix, nickname, parts[0]
             else:
+            
+            
                 return parts[0], None, parts[1], None, suffix, nickname, f"{parts[0]} {parts[1]}"
         elif len(parts) == 3:
             # Check if second part is an initial
             if self._is_initial(parts[1]):
                 return parts[0], parts[1], parts[2], None, suffix, nickname, f"{parts[0]} {parts[1]} {parts[2]}"
             else:
+            
+            
                 return parts[0], parts[1], parts[2], None, suffix, nickname, f"{parts[0]} {parts[1]} {parts[2]}"
         else:
+            
+            
             
             
             # For names with more than 3 parts, treat first as first, last as last, rest as middle

@@ -243,6 +243,8 @@ class DelawareCleaner:
                 else:
             
             
+            
+            
                     # Try abbreviated format
                     district_match = re.search(r'DIS (\d+)', office_str, re.IGNORECASE)
                     if district_match:
@@ -258,6 +260,8 @@ class DelawareCleaner:
                 if district_match:
                     district = district_match.group(1)
                 else:
+            
+            
             
             
                     # Try abbreviated format
@@ -277,6 +281,8 @@ class DelawareCleaner:
                 if "At-Large" in office_str or "AT LRG" in office_str:
                     return "City Council Member", "At-Large"
                 else:
+            
+            
             
             
                     # Extract district number from office string
@@ -378,6 +384,8 @@ class DelawareCleaner:
                     elif "Levy Court" in office_str or "LEVY COURT" in office_str:
                         return "County Levy Court Member", district
                     else:
+            
+            
             
             
                         # For any other office with district, keep the office name but extract district
@@ -797,6 +805,8 @@ class DelawareCleaner:
                 else:
             
             
+            
+            
                     # Handle multiple parts
                     first_name = first_middle[0]
                     middle_parts = []
@@ -819,14 +829,20 @@ class DelawareCleaner:
             if self._is_initial_or_suffix(parts[1]):
                 return parts[0], None, None, None, suffix, nickname, parts[0]
             else:
+            
+            
                 return parts[0], None, parts[1], None, suffix, nickname, f"{parts[0]} {parts[1]}"
         elif len(parts) == 3:
             # Check if second part is an initial
             if self._is_initial(parts[1]):
                 return parts[0], parts[1], parts[2], None, suffix, nickname, f"{parts[0]} {parts[1]} {parts[2]}"
             else:
+            
+            
                 return parts[0], parts[1], parts[2], None, suffix, nickname, f"{parts[0]} {parts[1]} {parts[2]}"
         else:
+            
+            
             
             
             # For names with more than 3 parts, treat first as first, last as last, rest as middle

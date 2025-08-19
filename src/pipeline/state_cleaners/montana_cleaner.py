@@ -174,6 +174,8 @@ class MontanaCleaner:
             if year_match:
                 year = int(year_match.group())
             else:
+            
+            
                 return None, None
             
             # Determine election type
@@ -196,6 +198,8 @@ class MontanaCleaner:
             df['election_year'] = [result[0] for result in election_results]
             df['election_type'] = [result[1] for result in election_results]
         else:
+            
+            
             
             
             # If no election column, try to extract from filename or set defaults
@@ -251,6 +255,8 @@ class MontanaCleaner:
         else:
             
             
+            
+            
             df['office'] = None
             df['district'] = None
         
@@ -277,8 +283,12 @@ class MontanaCleaner:
                         last_name, first_name = first_part.split(',', 1)
                         return first_name.strip()
                     else:
+            
+            
                         return first_part
                 else:
+            
+            
             
             
                     # Handle single names
@@ -286,6 +296,8 @@ class MontanaCleaner:
                         last_name, first_name = name_str.split(',', 1)
                         return first_name.strip()
                     else:
+            
+            
                         return name_str
             
             # For non-president cases, clean the name
@@ -298,6 +310,8 @@ class MontanaCleaner:
         if name_column in df.columns:
             df['full_name_display'] = df.apply(lambda row: clean_name(row[name_column], row.get('office', '')), axis=1)
         else:
+            
+            
             
             
             df['full_name_display'] = None
@@ -337,9 +351,13 @@ class MontanaCleaner:
                 else:
             
             
+            
+            
                     # Fallback for president candidates without running mates
                     parsed = self._parse_standard_name(original_name, original_name)
             else:
+            
+            
             
             
                 # For all other cases, use the original name for parsing
@@ -417,6 +435,8 @@ class MontanaCleaner:
                 else:
             
             
+            
+            
                     # Handle multiple parts
                     first_name = first_middle[0]
                     middle_parts = []
@@ -439,14 +459,20 @@ class MontanaCleaner:
             if self._is_initial_or_suffix(parts[1]):
                 return parts[0], None, None, None, suffix, nickname, parts[0]
             else:
+            
+            
                 return parts[0], None, parts[1], None, suffix, nickname, f"{parts[0]} {parts[1]}"
         elif len(parts) == 3:
             # Check if second part is an initial
             if self._is_initial(parts[1]):
                 return parts[0], parts[1], parts[2], None, suffix, nickname, f"{parts[0]} {parts[1]} {parts[2]}"
             else:
+            
+            
                 return parts[0], parts[1], parts[2], None, suffix, nickname, f"{parts[0]} {parts[1]} {parts[2]}"
         else:
+            
+            
             
             
             # For names with more than 3 parts, treat first as first, last as last, rest as middle
@@ -517,6 +543,8 @@ class MontanaCleaner:
         else:
             
             
+            
+            
             df['party'] = None
         
         return df
@@ -576,11 +604,15 @@ class MontanaCleaner:
         else:
             
             
+            
+            
             df['phone'] = None
             
         if email_column in df.columns:
             df['email'] = df[email_column].apply(clean_email)
         else:
+            
+            
             
             
             df['email'] = None
@@ -590,11 +622,15 @@ class MontanaCleaner:
         else:
             
             
+            
+            
             df['address'] = None
             
         if website_column in df.columns:
             df['website'] = df[website_column].apply(lambda x: str(x).strip() if pd.notna(x) else None)
         else:
+            
+            
             
             
             df['website'] = None

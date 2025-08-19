@@ -169,11 +169,15 @@ class IndianaCleaner:
         else:
             
             
+            
+            
             df['election_year'] = 2024
         
         if 'Election' in df.columns:
             df['election_type'] = df['Election'].str.capitalize()
         else:
+            
+            
             
             
             df['election_type'] = "General"
@@ -224,6 +228,8 @@ class IndianaCleaner:
             df['district'] = [result[1] for result in office_results]
             df['district'] = df['district'].astype('object')
         else:
+            
+            
             
             
             df['office'] = pd.NA
@@ -372,6 +378,8 @@ class IndianaCleaner:
                 else:
             
             
+            
+            
                     # Handle multiple parts
                     first_name = first_middle[0]
                     middle_parts = []
@@ -394,14 +402,20 @@ class IndianaCleaner:
             if self._is_initial_or_suffix(parts[1]):
                 return parts[0], None, None, None, suffix, nickname, parts[0]
             else:
+            
+            
                 return parts[0], None, parts[1], None, suffix, nickname, f"{parts[0]} {parts[1]}"
         elif len(parts) == 3:
             # Check if second part is an initial
             if self._is_initial(parts[1]):
                 return parts[0], parts[1], parts[2], None, suffix, nickname, f"{parts[0]} {parts[1]} {parts[2]}"
             else:
+            
+            
                 return parts[0], parts[1], parts[2], None, suffix, nickname, f"{parts[0]} {parts[1]} {parts[2]}"
         else:
+            
+            
             
             
             # For names with more than 3 parts, treat first as first, last as last, rest as middle
@@ -469,6 +483,8 @@ class IndianaCleaner:
         if 'Party' in df.columns:
             df['party'] = df['Party'].apply(standardize_party)
         else:
+            
+            
             
             
             df['party'] = pd.NA

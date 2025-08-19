@@ -141,6 +141,8 @@ class ColoradoCleaner:
         else:
             
             
+            
+            
             # Default to current year if no year found
             election_year = datetime.now().year
             logger.warning(f"No election year found in filename {filename}, using {election_year}")
@@ -183,6 +185,8 @@ class ColoradoCleaner:
                     district = district_match.group(1)
                     return "State Senator", district
                 else:
+            
+            
                     return "State Senator", district_str if district_str else None
             
             # Handle State Representative
@@ -193,6 +197,8 @@ class ColoradoCleaner:
                     district = district_match.group(1)
                     return "State Representative", district
                 else:
+            
+            
                     return "State Representative", district_str if district_str else None
             
             # Handle State Board of Education Member
@@ -203,6 +209,8 @@ class ColoradoCleaner:
                     district = district_match.group(1)
                     return "State Board of Education Member", district
                 else:
+            
+            
                     return "State Board of Education Member", district_str if district_str else None
             
             # Handle Regent of the University of Colorado
@@ -213,6 +221,8 @@ class ColoradoCleaner:
                     district = district_match.group(1)
                     return "Regent of the University of Colorado", district
                 else:
+            
+            
                     return "Regent of the University of Colorado", district_str if district_str else None
             
             # Handle District Attorney
@@ -223,6 +233,8 @@ class ColoradoCleaner:
                     district = district_match.group(1)
                     return "District Attorney", district
                 else:
+            
+            
                     return "District Attorney", district_str if district_str else None
             
             # For other offices, keep as is
@@ -359,6 +371,8 @@ class ColoradoCleaner:
                 else:
             
             
+            
+            
                     # Handle multiple parts
                     first_name = first_middle[0]
                     middle_parts = []
@@ -381,14 +395,20 @@ class ColoradoCleaner:
             if self._is_initial_or_suffix(parts[1]):
                 return parts[0], None, None, None, suffix, nickname, parts[0]
             else:
+            
+            
                 return parts[0], None, parts[1], None, suffix, nickname, f"{parts[0]} {parts[1]}"
         elif len(parts) == 3:
             # Check if second part is an initial
             if self._is_initial(parts[1]):
                 return parts[0], parts[1], parts[2], None, suffix, nickname, f"{parts[0]} {parts[1]} {parts[2]}"
             else:
+            
+            
                 return parts[0], parts[1], parts[2], None, suffix, nickname, f"{parts[0]} {parts[1]} {parts[2]}"
         else:
+            
+            
             
             
             # For names with more than 3 parts, treat first as first, last as last, rest as middle

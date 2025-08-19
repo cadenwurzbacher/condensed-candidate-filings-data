@@ -195,6 +195,8 @@ class SouthCarolinaCleaner:
                     else:
             
             
+            
+            
                         # For non-Presidential candidates, use the filing year as election year
                         year = filing_year
                     
@@ -335,6 +337,8 @@ class SouthCarolinaCleaner:
             elif last_suffix:
                 return last_suffix
             else:
+            
+            
                 return None
         
         # Apply name cleaning

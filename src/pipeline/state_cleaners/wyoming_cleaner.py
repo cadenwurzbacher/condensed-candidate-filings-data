@@ -236,8 +236,12 @@ class WyomingCleaner:
                         last_name, first_name = first_part.split(',', 1)
                         return first_name.strip()
                     else:
+            
+            
                         return first_part
                 else:
+            
+            
             
             
                     # Handle single names
@@ -245,6 +249,8 @@ class WyomingCleaner:
                         last_name, first_name = name_str.split(',', 1)
                         return first_name.strip()
                     else:
+            
+            
                         return name_str
             
             # For non-president cases, clean the name
@@ -290,9 +296,13 @@ class WyomingCleaner:
                 else:
             
             
+            
+            
                     # Fallback for president candidates without running mates
                     parsed = self._parse_standard_name(original_name, original_name)
             else:
+            
+            
             
             
                 # For all other cases, use the original name for parsing
@@ -370,6 +380,8 @@ class WyomingCleaner:
                 else:
             
             
+            
+            
                     # Handle multiple parts
                     first_name = first_middle[0]
                     middle_parts = []
@@ -392,14 +404,20 @@ class WyomingCleaner:
             if self._is_initial_or_suffix(parts[1]):
                 return parts[0], None, None, None, suffix, nickname, parts[0]
             else:
+            
+            
                 return parts[0], None, parts[1], None, suffix, nickname, f"{parts[0]} {parts[1]}"
         elif len(parts) == 3:
             # Check if second part is an initial
             if self._is_initial(parts[1]):
                 return parts[0], parts[1], parts[2], None, suffix, nickname, f"{parts[0]} {parts[1]} {parts[2]}"
             else:
+            
+            
                 return parts[0], parts[1], parts[2], None, suffix, nickname, f"{parts[0]} {parts[1]} {parts[2]}"
         else:
+            
+            
             
             
             # For names with more than 3 parts, treat first as first, last as last, rest as middle

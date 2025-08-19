@@ -341,10 +341,14 @@ class MissouriCleaner:
                 else:
             
             
+            
+            
                     # Middle part is not an initial, treat as middle name
                     middle_name = parts[1]
                     last_name = parts[2]
             else:
+            
+            
             
             
                 # More than 3 parts
@@ -354,6 +358,8 @@ class MissouriCleaner:
                     middle_name = parts[1]
                     last_name = ' '.join(parts[2:])
                 else:
+            
+            
             
             
                     # Second part is not an initial, treat as middle name
@@ -561,6 +567,8 @@ class MissouriCleaner:
             elif len(digits) > 0:
                 return digits
             else:
+            
+            
                 return ""
         
         def clean_email(email_str: str) -> str:

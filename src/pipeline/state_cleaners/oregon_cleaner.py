@@ -174,6 +174,8 @@ class OregonCleaner:
             if year_match:
                 year = int(year_match.group())
             else:
+            
+            
                 return None, None
             
             # Determine election type
@@ -217,6 +219,8 @@ class OregonCleaner:
                 if district_match:
                     return "US Representative", district_match.group(1)
                 else:
+            
+            
                     return "US Representative", None
             
             # Handle State Senate
@@ -226,6 +230,8 @@ class OregonCleaner:
                 if district_match:
                     return "State Senate", district_match.group(1)
                 else:
+            
+            
                     return "State Senate", None
             
             # Handle State House/Representative
@@ -235,6 +241,8 @@ class OregonCleaner:
                 if district_match:
                     return "State House", district_match.group(1)
                 else:
+            
+            
                     return "State House", None
             
             # Handle other offices (keep as is)
@@ -368,6 +376,8 @@ class OregonCleaner:
                 else:
             
             
+            
+            
                     # Handle multiple parts
                     first_name = first_middle[0]
                     middle_parts = []
@@ -390,14 +400,20 @@ class OregonCleaner:
             if self._is_initial_or_suffix(parts[1]):
                 return parts[0], None, None, None, suffix, nickname, parts[0]
             else:
+            
+            
                 return parts[0], None, parts[1], None, suffix, nickname, f"{parts[0]} {parts[1]}"
         elif len(parts) == 3:
             # Check if second part is an initial
             if self._is_initial(parts[1]):
                 return parts[0], parts[1], parts[2], None, suffix, nickname, f"{parts[0]} {parts[1]} {parts[2]}"
             else:
+            
+            
                 return parts[0], parts[1], parts[2], None, suffix, nickname, f"{parts[0]} {parts[1]} {parts[2]}"
         else:
+            
+            
             
             
             # For names with more than 3 parts, treat first as first, last as last, rest as middle
