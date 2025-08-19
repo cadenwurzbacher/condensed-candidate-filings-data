@@ -18,7 +18,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Configuration
-DEFAULT_OUTPUT_DIR = "cleaned_data"  # Default output directory for cleaned data
+DEFAULT_OUTPUT_DIR = "data/processed"  # Default output directory for cleaned data
 DEFAULT_INPUT_DIR = "Raw State Data - Current"  # Default input directory
 
 def list_available_input_files(input_dir: str = DEFAULT_INPUT_DIR) -> List[str]:
@@ -75,10 +75,24 @@ class NorthCarolinaCleaner:
         """Remove original columns that have been replaced by cleaned versions."""
         logger.info("Removing duplicate columns...")
         
-        # Columns to remove (original versions)
-        columns_to_remove = [
-            'Election', 'Office', 'Name', 'Party', 'Address', 'Email', 'Website', 'Phone Number'
-        ]
+        # Columns to remove (original versions) - handle different column names
+        columns_to_remove = []
+        if 'Election' in df.columns:
+            columns_to_remove.append('Election')
+        if 'Office' in df.columns:
+            columns_to_remove.append('Office')
+        if 'Name' in df.columns:
+            columns_to_remove.append('Name')
+        if 'Party' in df.columns:
+            columns_to_remove.append('Party')
+        if 'Address' in df.columns:
+            columns_to_remove.append('Address')
+        if 'Email' in df.columns:
+            columns_to_remove.append('Email')
+        if 'Website' in df.columns:
+            columns_to_remove.append('Website')
+        if 'Phone Number' in df.columns:
+            columns_to_remove.append('Phone Number')
         
         # Only remove if they exist and we have cleaned versions
         columns_to_remove = [col for col in columns_to_remove if col in df.columns]
@@ -165,6 +179,14 @@ class NorthCarolinaCleaner:
                 election_type = "General"  # Default
             
             return year, election_type
+        
+        # Check if election_year is already present (from merged files)
+        if 'election_year' in df.columns and df['election_year'].notna().any():
+            logger.info("Election year already present from merged files, skipping extraction")
+            # Still need to set election_type if not present
+            if 'election_type' not in df.columns:
+                df['election_type'] = None
+            return df
         
         # Check if Election column exists, if not set defaults
         if 'Election' not in df.columns:
@@ -277,7 +299,8 @@ class NorthCarolinaCleaner:
         
         # Apply name cleaning with office context - handle different column names
         name_col = 'name_on_ballot' if 'name_on_ballot' in df.columns else 'Name'
-        df['full_name_display'] = df.apply(lambda row: clean_name(row[name_col], row['Office']), axis=1)
+        office_col = 'contest_name' if 'contest_name' in df.columns else 'Office'
+        df['full_name_display'] = df.apply(lambda row: clean_name(row[name_col], row[office_col]), axis=1)
         
         # Parse names into components
         df = self._parse_names(df)
@@ -298,7 +321,8 @@ class NorthCarolinaCleaner:
         
         for idx, row in df.iterrows():
             name = row['full_name_display']
-            office = row['office']
+            office_col = 'contest_name' if 'contest_name' in df.columns else 'office'
+            office = row[office_col]
             # Get original name from the appropriate column
             name_col = 'name_on_ballot' if 'name_on_ballot' in df.columns else 'Name'
             original_name = row[name_col]
@@ -314,28 +338,45 @@ class NorthCarolinaCleaner:
                     first_part = original_str.split('/')[0].strip()
                     parsed = self._parse_standard_name(first_part, original_name)
                 else:
-            
-            
-            
-            
                     # Fallback for president candidates without running mates
                     parsed = self._parse_standard_name(original_name, original_name)
             else:
-            
-            
-            
-            
                 # For all other cases, use the original name for parsing
-                parsed = self._parse_standard_name(original_name, original_name)
+                try:
+                    parsed = self._parse_standard_name(original_name, original_name)
+                    
+                    # Safety check: ensure we got a 7-tuple
+                    if parsed is None or len(parsed) != 7:
+                        logger.warning(f"Name parsing failed for '{original_name}', using fallback")
+                        parsed = (original_name, None, None, None, None, None, original_name)
+                except Exception as e:
+                    logger.error(f"Exception in _parse_standard_name for '{original_name}': {e}")
+                    logger.error(f"Using fallback values")
+                    parsed = (original_name, None, None, None, None, None, original_name)
             
-            # Assign parsed components
-            df.at[idx, 'first_name'] = parsed[0]
-            df.at[idx, 'middle_name'] = parsed[1]
-            df.at[idx, 'last_name'] = parsed[2]
-            df.at[idx, 'prefix'] = parsed[3]
-            df.at[idx, 'suffix'] = parsed[4]
-            df.at[idx, 'nickname'] = parsed[5]
-            df.at[idx, 'full_name_display'] = parsed[6]
+            # Assign parsed components with detailed error handling
+            try:
+                df.at[idx, 'first_name'] = parsed[0]
+                df.at[idx, 'middle_name'] = parsed[1]
+                df.at[idx, 'last_name'] = parsed[2]
+                df.at[idx, 'prefix'] = parsed[3]
+                df.at[idx, 'suffix'] = parsed[4]
+                df.at[idx, 'nickname'] = parsed[5]
+                df.at[idx, 'full_name_display'] = parsed[6]
+            except (IndexError, TypeError) as e:
+                logger.error(f"Error assigning parsed components for '{original_name}': {e}")
+                logger.error(f"Parsed result: {parsed}")
+                logger.error(f"Parsed type: {type(parsed)}")
+                logger.error(f"Parsed length: {len(parsed) if parsed else 'None'}")
+                
+                # Use fallback values
+                df.at[idx, 'first_name'] = original_name if original_name else 'Unknown'
+                df.at[idx, 'middle_name'] = None
+                df.at[idx, 'last_name'] = None
+                df.at[idx, 'prefix'] = None
+                df.at[idx, 'suffix'] = None
+                df.at[idx, 'nickname'] = None
+                df.at[idx, 'full_name_display'] = original_name if original_name else 'Unknown'
         
         return df
     
@@ -394,14 +435,11 @@ class NorthCarolinaCleaner:
                         # This is a nickname, not a middle name
                         first_name = first_middle[0]
                         # Nickname should already be extracted above
+                        middle_name = None
                     else:
                         first_name = first_middle[0]
                         middle_name = second_part
                 else:
-            
-            
-            
-            
                     # Handle multiple parts
                     first_name = first_middle[0]
                     middle_parts = []
@@ -424,22 +462,14 @@ class NorthCarolinaCleaner:
             if self._is_initial_or_suffix(parts[1]):
                 return parts[0], None, None, None, suffix, nickname, parts[0]
             else:
-            
-            
                 return parts[0], None, parts[1], None, suffix, nickname, f"{parts[0]} {parts[1]}"
         elif len(parts) == 3:
             # Check if second part is an initial
             if self._is_initial(parts[1]):
                 return parts[0], parts[1], parts[2], None, suffix, nickname, f"{parts[0]} {parts[1]} {parts[2]}"
             else:
-            
-            
                 return parts[0], parts[1], parts[2], None, suffix, nickname, f"{parts[0]} {parts[1]} {parts[2]}"
         else:
-            
-            
-            
-            
             # For names with more than 3 parts, treat first as first, last as last, rest as middle
             first = parts[0]
             last = parts[-1]
@@ -501,7 +531,15 @@ class NorthCarolinaCleaner:
             party_lower = str(party_str).strip().lower()
             return party_mapping.get(party_lower, party_str)
         
-        df['party'] = df['Party'].apply(standardize_party)
+        # Handle different party column names - North Carolina uses party_candidate
+        if 'party_candidate' in df.columns:
+            df['party'] = df['party_candidate'].apply(standardize_party)
+        elif 'Party' in df.columns:
+            df['party'] = df['Party'].apply(standardize_party)
+        else:
+            # No party column found, set to None
+            df['party'] = pd.NA
+            logger.warning("No party column found in North Carolina data, setting to None")
         
         return df
     
@@ -549,11 +587,30 @@ class NorthCarolinaCleaner:
             cleaned = re.sub(r'\s+', ' ', cleaned)
             return cleaned
         
-        # Apply cleaning
-        df['phone'] = df['Phone Number'].apply(clean_phone)
-        df['email'] = df['Email'].apply(clean_email)
-        df['address'] = df['Address'].apply(clean_address)
-        df['website'] = df['Website'].apply(lambda x: str(x).strip() if pd.notna(x) else None)
+        # Apply cleaning - handle different column names
+        if 'phone' in df.columns:
+            df['phone'] = df['phone'].apply(clean_phone)
+        elif 'Phone Number' in df.columns:
+            df['phone'] = df['Phone Number'].apply(clean_phone)
+        else:
+            df['phone'] = pd.NA
+            
+        if 'email' in df.columns:
+            df['email'] = df['email'].apply(clean_email)
+        elif 'Email' in df.columns:
+            df['email'] = df['Email'].apply(clean_email)
+        else:
+            df['email'] = pd.NA
+            
+        if 'street_address' in df.columns:
+            df['address'] = df['street_address'].apply(clean_address)
+        elif 'Address' in df.columns:
+            df['address'] = df['Address'].apply(clean_address)
+        else:
+            df['address'] = pd.NA
+            
+        # North Carolina doesn't have website data
+        df['website'] = pd.NA
         
         return df
     
@@ -569,7 +626,9 @@ class NorthCarolinaCleaner:
         df['original_name'] = df[name_col].copy()
         df['original_state'] = df['state'].copy()
         df['original_election_year'] = df['election_year'].copy()
-        df['original_office'] = df['Office'].copy()
+        # Handle different office column names
+        office_col = 'contest_name' if 'contest_name' in df.columns else 'Office'
+        df['original_office'] = df[office_col].copy()
         df['original_filing_date'] = pd.NA  # Not available in North Carolina data
         
         # Add missing columns with None values
@@ -584,6 +643,10 @@ class NorthCarolinaCleaner:
         
         # Set id to empty string (will be generated later in process)
         df['id'] = ""
+        
+        # Preserve source file info if present (from merged files)
+        if '_source_file' in df.columns:
+            logger.info(f"Preserving source file information for {len(df)} records")
         
         return df
     
@@ -718,7 +781,7 @@ class NorthCarolinaCleaner:
         
         return ' '.join(parts).strip()
 
-def clean_north_carolina_candidates(input_file: str, output_file: str = None, output_dir: str = DEFAULT_OUTPUT_DIR) -> pd.DataFrame:
+def clean_north_carolina_candidates(input_file: str, output_dir: str = DEFAULT_OUTPUT_DIR) -> pd.DataFrame:
     """
     Main function to clean North Carolina candidate data.
     
@@ -730,9 +793,12 @@ def clean_north_carolina_candidates(input_file: str, output_file: str = None, ou
     Returns:
         Cleaned DataFrame
     """
-    # Load the data
+    # Load the data - handle both CSV and Excel files
     logger.info(f"Loading North Carolina data from {input_file}...")
-    df = pd.read_excel(input_file)
+    if input_file.endswith('.csv'):
+        df = pd.read_csv(input_file)
+    else:
+        df = pd.read_excel(input_file)
     
     # Initialize cleaner with output directory
     cleaner = NorthCarolinaCleaner(output_dir=output_dir)
@@ -740,16 +806,13 @@ def clean_north_carolina_candidates(input_file: str, output_file: str = None, ou
     # Clean the data
     cleaned_df = cleaner.clean_north_carolina_data(df)
     
-    # Generate output filename if not provided
-    if output_file is None:
-        # Extract base name from input file
-        base_name = os.path.splitext(os.path.basename(input_file))[0]
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        output_file = os.path.join(output_dir, f"{base_name}_cleaned_{timestamp}.xlsx")
+    # Generate output filename
+    base_name = os.path.splitext(os.path.basename(input_file))[0]
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    output_file = os.path.join(output_dir, f"{base_name}_cleaned_{timestamp}.xlsx")
     
-    # Ensure output file is in the output directory
-    if not os.path.dirname(output_file):
-        output_file = os.path.join(output_dir, output_file)
+    # Ensure the output directory exists
+    os.makedirs(output_dir, exist_ok=True)
     
     # Save the cleaned data
     logger.info(f"Saving cleaned data to {output_file}...")

@@ -18,7 +18,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Configuration
-DEFAULT_OUTPUT_DIR = "cleaned_data"  # Default output directory for cleaned data
+DEFAULT_OUTPUT_DIR = "data/processed"  # Default output directory for cleaned data
 DEFAULT_INPUT_DIR = "Raw State Data - Current"  # Default input directory
 
 def list_available_input_files(input_dir: str = DEFAULT_INPUT_DIR) -> List[str]:
@@ -509,7 +509,10 @@ def clean_new_mexico_candidates(input_file: str, output_file: str = None, output
     logger.info(f"Loading New Mexico data from {input_file}...")
     
     # Handle different file types
-    if input_file.endswith('.xls'):
+    if input_file.endswith('.csv'):
+        df = pd.read_csv(input_file)
+        logger.info("Successfully read CSV file")
+    elif input_file.endswith('.xls'):
         # Try to read as HTML first (since some .xls files are actually HTML)
         try:
             df = pd.read_html(input_file)[0]

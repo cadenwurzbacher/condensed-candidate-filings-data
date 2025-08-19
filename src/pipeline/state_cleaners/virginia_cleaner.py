@@ -18,7 +18,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Configuration
-DEFAULT_OUTPUT_DIR = "cleaned_data"  # Default output directory for cleaned data
+DEFAULT_OUTPUT_DIR = "data/processed"  # Default output directory for cleaned data
 DEFAULT_INPUT_DIR = "Raw State Data - Current"  # Default input directory
 
 def list_available_input_files(input_dir: str = DEFAULT_INPUT_DIR) -> List[str]:
@@ -107,6 +107,9 @@ class VirginiaCleaner:
         # Step 7: Remove duplicate columns
         cleaned_df = self._remove_duplicate_columns(cleaned_df)
         
+        # Step 8: Map geographic data
+        cleaned_df = self._map_geographic_data(cleaned_df)
+        
         # Final step: Ensure column order matches Alaska's exact structure
         cleaned_df = self.ensure_column_order(cleaned_df)
         
@@ -133,6 +136,14 @@ class VirginiaCleaner:
         """Process election year and type from election column."""
         logger.info("Processing election data...")
         
+        # Check if election_year already exists (from main pipeline filename extraction)
+        if 'election_year' in df.columns and df['election_year'].notna().any():
+            logger.info("election_year already exists from main pipeline, preserving existing data")
+            # Only set election_type if it doesn't exist
+            if 'election_type' not in df.columns:
+                df['election_type'] = 'General'  # Default for Virginia
+            return df
+        
         def extract_election_info(election_str: str) -> Tuple[Optional[int], Optional[str]]:
             if pd.isna(election_str):
                 return None, None
@@ -143,8 +154,6 @@ class VirginiaCleaner:
             if year_match:
                 year = int(year_match.group())
             else:
-            
-            
                 return None, None
             
             election_str_lower = election_str.lower()
@@ -163,7 +172,7 @@ class VirginiaCleaner:
         if 'Election' not in df.columns:
             logger.warning("Election column not found in Virginia data, setting defaults")
             df['election_year'] = None
-            df['election_type'] = None
+            df['election_type'] = 'General'  # Default for Virginia
             return df
         
         election_results = df['Election'].apply(extract_election_info)
@@ -244,7 +253,8 @@ class VirginiaCleaner:
         
         # Handle different column names
         office_col = 'Office Title' if 'Office Title' in df.columns else 'Office'
-        df['full_name_display'] = df.apply(lambda row: clean_name(row['Name'], row[office_col]), axis=1)
+        name_col = 'Candidate Name' if 'Candidate Name' in df.columns else 'Name'
+        df['full_name_display'] = df.apply(lambda row: clean_name(row[name_col], row[office_col]), axis=1)
         df = self._parse_names(df)
         
         return df
@@ -260,10 +270,13 @@ class VirginiaCleaner:
         df['suffix'] = pd.NA
         df['nickname'] = pd.NA
         
+        # Get the correct name column
+        name_col = 'Candidate Name' if 'Candidate Name' in df.columns else 'Name'
+        
         for idx, row in df.iterrows():
             name = row['full_name_display']
             office = row['office']
-            original_name = row['Name']
+            original_name = row[name_col]
             
             if pd.isna(name) or not name:
                 continue
@@ -431,6 +444,8 @@ class VirginiaCleaner:
             df['party'] = df['Party'].apply(standardize_party)
         elif 'Political Party' in df.columns:
             df['party'] = df['Political Party'].apply(standardize_party)
+        elif 'Political Party Descr' in df.columns:
+            df['party'] = df['Political Party Descr'].apply(standardize_party)
         else:
             logger.warning("No party column found in Virginia data, setting to None")
             df['party'] = None
@@ -473,17 +488,49 @@ class VirginiaCleaner:
             cleaned = re.sub(r'\s+', ' ', cleaned)
             return cleaned
         
-        # Check if Phone Number column exists, if not try alternative names
-        if 'Phone Number' in df.columns:
+        # Handle phone - check multiple possible column names
+        if 'Campaign Day Time Phone' in df.columns:
+            df['phone'] = df['Campaign Day Time Phone'].apply(clean_phone)
+        elif 'Campaign Phone' in df.columns:
+            df['phone'] = df['Campaign Phone'].apply(clean_phone)
+        elif 'Phone Number' in df.columns:
             df['phone'] = df['Phone Number'].apply(clean_phone)
         elif 'Phone' in df.columns:
             df['phone'] = df['Phone'].apply(clean_phone)
         else:
             logger.warning("No phone column found in Virginia data, setting to None")
             df['phone'] = None
-        df['email'] = df['Email'].apply(clean_email)
-        df['address'] = df['Address'].apply(clean_address)
-        df['website'] = df['Website'].apply(lambda x: str(x).strip() if pd.notna(x) else None)
+        
+        # Handle email - check multiple possible column names
+        if 'Campaign Email' in df.columns:
+            df['email'] = df['Campaign Email'].apply(clean_email)
+        elif 'Email' in df.columns:
+            df['email'] = df['Email'].apply(clean_email)
+        else:
+            logger.warning("No email column found in Virginia data, setting to None")
+            df['email'] = None
+        
+        # Handle address - check multiple possible column names
+        if 'Campaign Address Line 1' in df.columns:
+            df['address'] = df['Campaign Address Line 1'].apply(clean_address)
+        elif 'CampaignAddressLine1' in df.columns:
+            df['address'] = df['CampaignAddressLine1'].apply(clean_address)
+        elif 'Address' in df.columns:
+            df['address'] = df['Address'].apply(clean_address)
+        elif 'Address 1' in df.columns:
+            df['address'] = df['Address 1'].apply(clean_address)
+        else:
+            logger.warning("No address column found in Virginia data, setting to None")
+            df['address'] = None
+        
+        # Handle website - check multiple possible column names
+        if 'Campaign Website' in df.columns:
+            df['website'] = df['Campaign Website'].apply(lambda x: str(x).strip() if pd.notna(x) else None)
+        elif 'Website' in df.columns:
+            df['website'] = df['Website'].apply(lambda x: str(x).strip() if pd.notna(x) else None)
+        else:
+            logger.warning("No website column found in Virginia data, setting to None")
+            df['website'] = None
         
         return df
     
@@ -492,7 +539,11 @@ class VirginiaCleaner:
         logger.info("Adding required columns...")
         
         df['state'] = self.state_name
-        df['original_name'] = df['Name'].copy()
+        
+        # Get the correct name column
+        name_col = 'Candidate Name' if 'Candidate Name' in df.columns else 'Name'
+        df['original_name'] = df[name_col].copy()
+        
         df['original_state'] = df['state'].copy()
         df['original_election_year'] = df['election_year'].copy()
         # Handle different column names
@@ -544,6 +595,43 @@ class VirginiaCleaner:
             return hashlib.sha256(id_string.encode('utf-8')).hexdigest()[:16]
         
         df['stable_id'] = df.apply(generate_stable_id, axis=1)
+        
+        return df
+
+    def _map_geographic_data(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Map geographic data from Virginia raw data columns."""
+        logger.info("Mapping geographic data...")
+        
+        # Map city data
+        if 'Campaign City' in df.columns:
+            df['city'] = df['Campaign City'].apply(lambda x: str(x).strip() if pd.notna(x) else None)
+        elif 'City' in df.columns:
+            df['city'] = df['City'].apply(lambda x: str(x).strip() if pd.notna(x) else None)
+        else:
+            logger.warning("No city column found in Virginia data, setting to None")
+            df['city'] = None
+        
+        # Map zip code data
+        if 'Campaign Zip' in df.columns:
+            df['zip_code'] = df['Campaign Zip'].apply(lambda x: str(x).strip() if pd.notna(x) else None)
+        elif 'Zip' in df.columns:
+            df['zip_code'] = df['Zip'].apply(lambda x: str(x).strip() if pd.notna(x) else None)
+        else:
+            logger.warning("No zip code column found in Virginia data, setting to None")
+            df['zip_code'] = None
+        
+        # Map county/locality data
+        if 'Locality Name' in df.columns:
+            df['county'] = df['Locality Name'].apply(lambda x: str(x).strip() if pd.notna(x) else None)
+        elif 'Locality' in df.columns:
+            df['county'] = df['Locality'].apply(lambda x: str(x).strip() if pd.notna(x) else None)
+        else:
+            logger.warning("No county/locality column found in Virginia data, setting to None")
+            df['county'] = None
+        
+        # Map district data (already handled in _process_office_and_district but ensure it's preserved)
+        if 'District' in df.columns and 'district' not in df.columns:
+            df['district'] = df['District'].apply(lambda x: str(x).strip() if pd.notna(x) else None)
         
         return df
 

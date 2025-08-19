@@ -18,7 +18,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Configuration
-DEFAULT_OUTPUT_DIR = "cleaned_data"  # Default output directory for cleaned data
+DEFAULT_OUTPUT_DIR = "data/processed"  # Default output directory for cleaned data
 DEFAULT_INPUT_DIR = "Raw State Data - Current"  # Default input directory
 
 def list_available_input_files(input_dir: str = DEFAULT_INPUT_DIR) -> List[str]:
@@ -271,10 +271,8 @@ class KansasCleaner:
         if 'Candidate' in df.columns:
             df['full_name_display'] = df['Candidate'].apply(clean_name)
         else:
-            
-            
-            
-            
+            # Fallback if no Candidate column
+            df['full_name_display'] = 'Unknown'
         
         # Parse names into components
         df = self._parse_names(df)
@@ -368,7 +366,7 @@ class KansasCleaner:
                         elif '"' in second_part or '"' in second_part or '"' in second_part or "'" in second_part or "'" in second_part or "'" in second_part or '\u201c' in second_part or '\u201d' in second_part or '\u2018' in second_part or '\u2019' in second_part:
                             # This is a nickname, not a middle name
                             # Nickname should already be extracted above
-                            
+                            pass
                         else:
                             middle_name = second_part
                         
@@ -398,22 +396,14 @@ class KansasCleaner:
             if self._is_initial_or_suffix(parts[1]):
                 return parts[0], None, None, None, suffix, nickname, parts[0]
             else:
-            
-            
                 return parts[0], None, parts[1], None, suffix, nickname, f"{parts[0]} {parts[1]}"
         elif len(parts) == 3:
             # Check if second part is an initial
             if self._is_initial(parts[1]):
                 return parts[0], parts[1], parts[2], None, suffix, nickname, f"{parts[0]} {parts[1]} {parts[2]}"
             else:
-            
-            
                 return parts[0], parts[1], parts[2], None, suffix, nickname, f"{parts[0]} {parts[1]} {parts[2]}"
         else:
-            
-            
-            
-            
             # For names with more than 3 parts, treat first as first, last as last, rest as middle
             first = parts[0]
             last = parts[-1]

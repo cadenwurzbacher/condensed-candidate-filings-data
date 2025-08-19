@@ -18,7 +18,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Configuration
-DEFAULT_OUTPUT_DIR = "cleaned_data"
+DEFAULT_OUTPUT_DIR = "data/processed"
 DEFAULT_INPUT_DIR = "Raw State Data - Current"
 
 def list_available_input_files(input_dir: str = DEFAULT_INPUT_DIR) -> List[str]:

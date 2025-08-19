@@ -19,7 +19,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Configuration
-DEFAULT_OUTPUT_DIR = "cleaned_data"  # Default output directory for cleaned data
+DEFAULT_OUTPUT_DIR = "data/processed"  # Default output directory for cleaned data
 DEFAULT_INPUT_DIR = "Raw State Data - Current"  # Default input directory
 
 def list_available_input_files(input_dir: str = DEFAULT_INPUT_DIR) -> List[str]:
@@ -363,7 +363,7 @@ class GeorgiaCleaner:
         df["prefix"] = pd.NA
         df["suffix"] = pd.NA
         df["nickname"] = pd.NA
-        df["full_name_display"] = pd.NA
+        # Don't overwrite full_name_display - it was already set above
 
         for idx, row in df.iterrows():
             name = row.get("full_name_display")

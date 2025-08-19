@@ -18,7 +18,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Configuration
-DEFAULT_OUTPUT_DIR = "cleaned_data"  # Default output directory for cleaned data
+DEFAULT_OUTPUT_DIR = "data/processed"  # Default output directory for cleaned data
 DEFAULT_INPUT_DIR = "Raw State Data - Current"  # Default input directory
 
 def list_available_input_files(input_dir: str = DEFAULT_INPUT_DIR) -> List[str]:
@@ -397,10 +397,6 @@ class NewYorkCleaner:
                         first_name = first_middle[0]
                         middle_name = second_part
                 else:
-            
-            
-            
-            
                     # Handle multiple parts
                     first_name = first_middle[0]
                     middle_parts = []
@@ -423,22 +419,14 @@ class NewYorkCleaner:
             if self._is_initial_or_suffix(parts[1]):
                 return parts[0], None, None, None, suffix, nickname, parts[0]
             else:
-            
-            
                 return parts[0], None, parts[1], None, suffix, nickname, f"{parts[0]} {parts[1]}"
         elif len(parts) == 3:
             # Check if second part is an initial
             if self._is_initial(parts[1]):
                 return parts[0], parts[1], parts[2], None, suffix, nickname, f"{parts[0]} {parts[1]} {parts[2]}"
             else:
-            
-            
                 return parts[0], parts[1], parts[2], None, suffix, nickname, f"{parts[0]} {parts[1]} {parts[2]}"
         else:
-            
-            
-            
-            
             # For names with more than 3 parts, treat first as first, last as last, rest as middle
             first = parts[0]
             last = parts[-1]
@@ -500,9 +488,15 @@ class NewYorkCleaner:
             party_lower = str(party_str).strip().lower()
             return party_mapping.get(party_lower, party_str)
         
-        # Handle different party column names
-        party_col = 'Office Political Party' if 'Office Political Party' in df.columns else 'Party'
-        df['party'] = df[party_col].apply(standardize_party)
+        # Handle different party column names - New York doesn't have party data
+        if 'Office Political Party' in df.columns:
+            df['party'] = df['Office Political Party'].apply(standardize_party)
+        elif 'Party' in df.columns:
+            df['party'] = df['Party'].apply(standardize_party)
+        else:
+            # New York doesn't have party data, set to None
+            df['party'] = pd.NA
+            logger.warning("No party column found in New York data, setting to None")
         
         return df
     
@@ -550,11 +544,26 @@ class NewYorkCleaner:
             cleaned = re.sub(r'\s+', ' ', cleaned)
             return cleaned
         
-        # Apply cleaning
-        df['phone'] = df['Phone Number'].apply(clean_phone)
-        df['email'] = df['Email'].apply(clean_email)
-        df['address'] = df['Address'].apply(clean_address)
-        df['website'] = df['Website'].apply(lambda x: str(x).strip() if pd.notna(x) else None)
+        # Apply cleaning - handle different column names
+        if 'Phone Number' in df.columns:
+            df['phone'] = df['Phone Number'].apply(clean_phone)
+        else:
+            df['phone'] = pd.NA
+            
+        if 'Email' in df.columns:
+            df['email'] = df['Email'].apply(clean_email)
+        else:
+            df['email'] = pd.NA
+            
+        if 'Address' in df.columns:
+            df['address'] = df['Address'].apply(clean_address)
+        else:
+            df['address'] = pd.NA
+            
+        if 'Website' in df.columns:
+            df['website'] = df['Website'].apply(lambda x: str(x).strip() if pd.notna(x) else None)
+        else:
+            df['website'] = pd.NA
         
         return df
     
@@ -722,7 +731,7 @@ class NewYorkCleaner:
         
         return ' '.join(parts).strip()
 
-def clean_new_york_candidates(input_file: str, output_file: str = None, output_dir: str = DEFAULT_OUTPUT_DIR) -> pd.DataFrame:
+def clean_new_york_candidates(input_file: str, output_dir: str = DEFAULT_OUTPUT_DIR) -> pd.DataFrame:
     """
     Main function to clean New York candidate data.
     
@@ -749,16 +758,13 @@ def clean_new_york_candidates(input_file: str, output_file: str = None, output_d
     # Clean the data
     cleaned_df = cleaner.clean_new_york_data(df)
     
-    # Generate output filename if not provided
-    if output_file is None:
-        # Extract base name from input file
-        base_name = os.path.splitext(os.path.basename(input_file))[0]
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        output_file = os.path.join(output_dir, f"{base_name}_cleaned_{timestamp}.xlsx")
+    # Generate output filename
+    base_name = os.path.splitext(os.path.basename(input_file))[0]
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    output_file = os.path.join(output_dir, f"{base_name}_cleaned_{timestamp}.xlsx")
     
-    # Ensure output file is in the output directory
-    if not os.path.dirname(output_file):
-        output_file = os.path.join(output_dir, output_file)
+    # Ensure the output directory exists
+    os.makedirs(output_dir, exist_ok=True)
     
     # Save the cleaned data
     logger.info(f"Saving cleaned data to {output_file}...")

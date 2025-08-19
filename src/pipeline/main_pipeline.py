@@ -283,6 +283,18 @@ class MainPipeline:
         
         return cleaned_files
     
+    def _extract_election_year_from_filename(self, filename: str) -> Optional[int]:
+        """Extract election year from filename."""
+        import re
+        # Look for 4-digit year patterns in filename
+        year_match = re.search(r'(\d{4})', filename)
+        if year_match:
+            year = int(year_match.group(1))
+            # Validate it's a reasonable election year (1900-2100)
+            if 1900 <= year <= 2100:
+                return year
+        return None
+    
     def _cleanup_temp_files(self):
         """Clean up temporary merged files."""
         temp_files = list(Path(self.processed_dir).glob("*_merged_temp.xlsx"))
@@ -344,16 +356,41 @@ class MainPipeline:
             try:
                 # Handle different file types
                 if file_path.endswith('.csv'):
-                    df = pd.read_csv(file_path)
+                    # Try multiple encodings for CSV files
+                    df = None
+                    encodings_to_try = ['utf-8', 'latin-1', 'cp1252', 'iso-8859-1']
+                    
+                    for encoding in encodings_to_try:
+                        try:
+                            df = pd.read_csv(file_path, encoding=encoding)
+                            logger.info(f"Successfully read {os.path.basename(file_path)} with {encoding} encoding")
+                            break
+                        except UnicodeDecodeError:
+                            continue
+                        except Exception as e:
+                            logger.warning(f"Error reading {os.path.basename(file_path)} with {encoding} encoding: {e}")
+                            continue
+                    
+                    if df is None:
+                        logger.error(f"Failed to read {os.path.basename(file_path)} with any encoding")
+                        continue
+                        
                 elif file_path.endswith('.xls'):
                     df = pd.read_excel(file_path, engine='xlrd')
                 else:
                     df = pd.read_excel(file_path)
                 
+                # Extract election year from filename
+                filename = os.path.basename(file_path)
+                election_year = self._extract_election_year_from_filename(filename)
+                if election_year:
+                    df['election_year'] = election_year
+                    logger.info(f"Extracted election year {election_year} from {filename}")
+                
                 # Add source file info
-                df['_source_file'] = os.path.basename(file_path)
+                df['_source_file'] = filename
                 all_data.append(df)
-                logger.info(f"Loaded {len(df)} records from {os.path.basename(file_path)}")
+                logger.info(f"Loaded {len(df)} records from {filename}")
                 
             except Exception as e:
                 logger.warning(f"Error reading {file_path}: {e}")

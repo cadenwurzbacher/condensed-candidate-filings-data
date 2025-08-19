@@ -18,7 +18,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Configuration
-DEFAULT_OUTPUT_DIR = "cleaned_data"  # Default output directory for cleaned data
+DEFAULT_OUTPUT_DIR = "data/processed"  # Default output directory for cleaned data
 DEFAULT_INPUT_DIR = "Raw State Data - Current"  # Default input directory
 
 def list_available_input_files(input_dir: str = DEFAULT_INPUT_DIR) -> List[str]:
@@ -198,10 +198,6 @@ class WestVirginiaCleaner:
             df['election_year'] = [result[0] for result in election_results]
             df['election_type'] = [result[1] for result in election_results]
         else:
-            
-            
-            
-            
             # If no election column, set default values
             df['election_year'] = 2024  # Default to current year
             df['election_type'] = "General"  # Default to general election
@@ -276,21 +272,13 @@ class WestVirginiaCleaner:
                         last_name, first_name = first_part.split(',', 1)
                         return first_name.strip()
                     else:
-            
-            
                         return first_part
                 else:
-            
-            
-            
-            
                     # Handle single names
                     if ',' in name_str:
                         last_name, first_name = name_str.split(',', 1)
                         return first_name.strip()
                     else:
-            
-            
                         return name_str
             
             # For non-president cases, clean the name
