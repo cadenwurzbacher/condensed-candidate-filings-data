@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """
-Office Name Standardization System
+Simple Office Name Standardization System
 
-This script standardizes the 6,791 unique office names in the candidate filings data
-into a manageable set of standardized categories. It uses pattern matching, fuzzy matching,
-and hierarchical classification to group similar offices together.
+This script standardizes office names using a simple approach:
+1. Maps only the 12 key offices specified by the user
+2. Cleans up capitalization for everything else (no more ALL CAPS)
+3. Everything else remains as-is for filtering purposes
 """
 
 import pandas as pd
@@ -23,235 +24,120 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 class OfficeStandardizer:
-    """Standardizes office names using pattern matching and classification."""
+    """Simple office standardizer that maps key offices and cleans capitalization."""
     
     def __init__(self):
-        """Initialize the standardizer with office classification rules."""
-        self.office_mappings = self._create_office_mappings()
-        self.standard_categories = self._create_standard_categories()
+        """Initialize the standardizer with the 12 key office mappings."""
+        self.key_office_mappings = self._create_key_office_mappings()
         
-    def _create_standard_categories(self) -> Dict[str, str]:
-        """Create the main office categories with descriptions matching CandidateFilings.com."""
+    def _create_key_office_mappings(self) -> Dict[str, str]:
+        """Create mappings for only the 12 key offices specified by the user."""
         return {
-            'ALL_OFFICES': 'All Offices',
-            'US_SENATE': 'U.S. Senate',
-            'US_HOUSE': 'U.S. House',
+            # Federal offices
+            'U.S. SENATE': 'U.S. Senate',
+            'U.S. HOUSE': 'U.S. House',
+            'US SENATE': 'U.S. Senate',
+            'US HOUSE': 'U.S. House',
+            'UNITED STATES SENATE': 'U.S. Senate',
+            'UNITED STATES HOUSE': 'U.S. House',
+            'UNITED STATES REPRESENTATIVE': 'U.S. House',
+            'UNITED STATES SENATOR': 'U.S. Senate',
+            'FEDERAL SENATE': 'U.S. Senate',
+            'FEDERAL HOUSE': 'U.S. House',
+            
+            # State executive offices
             'GOVERNOR': 'Governor',
-            'STATE_SENATE': 'State Senate',
-            'STATE_HOUSE': 'State House',
-            'STATE_ATTORNEY_GENERAL': 'State Attorney General',
-            'STATE_TREASURER': 'State Treasurer',
-            'SECRETARY_OF_STATE': 'Secretary of State',
+            'STATE ATTORNEY GENERAL': 'State Attorney General',
+            'ATTORNEY GENERAL': 'State Attorney General',
+            'STATE TREASURER': 'State Treasurer',
+            'TREASURER': 'State Treasurer',
+            'SECRETARY OF STATE': 'Secretary of State',
+            
+            # State legislative offices
+            'STATE SENATE': 'State Senate',
+            'STATE SENATOR': 'State Senate',
+            'STATE HOUSE': 'State House',
+            'STATE REPRESENTATIVE': 'State House',
+            'ASSEMBLY': 'State House',
+            'ASSEMBLY MEMBER': 'State House',
+            'ASSEMBLYMAN': 'State House',
+            'ASSEMBLYWOMAN': 'State House',
+            
+            # City offices
             'MAYOR': 'Mayor',
-            'CITY_COUNCIL': 'City Council',
-            'COUNTY_COMMISSION': 'County Commission',
-            'SCHOOL_BOARD': 'School Board',
-            'OTHER_LOCAL_OFFICE': 'Other Local Office'
+            'CITY COUNCIL': 'City Council',
+            'CITY COUNCIL MEMBER': 'City Council',
+            'CITY COUNCILMAN': 'City Council',
+            'CITY COUNCILWOMAN': 'City Council',
+            'CITY COMMISSIONER': 'City Council',
+            'CITY COMMISSION': 'City Council',
+            
+            # County offices
+            'COUNTY COMMISSION': 'County Commission',
+            'COUNTY COMMISSIONER': 'County Commission',
+            'COUNTY JUDGE EXECUTIVE': 'County Commission',
+            'COUNTY EXECUTIVE': 'County Commission',
+            
+            # School board
+            'SCHOOL BOARD': 'School Board',
+            'SCHOOL BOARD MEMBER': 'School Board',
+            'BOARD OF EDUCATION': 'School Board',
+            'COUNTY SCHOOL BOARD': 'School Board',
+            'IND SCHOOL BOARD': 'School Board',
+            'INDEPENDENT SCHOOL BOARD': 'School Board'
         }
     
-    def _create_office_mappings(self) -> Dict[str, str]:
-        """Create specific office name mappings matching CandidateFilings.com categories."""
-        mappings = {}
+    def clean_capitalization(self, office_name: str) -> str:
+        """Clean up capitalization - convert from ALL CAPS to Title Case."""
+        if pd.isna(office_name) or not str(office_name).strip():
+            return str(office_name)
         
-        # Federal offices
-        federal_patterns = {
-            r'\bUS\s+SENATOR?\b': 'US_SENATE',
-            r'\bUS\s+REPRESENTATIVE\b': 'US_HOUSE',
-            r'\bUNITED\s+STATES\s+SENATOR?\b': 'US_SENATE',
-            r'\bUNITED\s+STATES\s+REPRESENTATIVE\b': 'US_HOUSE',
-            r'\bFEDERAL\s+SENATOR?\b': 'US_SENATE',
-            r'\bFEDERAL\s+REPRESENTATIVE\b': 'US_HOUSE'
-        }
+        office_str = str(office_name).strip()
         
-        # State executive offices
-        state_exec_patterns = {
-            r'\bGOVERNOR\b': 'GOVERNOR',
-            r'\bSTATE\s+ATTORNEY\s+GENERAL\b': 'STATE_ATTORNEY_GENERAL',
-            r'\bATTORNEY\s+GENERAL\b': 'STATE_ATTORNEY_GENERAL',
-            r'\bSECRETARY\s+OF\s+STATE\b': 'SECRETARY_OF_STATE',
-            r'\bSTATE\s+TREASURER\b': 'STATE_TREASURER',
-            r'\bTREASURER\b': 'STATE_TREASURER'
-        }
+        # If it's already in mixed case, leave it as-is
+        if not office_str.isupper():
+            return office_str
         
-        # State legislative offices
-        state_leg_patterns = {
-            r'\bSTATE\s+SENATOR?\b': 'STATE_SENATE',
-            r'\bSTATE\s+SENATE\b': 'STATE_SENATE',
-            r'\bSTATE\s+REPRESENTATIVE\b': 'STATE_HOUSE',
-            r'\bSTATE\s+HOUSE\b': 'STATE_HOUSE',
-            r'\bASSEMBLY\s+MEMBER\b': 'STATE_HOUSE',
-            r'\bASSEMBLYMAN\b': 'STATE_HOUSE',
-            r'\bASSEMBLYWOMAN\b': 'STATE_HOUSE'
-        }
+        # Convert from ALL CAPS to Title Case
+        # Handle special cases like "U.S." and "Jr."
+        words = office_str.split()
+        cleaned_words = []
         
-        # City offices
-        city_patterns = {
-            r'\bMAYOR\b': 'MAYOR',
-            r'\bCITY\s+COUNCIL\s+MEMBER\b': 'CITY_COUNCIL',
-            r'\bCITY\s+COUNCILMAN\b': 'CITY_COUNCIL',
-            r'\bCITY\s+COUNCILWOMAN\b': 'CITY_COUNCIL',
-            r'\bCITY\s+COMMISSIONER\b': 'CITY_COUNCIL',
-            r'\bCITY\s+COMMISSION\b': 'CITY_COUNCIL'
-        }
+        for word in words:
+            # Handle abbreviations and special cases
+            if word in ['U.S.', 'U.S.A.', 'JR.', 'SR.', 'II', 'III', 'IV']:
+                cleaned_words.append(word)
+            elif '.' in word:  # Abbreviations with periods
+                cleaned_words.append(word.title())
+            else:
+                cleaned_words.append(word.title())
         
-        # County offices
-        county_patterns = {
-            r'\bCOUNTY\s+COMMISSIONER\b': 'COUNTY_COMMISSION',
-            r'\bCOUNTY\s+JUDGE\s+EXECUTIVE\b': 'COUNTY_COMMISSION',
-            r'\bCOUNTY\s+EXECUTIVE\b': 'COUNTY_COMMISSION',
-            r'\bCOUNTY\s+CLERK\b': 'COUNTY_COMMISSION',
-            r'\bCOUNTY\s+TREASURER\b': 'COUNTY_COMMISSION',
-            r'\bCOUNTY\s+AUDITOR\b': 'COUNTY_COMMISSION',
-            r'\bCOUNTY\s+ATTORNEY\b': 'COUNTY_COMMISSION',
-            r'\bCOUNTY\s+SHERIFF\b': 'COUNTY_COMMISSION',
-            r'\bCOUNTY\s+CORONER\b': 'COUNTY_COMMISSION',
-            r'\bCOUNTY\s+JAILER\b': 'COUNTY_COMMISSION',
-            r'\bCOUNTY\s+SURVEYOR\b': 'COUNTY_COMMISSION',
-            r'\bCOUNTY\s+ASSESSOR\b': 'COUNTY_COMMISSION',
-            r'\bCOUNTY\s+COLLECTOR\b': 'COUNTY_COMMISSION',
-            r'\bCOUNTY\s+RECORDER\b': 'COUNTY_COMMISSION',
-            r'\bCOUNTY\s+REGISTRAR\b': 'COUNTY_COMMISSION'
-        }
-        
-        # School board offices
-        school_patterns = {
-            r'\bSCHOOL\s+BOARD\s+MEMBER\b': 'SCHOOL_BOARD',
-            r'\bCOUNTY\s+SCHOOL\s+BOARD\b': 'SCHOOL_BOARD',
-            r'\bIND\s+SCHOOL\s+BOARD\b': 'SCHOOL_BOARD',
-            r'\bINDEPENDENT\s+SCHOOL\s+BOARD\b': 'SCHOOL_BOARD',
-            r'\bBOARD\s+OF\s+EDUCATION\b': 'SCHOOL_BOARD'
-        }
-        
-        # Other local offices (catch-all for remaining local positions)
-        local_patterns = {
-            r'\bMAGISTRATE\b': 'OTHER_LOCAL_OFFICE',
-            r'\bJUSTICE\s+OF\s+THE\s+PEACE\b': 'OTHER_LOCAL_OFFICE',
-            r'\bCONSTABLE\b': 'OTHER_LOCAL_OFFICE',
-            r'\bSOIL\s+CONSERVATION\s+OFFICER\b': 'OTHER_LOCAL_OFFICE',
-            r'\bPROPERTY\s+VALUATION\s+ADMINISTRATOR\b': 'OTHER_LOCAL_OFFICE',
-            r'\bPRECINCT\s+COMMITTEE\s+MEMBER\b': 'OTHER_LOCAL_OFFICE',
-            r'\bCIRCUIT\s+JUDGE\b': 'OTHER_LOCAL_OFFICE',
-            r'\bDISTRICT\s+JUDGE\b': 'OTHER_LOCAL_OFFICE',
-            r'\bCIRCUIT\s+COURT\b': 'OTHER_LOCAL_OFFICE',
-            r'\bDISTRICT\s+COURT\b': 'OTHER_LOCAL_OFFICE'
-        }
-        
-        # Combine all patterns
-        all_patterns = {
-            **federal_patterns,
-            **state_exec_patterns,
-            **state_leg_patterns,
-            **city_patterns,
-            **county_patterns,
-            **school_patterns,
-            **local_patterns
-        }
-        
-        # Create regex mappings
-        for pattern, category in all_patterns.items():
-            mappings[pattern] = category
-        
-        return mappings
+        return ' '.join(cleaned_words)
     
-    def standardize_office_name(self, office_name: str) -> Tuple[str, str, float]:
+    def standardize_office_name(self, office_name: str) -> Tuple[str, float]:
         """
-        Standardize an office name to a category.
+        Standardize an office name using the simple approach.
         
         Returns:
-            Tuple of (standardized_category, confidence_score, original_name)
+            Tuple of (standardized_name, confidence_score)
         """
         if pd.isna(office_name) or not str(office_name).strip():
-            return 'UNKNOWN', 0.0, str(office_name)
+            return str(office_name), 0.0
         
-        office_str = str(office_name).upper().strip()
-        original_name = office_name
+        office_str = str(office_name).strip()
         
-        # Try exact pattern matching first
-        for pattern, category in self.office_mappings.items():
-            if re.search(pattern, office_str, re.IGNORECASE):
-                return category, 1.0, original_name
+        # First, check if this office matches one of our key mappings
+        for key, standard in self.key_office_mappings.items():
+            if office_str.upper() == key.upper():
+                return standard, 1.0
         
-        # Try partial matching for common words
-        confidence = 0.0
-        best_match = 'UNKNOWN'
-        
-        # Check for key words that indicate office type
-        if any(word in office_str for word in ['SENATOR', 'SENATE']):
-            if 'STATE' in office_str or 'US' not in office_str:
-                best_match = 'STATE_SENATE'
-                confidence = 0.8
-            else:
-                best_match = 'US_SENATE'
-                confidence = 0.8
-        elif any(word in office_str for word in ['REPRESENTATIVE', 'HOUSE']):
-            if 'STATE' in office_str or 'US' not in office_str:
-                best_match = 'STATE_HOUSE'
-                confidence = 0.8
-            else:
-                best_match = 'US_HOUSE'
-                confidence = 0.8
-        elif 'MAYOR' in office_str:
-            best_match = 'MAYOR'
-            confidence = 0.9
-        elif 'GOVERNOR' in office_str:
-            best_match = 'GOVERNOR'
-            confidence = 0.9
-        elif 'ATTORNEY' in office_str and 'GENERAL' in office_str:
-            best_match = 'STATE_ATTORNEY_GENERAL'
-            confidence = 0.9
-        elif 'TREASURER' in office_str:
-            if 'STATE' in office_str:
-                best_match = 'STATE_TREASURER'
-                confidence = 0.8
-            else:
-                best_match = 'COUNTY_COMMISSION'
-                confidence = 0.8
-        elif 'SECRETARY' in office_str and 'STATE' in office_str:
-            best_match = 'SECRETARY_OF_STATE'
-            confidence = 0.9
-        elif 'COUNCIL' in office_str:
-            best_match = 'CITY_COUNCIL'
-            confidence = 0.8
-        elif 'COMMISSIONER' in office_str:
-            if 'COUNTY' in office_str:
-                best_match = 'COUNTY_COMMISSION'
-                confidence = 0.8
-            elif 'CITY' in office_str:
-                best_match = 'CITY_COUNCIL'
-                confidence = 0.8
-            else:
-                best_match = 'COUNTY_COMMISSION'
-                confidence = 0.6
-        elif 'SCHOOL' in office_str and 'BOARD' in office_str:
-            best_match = 'SCHOOL_BOARD'
-            confidence = 0.9
-        elif any(word in office_str for word in ['SHERIFF', 'CLERK', 'CORONER', 'JAILER', 'SURVEYOR', 'ASSESSOR', 'COLLECTOR', 'RECORDER', 'REGISTRAR']):
-            best_match = 'COUNTY_COMMISSION'
-            confidence = 0.8
-        elif any(word in office_str for word in ['MAGISTRATE', 'JUSTICE OF THE PEACE', 'CONSTABLE', 'JUDGE', 'COURT']):
-            best_match = 'OTHER_LOCAL_OFFICE'
-            confidence = 0.7
-        
-        # If we still don't have a good match, try to classify by context
-        if confidence < 0.5:
-            if any(word in office_str for word in ['COUNTY', 'PARISH', 'BOROUGH']):
-                best_match = 'COUNTY_COMMISSION'
-                confidence = 0.4
-            elif any(word in office_str for word in ['STATE', 'GOVERNMENT']):
-                best_match = 'OTHER_LOCAL_OFFICE'
-                confidence = 0.4
-            elif any(word in office_str for word in ['CITY', 'TOWN', 'VILLAGE']):
-                best_match = 'CITY_COUNCIL'
-                confidence = 0.4
-            else:
-                best_match = 'OTHER_LOCAL_OFFICE'
-                confidence = 0.3
-        
-        return best_match, confidence, original_name
+        # If no key mapping found, just clean up capitalization
+        cleaned_name = self.clean_capitalization(office_str)
+        return cleaned_name, 0.5  # Lower confidence since it's just cleaned, not standardized
     
     def standardize_dataset(self, df: pd.DataFrame, office_column: str = 'office') -> pd.DataFrame:
-        """Standardize office names in the entire dataset using consolidated approach."""
-        logger.info(f"Starting office name standardization for {len(df):,} records...")
+        """Standardize office names in the entire dataset using the simple approach."""
+        logger.info(f"Starting simple office name standardization for {len(df):,} records...")
         
         if office_column not in df.columns:
             logger.error(f"Office column '{office_column}' not found in dataset")
@@ -265,174 +151,97 @@ class OfficeStandardizer:
             df_standardized['original_office'] = df_standardized[office_column]
             logger.info("Created original_office column from existing office data")
         
-        # Initialize the new columns (no more office_standardized)
+        # Initialize the confidence column
         df_standardized['office_confidence'] = None
-        df_standardized['office_category'] = None
         
         # Process each office name
         standardization_results = []
+        key_offices_count = 0
+        cleaned_offices_count = 0
+        
         for idx, row in df_standardized.iterrows():
             office_name = row[office_column]
-            standardized, confidence, original = self.standardize_office_name(office_name)
+            standardized, confidence = self.standardize_office_name(office_name)
             
             # Store the standardized result directly in the main office field
             df_standardized.at[idx, office_column] = standardized
             df_standardized.at[idx, 'office_confidence'] = confidence
-            df_standardized.at[idx, 'office_category'] = self.standard_categories.get(standardized, 'Unknown')
             
+            # Track statistics
+            if confidence == 1.0:
+                key_offices_count += 1
+            else:
+                cleaned_offices_count += 1
+                
             standardization_results.append({
-                'original': original,
+                'original': row['original_office'],
                 'standardized': standardized,
-                'confidence': confidence,
-                'category': self.standard_categories.get(standardized, 'Unknown')
+                'confidence': confidence
             })
         
         # Generate standardization statistics
-        self._generate_standardization_stats(standardization_results)
+        self._generate_standardization_stats(standardization_results, key_offices_count, cleaned_offices_count)
         
-        logger.info("✅ Office name standardization completed using consolidated approach!")
-        logger.info("  • Main 'office' field now contains standardized names")
+        logger.info("✅ Simple office name standardization completed!")
+        logger.info("  • Key offices mapped to standard names")
+        logger.info("  • All other offices cleaned for proper capitalization")
         logger.info("  • 'original_office' preserves raw data for audit")
-        logger.info("  • No duplicate 'office_standardized' column created")
         
         return df_standardized
     
-    def _generate_standardization_stats(self, results: List[Dict]) -> None:
-        """Generate statistics about the standardization process."""
+    def _generate_standardization_stats(self, results: List[Dict], key_offices: int, cleaned_offices: int) -> None:
+        """Generate and log standardization statistics."""
         total_records = len(results)
-        successful_standardizations = sum(1 for r in results if r['confidence'] > 0.5)
-        high_confidence = sum(1 for r in results if r['confidence'] > 0.8)
-        medium_confidence = sum(1 for r in results if 0.5 < r['confidence'] <= 0.8)
-        low_confidence = sum(1 for r in results if r['confidence'] <= 0.5)
         
-        # Count by category
-        category_counts = {}
-        for result in results:
-            category = result['standardized']
-            category_counts[category] = category_counts.get(category, 0) + 1
+        # Count confidence levels
+        high_confidence = sum(1 for r in results if r['confidence'] == 1.0)
+        medium_confidence = sum(1 for r in results if r['confidence'] == 0.5)
+        low_confidence = sum(1 for r in results if r['confidence'] == 0.0)
         
-        logger.info(f"Standardization Statistics:")
+        logger.info("Standardization Statistics:")
         logger.info(f"  Total records: {total_records:,}")
-        logger.info(f"  Successfully standardized: {successful_standardizations:,} ({successful_standardizations/total_records*100:.1f}%)")
-        logger.info(f"  High confidence (>80%): {high_confidence:,} ({high_confidence/total_records*100:.1f}%)")
-        logger.info(f"  Medium confidence (50-80%): {medium_confidence:,} ({medium_confidence/total_records*100:.1f}%)")
-        logger.info(f"  Low confidence (<50%): {low_confidence:,} ({low_confidence/total_records*100:.1f}%)")
+        logger.info(f"  Key offices mapped: {key_offices:,} ({key_offices/total_records*100:.1f}%)")
+        logger.info(f"  Offices cleaned (capitalization): {cleaned_offices:,} ({cleaned_offices/total_records*100:.1f}%)")
+        logger.info(f"  High confidence (mapped): {high_confidence:,} ({high_confidence/total_records*100:.1f}%)")
+        logger.info(f"  Medium confidence (cleaned): {medium_confidence:,} ({medium_confidence/total_records*100:.1f}%)")
+        logger.info(f"  Low confidence (unchanged): {low_confidence:,} ({low_confidence/total_records*100:.1f}%)")
         
-        logger.info(f"  Categories created: {len(category_counts)}")
-        logger.info(f"  Top 10 categories:")
-        for category, count in sorted(category_counts.items(), key=lambda x: x[1], reverse=True)[:10]:
-            logger.info(f"    {category}: {count:,} records")
-    
-    def create_standardization_report(self, df: pd.DataFrame, output_file: str = None) -> str:
-        """Create a detailed report of the standardization process."""
-        if output_file is None:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            output_file = f"office_standardization_report_{timestamp}.txt"
+        # Show some examples of key office mappings
+        key_office_examples = [r for r in results if r['confidence'] == 1.0][:5]
+        if key_office_examples:
+            logger.info("  Key office mapping examples:")
+            for example in key_office_examples:
+                logger.info(f"    '{example['original']}' → '{example['standardized']}'")
         
-        logger.info(f"Generating standardization report: {output_file}")
-        
-        with open(output_file, 'w') as f:
-            f.write("OFFICE NAME STANDARDIZATION REPORT\n")
-            f.write("=" * 50 + "\n\n")
-            f.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-            f.write(f"Total Records: {len(df):,}\n\n")
-            
-            # Summary statistics
-            if 'office_confidence' in df.columns:
-                f.write("STANDARDIZATION SUMMARY\n")
-                f.write("-" * 30 + "\n")
-                
-                total_standardized = df['office_confidence'].notna().sum()
-                f.write(f"Records standardized: {total_standardized:,}\n")
-                
-                confidence_stats = df['office_confidence'].describe()
-                f.write(f"Confidence score - Mean: {confidence_stats.get('mean', 0):.3f}\n")
-                f.write(f"Confidence score - Median: {confidence_stats.get('50%', 0):.3f}\n")
-                f.write(f"Confidence score - Std Dev: {confidence_stats.get('std', 0):.3f}\n\n")
-                
-                # Category breakdown
-                f.write("CATEGORY BREAKDOWN\n")
-                f.write("-" * 30 + "\n")
-                category_counts = df['office_category'].value_counts()
-                for category, count in category_counts.head(20).items():
-                    percentage = (count / len(df)) * 100
-                    f.write(f"{category}: {count:,} records ({percentage:.1f}%)\n")
-                
-                f.write("\n")
-                
-                # Low confidence examples
-                f.write("LOW CONFIDENCE EXAMPLES\n")
-                f.write("-" * 30 + "\n")
-                low_confidence = df[df['office_confidence'] < 0.5]
-                if not low_confidence.empty:
-                    f.write(f"Records with low confidence (<50%): {len(low_confidence):,}\n")
-                    f.write("Sample of low confidence standardizations:\n")
-                    for _, row in low_confidence.head(10).iterrows():
-                        f.write(f"  '{row['original_office']}' → {row['office']} (confidence: {row['office_confidence']:.2f})\n")
-                else:
-                    f.write("No low confidence standardizations found.\n")
-                
-                f.write("\n")
-                
-                # Unknown category examples
-                f.write("UNKNOWN CATEGORY EXAMPLES\n")
-                f.write("-" * 30 + "\n")
-                unknown_cat = df[df['office_category'] == 'Unknown']
-                if not unknown_cat.empty:
-                    f.write(f"Records in Unknown category: {len(unknown_cat):,}\n")
-                    f.write("Sample of unknown offices:\n")
-                    for _, row in unknown_cat.head(10).iterrows():
-                        f.write(f"  '{row['original_office']}'\n")
-                else:
-                    f.write("No unknown category offices found.\n")
-            
-            f.write("\nRECOMMENDATIONS\n")
-            f.write("-" * 30 + "\n")
-            f.write("1. Review low confidence standardizations for accuracy\n")
-            f.write("2. Add specific patterns for unknown office types\n")
-            f.write("3. Consider creating subcategories for large groups\n")
-            f.write("4. Validate standardization results with domain experts\n")
-        
-        logger.info(f"Standardization report saved: {output_file}")
-        return output_file
+        # Show some examples of cleaned offices
+        cleaned_examples = [r for r in results if r['confidence'] == 0.5][:5]
+        if cleaned_examples:
+            logger.info("  Capitalization cleaning examples:")
+            for example in cleaned_examples:
+                logger.info(f"    '{example['original']}' → '{example['standardized']}'")
 
 def main():
-    """Main execution function."""
-    print("Office Name Standardization Tool")
-    print("=" * 40)
-    
-    # Initialize standardizer
+    """Main function for testing the office standardizer."""
+    # Example usage
     standardizer = OfficeStandardizer()
     
-    # Load the merged dataset
-    print("Loading merged dataset...")
-    try:
-        df = pd.read_excel("merged_data/all_states_merged_20250814_104014_deduplicated_20250814_104204.xlsx")
-        print(f"Loaded {len(df):,} records")
-    except Exception as e:
-        print(f"Error loading dataset: {e}")
-        return
+    # Test some office names
+    test_offices = [
+        "U.S. SENATE",
+        "GOVERNOR", 
+        "STATE SENATE",
+        "MAYOR",
+        "CITY COUNCIL MEMBER",
+        "COUNTY COMMISSIONER",
+        "SCHOOL BOARD",
+        "SOME RANDOM OFFICE",
+        "ANOTHER ALL CAPS OFFICE"
+    ]
     
-    # Standardize office names
-    print("\nStandardizing office names...")
-    df_standardized = standardizer.standardize_dataset(df)
-    
-    # Save standardized dataset
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    output_file = f"merged_data_standardized_offices_{timestamp}.xlsx"
-    
-    print(f"\nSaving standardized dataset to {output_file}...")
-    df_standardized.to_excel(output_file, index=False)
-    
-    # Generate report
-    report_file = standardizer.create_standardization_report(df_standardized)
-    
-    print(f"\n✅ Standardization completed successfully!")
-    print(f"📁 Standardized dataset: {output_file}")
-    print(f"📊 Report: {report_file}")
-    print(f"📈 Office names reduced from 6,791 to {df_standardized['office'].nunique()} categories")
-    print(f"💡 Using consolidated approach: standardized names are in 'office' field")
-    print(f"📋 Original names preserved in 'original_office' field for audit")
+    print("Testing office standardization:")
+    for office in test_offices:
+        standardized, confidence = standardizer.standardize_office_name(office)
+        print(f"  '{office}' → '{standardized}' (confidence: {confidence})")
 
 if __name__ == "__main__":
     main()
