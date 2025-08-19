@@ -523,8 +523,13 @@ class PennsylvaniaCleaner:
         # Add state column
         df['state'] = self.state_name
         
-        # Add original data preservation columns
-        df['original_name'] = df['Name'].copy()
+        # Add original data preservation columns - handle different column names
+        # Pennsylvania has complex structure, try to find name column
+        if 'Name' in df.columns:
+            df['original_name'] = df['Name'].copy()
+        else:
+            # Fallback - create a placeholder name
+            df['original_name'] = 'Unknown Candidate'
         df['original_state'] = df['state'].copy()
         df['original_election_year'] = df['election_year'].copy()
         df['original_office'] = df['Office'].copy()
@@ -691,6 +696,11 @@ def clean_pennsylvania_candidates(input_file: str, output_file: str = None, outp
     # Load the data - Pennsylvania files have headers in first row, data starts in second row
     logger.info(f"Loading Pennsylvania data from {input_file}...")
     df = pd.read_excel(input_file, header=0)  # Use first row as header
+    
+    # Pennsylvania files have a complex structure - the first row contains column headers
+    # but the actual data structure is different. Let me check what we actually have
+    logger.info(f"Pennsylvania columns: {df.columns.tolist()}")
+    logger.info(f"Pennsylvania data shape: {df.shape}")
     
     # Initialize cleaner with output directory
     cleaner = PennsylvaniaCleaner(output_dir=output_dir)

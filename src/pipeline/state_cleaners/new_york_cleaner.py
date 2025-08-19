@@ -471,7 +471,9 @@ class NewYorkCleaner:
             party_lower = str(party_str).strip().lower()
             return party_mapping.get(party_lower, party_str)
         
-        df['party'] = df['Party'].apply(standardize_party)
+        # Handle different party column names
+        party_col = 'Office Political Party' if 'Office Political Party' in df.columns else 'Party'
+        df['party'] = df[party_col].apply(standardize_party)
         
         return df
     

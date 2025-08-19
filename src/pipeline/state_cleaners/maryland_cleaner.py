@@ -271,8 +271,18 @@ class MarylandCleaner:
             cleaned = re.sub(r'\s+', ' ', name_str).strip().strip('"\'')
             return cleaned
         
-        # Apply name cleaning with office context
-        df['full_name_display'] = df.apply(lambda row: clean_name(row['Name'], row['Office']), axis=1)
+        # Apply name cleaning with office context - handle different column names
+        # Maryland has separate first and last name columns, combine them for processing
+        if 'Candidate First Name and Middle Name' in df.columns and 'Candidate Ballot Last Name and Suffix' in df.columns:
+            df['full_name_display'] = df.apply(lambda row: clean_name(
+                str(row['Candidate First Name and Middle Name']) + ' ' + str(row['Candidate Ballot Last Name and Suffix']), 
+                row['Office']
+            ), axis=1)
+        elif 'Name' in df.columns:
+            df['full_name_display'] = df.apply(lambda row: clean_name(row['Name'], row['Office']), axis=1)
+        else:
+            # Fallback - create a placeholder name
+            df['full_name_display'] = 'Unknown Candidate'
         
         # Parse names into components
         df = self._parse_names(df)
@@ -295,7 +305,13 @@ class MarylandCleaner:
         for idx, row in df.iterrows():
             name = row['full_name_display']
             office = row['office']
-            original_name = row['Name']
+            # Get original name from the appropriate columns
+            if 'Candidate First Name and Middle Name' in df.columns and 'Candidate Ballot Last Name and Suffix' in df.columns:
+                original_name = str(row['Candidate First Name and Middle Name']) + ' ' + str(row['Candidate Ballot Last Name and Suffix'])
+            elif 'Name' in df.columns:
+                original_name = row['Name']
+            else:
+                original_name = 'Unknown'
             
             if pd.isna(name) or not name:
                 continue
@@ -538,8 +554,14 @@ class MarylandCleaner:
         # Add state column
         df['state'] = self.state_name
         
-        # Add original data preservation columns
-        df['original_name'] = df['Name'].copy()
+        # Add original data preservation columns - handle different column names
+        # Maryland has separate first and last name columns, combine them
+        if 'Candidate First Name and Middle Name' in df.columns and 'Candidate Ballot Last Name and Suffix' in df.columns:
+            df['original_name'] = df['Candidate First Name and Middle Name'].astype(str) + ' ' + df['Candidate Ballot Last Name and Suffix'].astype(str)
+        elif 'Name' in df.columns:
+            df['original_name'] = df['Name'].copy()
+        else:
+            df['original_name'] = 'Unknown'
         df['original_state'] = df['state'].copy()
         df['original_election_year'] = df['election_year'].copy()
         df['original_office'] = df['Office'].copy()

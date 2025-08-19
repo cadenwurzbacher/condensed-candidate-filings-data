@@ -459,8 +459,9 @@ class IowaCleaner:
             cleaned = re.sub(r'\s+', ' ', cleaned)
             return cleaned
         
-        # Apply cleaning
-        df['phone'] = df['Phone Number'].apply(clean_phone)
+        # Apply cleaning - handle different column names
+        phone_col = 'Phone' if 'Phone' in df.columns else 'Phone Number'
+        df['phone'] = df[phone_col].apply(clean_phone)
         df['email'] = df['Email'].apply(clean_email)
         df['address'] = df['Address'].apply(clean_address)
         df['website'] = df['Website'].apply(lambda x: str(x).strip() if pd.notna(x) else None)
@@ -501,7 +502,7 @@ class IowaCleaner:
         logger.info("Removing duplicate columns...")
         
         columns_to_remove = [
-            'Election', 'Office', 'Name', 'Party', 'Address', 'Email', 'Website', 'Phone Number'
+            'Election', 'Office', 'Name', 'Party', 'Address', 'Email', 'Website', 'Phone'
         ]
         
         columns_to_remove = [col for col in columns_to_remove if col in df.columns]

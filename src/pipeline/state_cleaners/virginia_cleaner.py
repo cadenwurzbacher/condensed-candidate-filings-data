@@ -198,7 +198,9 @@ class VirginiaCleaner:
             
             return office_str, None
         
-        office_results = df['Office'].apply(process_office_district)
+        # Apply office and district processing - handle different column names
+        office_col = 'Office Title' if 'Office Title' in df.columns else 'Office'
+        office_results = df[office_col].apply(process_office_district)
         df['office'] = [result[0] for result in office_results]
         df['district'] = [result[1] for result in office_results]
         df['district'] = df['district'].astype('object')
@@ -234,7 +236,9 @@ class VirginiaCleaner:
             cleaned = re.sub(r'\s+', ' ', name_str).strip().strip('"\'')
             return cleaned
         
-        df['full_name_display'] = df.apply(lambda row: clean_name(row['Name'], row['Office']), axis=1)
+        # Handle different column names
+        office_col = 'Office Title' if 'Office Title' in df.columns else 'Office'
+        df['full_name_display'] = df.apply(lambda row: clean_name(row['Name'], row[office_col]), axis=1)
         df = self._parse_names(df)
         
         return df
@@ -478,7 +482,9 @@ class VirginiaCleaner:
         df['original_name'] = df['Name'].copy()
         df['original_state'] = df['state'].copy()
         df['original_election_year'] = df['election_year'].copy()
-        df['original_office'] = df['Office'].copy()
+        # Handle different column names
+        office_col = 'Office Title' if 'Office Title' in df.columns else 'Office'
+        df['original_office'] = df[office_col].copy()
         df['original_filing_date'] = pd.NA
         
         required_columns = [

@@ -265,8 +265,9 @@ class NorthCarolinaCleaner:
             cleaned = re.sub(r'\s+', ' ', name_str).strip().strip('"\'')
             return cleaned
         
-        # Apply name cleaning with office context
-        df['full_name_display'] = df.apply(lambda row: clean_name(row['Name'], row['Office']), axis=1)
+        # Apply name cleaning with office context - handle different column names
+        name_col = 'name_on_ballot' if 'name_on_ballot' in df.columns else 'Name'
+        df['full_name_display'] = df.apply(lambda row: clean_name(row[name_col], row['Office']), axis=1)
         
         # Parse names into components
         df = self._parse_names(df)
@@ -289,7 +290,9 @@ class NorthCarolinaCleaner:
         for idx, row in df.iterrows():
             name = row['full_name_display']
             office = row['office']
-            original_name = row['Name']
+            # Get original name from the appropriate column
+            name_col = 'name_on_ballot' if 'name_on_ballot' in df.columns else 'Name'
+            original_name = row[name_col]
             
             if pd.isna(name) or not name:
                 continue
@@ -532,8 +535,9 @@ class NorthCarolinaCleaner:
         # Add state column
         df['state'] = self.state_name
         
-        # Add original data preservation columns
-        df['original_name'] = df['Name'].copy()
+        # Add original data preservation columns - handle different column names
+        name_col = 'name_on_ballot' if 'name_on_ballot' in df.columns else 'Name'
+        df['original_name'] = df[name_col].copy()
         df['original_state'] = df['state'].copy()
         df['original_election_year'] = df['election_year'].copy()
         df['original_office'] = df['Office'].copy()
