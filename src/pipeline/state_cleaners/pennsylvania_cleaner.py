@@ -256,8 +256,32 @@ class PennsylvaniaCleaner:
             cleaned = re.sub(r'\s+', ' ', name_str).strip().strip('"\'')
             return cleaned
         
-        # Apply name cleaning with office context
-        df['full_name_display'] = df.apply(lambda row: clean_name(row['Name'], row['Office']), axis=1)
+        # Apply name cleaning with office context - handle different column names
+        # Pennsylvania data can have different structures depending on the file
+        if 'Name' in df.columns:
+            name_col = 'Name'
+        elif 'Unnamed: 1' in df.columns:
+            # The merged data structure has names in Unnamed: 1
+            name_col = 'Unnamed: 1'
+        elif 'Candidate Name' in df.columns:
+            name_col = 'Candidate Name'
+        else:
+            # Fallback - try to find any column that might contain names
+            name_cols = [col for col in df.columns if 'name' in col.lower() or 'candidate' in col.lower()]
+            if name_cols:
+                name_col = name_cols[0]
+            else:
+                # Last resort - use the first non-empty column that looks like it has text
+                for col in df.columns:
+                    if df[col].dtype == 'object' and df[col].notna().any():
+                        sample_val = df[col].dropna().iloc[0] if df[col].dropna().any() else None
+                        if sample_val and isinstance(sample_val, str) and len(sample_val) > 3:
+                            name_col = col
+                            break
+                else:
+                    name_col = 'Name'  # Default fallback
+        
+        df['full_name_display'] = df.apply(lambda row: clean_name(row[name_col], row['Office']), axis=1)
         
         # Parse names into components
         df = self._parse_names(df)
@@ -280,7 +304,29 @@ class PennsylvaniaCleaner:
         for idx, row in df.iterrows():
             name = row['full_name_display']
             office = row['office']
-            original_name = row['Name']
+            # Pennsylvania data can have different structures depending on the file
+            if 'Name' in df.columns:
+                original_name = row['Name']
+            elif 'Unnamed: 1' in df.columns:
+                # The merged data structure has names in Unnamed: 1
+                original_name = row['Unnamed: 1']
+            elif 'Candidate Name' in df.columns:
+                original_name = row['Candidate Name']
+            else:
+                # Fallback - try to find any column that might contain names
+                name_cols = [col for col in df.columns if 'name' in col.lower() or 'candidate' in col.lower()]
+                if name_cols:
+                    original_name = row[name_cols[0]]
+                else:
+                    # Last resort - use the first non-empty column that looks like it has text
+                    for col in df.columns:
+                        if df[col].dtype == 'object' and df[col].notna().any():
+                            sample_val = df[col].dropna().iloc[0] if df[col].dropna().any() else None
+                            if sample_val and isinstance(sample_val, str) and len(sample_val) > 3:
+                                original_name = row[col]
+                                break
+                    else:
+                        original_name = 'Unknown'
             
             if pd.isna(name) or not name:
                 continue
@@ -508,11 +554,12 @@ class PennsylvaniaCleaner:
             cleaned = re.sub(r'\s+', ' ', cleaned)
             return cleaned
         
-        # Apply cleaning
-        df['phone'] = df['Phone Number'].apply(clean_phone)
-        df['email'] = df['Email'].apply(clean_email)
-        df['address'] = df['Address'].apply(clean_address)
-        df['website'] = df['Website'].apply(lambda x: str(x).strip() if pd.notna(x) else None)
+        # Apply cleaning - Pennsylvania doesn't have these contact fields
+        # Set them to None since they're not available in the raw data
+        df['phone'] = None
+        df['email'] = None
+        df['address'] = None
+        df['website'] = None
         
         return df
     
@@ -693,13 +740,24 @@ def clean_pennsylvania_candidates(input_file: str, output_file: str = None, outp
     Returns:
         Cleaned DataFrame
     """
-    # Load the data - Pennsylvania files have headers in first row, data starts in second row
+    # Load the data - Pennsylvania files have a merged cell header in row 1, data starts in row 2
     logger.info(f"Loading Pennsylvania data from {input_file}...")
-    df = pd.read_excel(input_file, header=0)  # Use first row as header
     
-    # Pennsylvania files have a complex structure - the first row contains column headers
-    # but the actual data structure is different. Let me check what we actually have
-    logger.info(f"Pennsylvania columns: {df.columns.tolist()}")
+    # Try to read with header=0 first to see what we get
+    df_test = pd.read_excel(input_file, header=0)
+    logger.info(f"Pennsylvania columns with header=0: {df_test.columns.tolist()}")
+    
+    # Check if the first row is just a merged cell (like "Election Info")
+    if 'Election Info' in df_test.columns and 'Unnamed: 1' in df_test.columns:
+        # This is the merged cell scenario - skip first row, use second row as header
+        logger.info("Detected merged cell header scenario - using header=1")
+        df = pd.read_excel(input_file, header=1)
+    else:
+        # This has real column headers - use first row
+        logger.info("Detected real column headers - using header=0")
+        df = df_test
+    
+    logger.info(f"Final Pennsylvania columns: {df.columns.tolist()}")
     logger.info(f"Pennsylvania data shape: {df.shape}")
     
     # Initialize cleaner with output directory
