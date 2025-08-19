@@ -257,8 +257,8 @@ class IowaCleaner:
             if pd.isna(name) or not name:
                 continue
             
-            # Handle US President cases
-            if office == "US President" and pd.notna(original_name):
+            # Handle US President cases (Iowa uses "President/Vice President")
+            if (office == "US President" or office == "President/Vice President") and pd.notna(original_name):
                 original_str = str(original_name)
                 if '/' in original_str:
                     first_part = original_str.split('/')[0].strip()
