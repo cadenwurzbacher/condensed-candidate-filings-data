@@ -240,14 +240,13 @@ class IowaCleaner:
         """Parse candidate names into components."""
         logger.info("Parsing candidate names...")
         
-        # Initialize new columns
+        # Initialize new columns (don't overwrite full_name_display!)
         df['first_name'] = pd.NA
         df['middle_name'] = pd.NA
         df['last_name'] = pd.NA
         df['prefix'] = pd.NA
         df['suffix'] = pd.NA
         df['nickname'] = pd.NA
-        df['full_name_display'] = pd.NA
         
         for idx, row in df.iterrows():
             name = row['full_name_display']

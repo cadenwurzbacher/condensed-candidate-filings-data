@@ -265,7 +265,6 @@ class KansasCleaner:
         if 'Candidate' in df.columns:
             df['full_name_display'] = df['Candidate'].apply(clean_name)
         else:
-            df['full_name_display'] = pd.NA
         
         # Parse names into components
         df = self._parse_names(df)
@@ -283,7 +282,6 @@ class KansasCleaner:
         df['prefix'] = pd.NA
         df['suffix'] = pd.NA
         df['nickname'] = pd.NA
-        df['full_name_display'] = pd.NA
         
         for idx, row in df.iterrows():
             name = row['full_name_display']

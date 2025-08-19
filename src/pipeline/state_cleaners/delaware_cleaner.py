@@ -695,7 +695,6 @@ class DelawareCleaner:
         df['prefix'] = pd.NA
         df['suffix'] = pd.NA
         df['nickname'] = pd.NA
-        df['full_name_display'] = pd.NA
         
         for idx, row in df.iterrows():
             name = row['full_name_display']

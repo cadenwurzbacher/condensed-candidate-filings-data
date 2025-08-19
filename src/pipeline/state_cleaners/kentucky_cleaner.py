@@ -409,7 +409,6 @@ class KentuckyCleaner:
         df['prefix'] = pd.NA
         df['suffix'] = pd.NA
         df['nickname'] = pd.NA
-        df['full_name_display'] = pd.NA
         
         # Create clean first_name and last_name columns
         clean_first_names = []
