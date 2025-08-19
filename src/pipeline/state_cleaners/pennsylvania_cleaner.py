@@ -211,8 +211,10 @@ class PennsylvaniaCleaner:
             # Handle other offices (keep as is)
             return office_str, None
         
-        # Apply office and district processing
-        office_results = df['Office'].apply(process_office_district)
+        # Apply office and district processing - handle different column names
+        # Pennsylvania files have headers in first row, data starts in second row
+        office_col = 'Election Info' if 'Election Info' in df.columns else 'Office'
+        office_results = df[office_col].apply(process_office_district)
         df['office'] = [result[0] for result in office_results]
         df['district'] = [result[1] for result in office_results]
         df['district'] = df['district'].astype('object')
@@ -686,9 +688,9 @@ def clean_pennsylvania_candidates(input_file: str, output_file: str = None, outp
     Returns:
         Cleaned DataFrame
     """
-    # Load the data
+    # Load the data - Pennsylvania files have headers in first row, data starts in second row
     logger.info(f"Loading Pennsylvania data from {input_file}...")
-    df = pd.read_excel(input_file)
+    df = pd.read_excel(input_file, header=0)  # Use first row as header
     
     # Initialize cleaner with output directory
     cleaner = PennsylvaniaCleaner(output_dir=output_dir)

@@ -72,7 +72,7 @@ class MarylandCleaner:
         
         return df
 
-    def clean_maryland_data(self, df: pd.DataFrame) -> pd.DataFrame:
+    def clean_maryland_data(self, df: pd.DataFrame, filename: str = None) -> pd.DataFrame:
         """
         Clean and standardize Maryland candidate data according to final schema.
         
@@ -88,7 +88,7 @@ class MarylandCleaner:
         cleaned_df = df.copy()
         
         # Step 1: Handle election year and type
-        cleaned_df = self._process_election_data(cleaned_df)
+        cleaned_df = self._process_election_data(cleaned_df, filename)
         
         # Step 2: Clean and standardize office and district information
         cleaned_df = self._process_office_and_district(cleaned_df)
@@ -134,8 +134,8 @@ class MarylandCleaner:
         
         return df[ALASKA_COLUMN_ORDER]
     
-    def _process_election_data(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Process election year and type from election column."""
+    def _process_election_data(self, df: pd.DataFrame, filename: str = None) -> pd.DataFrame:
+        """Process election year and type from election column or filename."""
         logger.info("Processing election data...")
         
         def extract_election_info(election_str: str) -> Tuple[Optional[int], Optional[str]]:
@@ -164,11 +164,23 @@ class MarylandCleaner:
             
             return year, election_type
         
-        # Check if Election column exists, if not set defaults
+        # Check if Election column exists, if not try to extract from filename
         if 'Election' not in df.columns:
-            logger.warning("Election column not found in Maryland data, setting defaults")
-            df['election_year'] = None
-            df['election_type'] = None
+            if filename:
+                # Extract year from filename (e.g., "maryland_candidates_2024.xlsx" -> 2024)
+                year_match = re.search(r'(\d{4})', filename)
+                if year_match:
+                    election_year = int(year_match.group(1))
+                    logger.info(f"Extracted election year {election_year} from filename")
+                else:
+                    election_year = None
+                    logger.warning("No election year found in filename")
+            else:
+                election_year = None
+                logger.warning("No filename provided and no Election column found")
+            
+            df['election_year'] = election_year
+            df['election_type'] = "General"  # Default for Maryland
             return df
         
         # Apply election processing
@@ -215,8 +227,9 @@ class MarylandCleaner:
             # Handle other offices (keep as is)
             return office_str, None
         
-        # Apply office and district processing
-        office_results = df['Office'].apply(process_office_district)
+        # Apply office and district processing - handle different column names
+        office_col = 'Office Name' if 'Office Name' in df.columns else 'Office'
+        office_results = df[office_col].apply(process_office_district)
         df['office'] = [result[0] for result in office_results]
         df['district'] = [result[1] for result in office_results]
         df['district'] = df['district'].astype('object')
@@ -697,8 +710,9 @@ def clean_maryland_candidates(input_file: str, output_file: str = None, output_d
     # Initialize cleaner with output directory
     cleaner = MarylandCleaner(output_dir=output_dir)
     
-    # Clean the data
-    cleaned_df = cleaner.clean_maryland_data(df)
+    # Clean the data - extract filename for election year extraction
+    filename = os.path.basename(input_file)
+    cleaned_df = cleaner.clean_maryland_data(df, filename)
     
     # Generate output filename if not provided
     if output_file is None:

@@ -62,14 +62,14 @@ class IowaCleaner:
         
         return df[ALASKA_COLUMN_ORDER]
 
-    def clean_iowa_data(self, df: pd.DataFrame) -> pd.DataFrame:
+    def clean_iowa_data(self, df: pd.DataFrame, filename: str = None) -> pd.DataFrame:
         """Clean and standardize Iowa candidate data according to final schema."""
         logger.info(f"Starting Iowa data cleaning for {len(df)} records...")
         
         cleaned_df = df.copy()
         
         # Step 1: Handle election year and type
-        cleaned_df = self._process_election_data(cleaned_df)
+        cleaned_df = self._process_election_data(cleaned_df, filename)
         
         # Step 2: Clean and standardize office and district information
         cleaned_df = self._process_office_and_district(cleaned_df)
@@ -95,15 +95,27 @@ class IowaCleaner:
         logger.info(f"Iowa data cleaning completed. Final shape: {cleaned_df.shape}")
         return cleaned_df
     
-    def _process_election_data(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Process election year and type from election column."""
+    def _process_election_data(self, df: pd.DataFrame, filename: str = None) -> pd.DataFrame:
+        """Process election year and type from election column or filename."""
         logger.info("Processing election data...")
         
-        # Check if Election column exists, if not set defaults
+        # Check if Election column exists, if not try to extract from filename
         if 'Election' not in df.columns:
-            logger.warning("Election column not found in Iowa data, setting defaults")
-            df['election_year'] = None
-            df['election_type'] = None
+            if filename:
+                # Extract year from filename (e.g., "iowa_candidates_2024.xlsx" -> 2024)
+                year_match = re.search(r'(\d{4})', filename)
+                if year_match:
+                    election_year = int(year_match.group(1))
+                    logger.info(f"Extracted election year {election_year} from filename")
+                else:
+                    election_year = None
+                    logger.warning("No election year found in filename")
+            else:
+                election_year = None
+                logger.warning("No filename provided and no Election column found")
+            
+            df['election_year'] = election_year
+            df['election_type'] = "General"  # Default for Iowa
             return df
         
         def extract_election_info(election_str: str) -> Tuple[Optional[int], Optional[str]]:
@@ -215,8 +227,9 @@ class IowaCleaner:
             cleaned = re.sub(r'\s+', ' ', name_str).strip().strip('"\'')
             return cleaned
         
-        # Apply name cleaning with office context
-        df['full_name_display'] = df.apply(lambda row: clean_name(row['Name'], row['Office']), axis=1)
+        # Apply name cleaning with office context - handle different column names
+        name_col = 'Ballot Name(s)' if 'Ballot Name(s)' in df.columns else 'Name'
+        df['full_name_display'] = df.apply(lambda row: clean_name(row[name_col], row['Office']), axis=1)
         
         # Parse names into components
         df = self._parse_names(df)
@@ -239,7 +252,8 @@ class IowaCleaner:
         for idx, row in df.iterrows():
             name = row['full_name_display']
             office = row['office']
-            original_name = row['Name']
+            name_col = 'Ballot Name(s)' if 'Ballot Name(s)' in df.columns else 'Name'
+            original_name = row[name_col]
             
             if pd.isna(name) or not name:
                 continue
@@ -577,7 +591,9 @@ def clean_iowa_candidates(input_file: str, output_file: str = None, output_dir: 
     df = pd.read_excel(input_file)
     
     cleaner = IowaCleaner(output_dir=output_dir)
-    cleaned_df = cleaner.clean_iowa_data(df)
+    # Extract filename for election year extraction
+    filename = os.path.basename(input_file)
+    cleaned_df = cleaner.clean_iowa_data(df, filename)
     
     if output_file is None:
         base_name = os.path.splitext(os.path.basename(input_file))[0]

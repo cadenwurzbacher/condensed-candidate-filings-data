@@ -221,8 +221,9 @@ class NorthCarolinaCleaner:
             # Handle other offices (keep as is)
             return office_str, None
         
-        # Apply office and district processing
-        office_results = df['Office'].apply(process_office_district)
+        # Apply office and district processing - handle different column names
+        office_col = 'contest_name' if 'contest_name' in df.columns else 'Office'
+        office_results = df[office_col].apply(process_office_district)
         df['office'] = [result[0] for result in office_results]
         df['district'] = [result[1] for result in office_results]
         df['district'] = df['district'].astype('object')

@@ -134,8 +134,8 @@ class NewYorkCleaner:
         logger.info(f"New York data cleaning completed. Final shape: {cleaned_df.shape}")
         return cleaned_df
     
-    def _process_election_data(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Process election year and type from election column."""
+    def _process_election_data(self, df: pd.DataFrame, filename: str = None) -> pd.DataFrame:
+        """Process election year and type from election column or filename."""
         logger.info("Processing election data...")
         
         def extract_election_info(election_str: str) -> Tuple[Optional[int], Optional[str]]:
@@ -158,14 +158,34 @@ class NewYorkCleaner:
             elif 'general' in election_str_lower:
                 election_type = "General"
             elif 'special' in election_str_lower:
-                election_type = "Special"
+                election_type = "General"
             else:
                 election_type = "General"  # Default
             
             return year, election_type
         
+        # Check if Election Year column exists, if not try to extract from filename
+        election_col = 'Election Year' if 'Election Year' in df.columns else 'Election'
+        if election_col not in df.columns:
+            if filename:
+                # Extract year from filename (e.g., "new_york_candidates_2024.csv" -> 2024)
+                year_match = re.search(r'(\d{4})', filename)
+                if year_match:
+                    election_year = int(year_match.group(1))
+                    logger.info(f"Extracted election year {election_year} from filename")
+                else:
+                    election_year = None
+                    logger.warning("No election year found in filename")
+            else:
+                election_year = None
+                logger.warning("No filename provided and no Election Year column found")
+            
+            df['election_year'] = election_year
+            df['election_type'] = "General"  # Default for New York
+            return df
+        
         # Apply election processing
-        election_results = df['Election'].apply(extract_election_info)
+        election_results = df[election_col].apply(extract_election_info)
         df['election_year'] = [result[0] for result in election_results]
         df['election_type'] = [result[1] for result in election_results]
         
