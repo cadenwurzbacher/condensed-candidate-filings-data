@@ -339,10 +339,14 @@ class MissouriCleaner:
                     middle_name = parts[1]
                     last_name = parts[2]
                 else:
+            
+            
                     # Middle part is not an initial, treat as middle name
                     middle_name = parts[1]
                     last_name = parts[2]
             else:
+            
+            
                 # More than 3 parts
                 first_name = parts[0]
                 # Check if second part is an initial
@@ -350,6 +354,8 @@ class MissouriCleaner:
                     middle_name = parts[1]
                     last_name = ' '.join(parts[2:])
                 else:
+            
+            
                     # Second part is not an initial, treat as middle name
                     middle_name = parts[1]
                     last_name = ' '.join(parts[2:])

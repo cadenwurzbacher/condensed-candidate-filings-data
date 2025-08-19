@@ -139,6 +139,8 @@ class ColoradoCleaner:
         if year_match:
             election_year = int(year_match.group(1))
         else:
+            
+            
             # Default to current year if no year found
             election_year = datetime.now().year
             logger.warning(f"No election year found in filename {filename}, using {election_year}")
@@ -355,6 +357,8 @@ class ColoradoCleaner:
                         first_name = first_middle[0]
                         middle_name = second_part
                 else:
+            
+            
                     # Handle multiple parts
                     first_name = first_middle[0]
                     middle_parts = []
@@ -385,6 +389,8 @@ class ColoradoCleaner:
             else:
                 return parts[0], parts[1], parts[2], None, suffix, nickname, f"{parts[0]} {parts[1]} {parts[2]}"
         else:
+            
+            
             # For names with more than 3 parts, treat first as first, last as last, rest as middle
             first = parts[0]
             last = parts[-1]

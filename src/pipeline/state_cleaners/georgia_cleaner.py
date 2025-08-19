@@ -14,16 +14,13 @@ from typing import List, Optional, Tuple
 
 import pandas as pd
 
-
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-
 # Configuration
 DEFAULT_OUTPUT_DIR = "cleaned_data"  # Default output directory for cleaned data
 DEFAULT_INPUT_DIR = "Raw State Data - Current"  # Default input directory
-
 
 def list_available_input_files(input_dir: str = DEFAULT_INPUT_DIR) -> List[str]:
     """
@@ -45,7 +42,6 @@ def list_available_input_files(input_dir: str = DEFAULT_INPUT_DIR) -> List[str]:
             excel_files.append(os.path.join(input_dir, file))
 
     return sorted(excel_files)
-
 
 class GeorgiaCleaner:
     """Handles cleaning and standardization of Georgia political candidate data."""
@@ -583,16 +579,22 @@ class GeorgiaCleaner:
         if 'City' in df.columns:
             df['city'] = df['City'].apply(lambda x: str(x).strip() if pd.notna(x) else None)
         else:
+            
+            
             df['city'] = pd.NA
             
         if 'Zip' in df.columns:
             df['zip_code'] = df['Zip'].apply(lambda x: str(x).strip() if pd.notna(x) else None)
         else:
+            
+            
             df['zip_code'] = pd.NA
             
         if 'County (If Local Contest)' in df.columns:
             df['county'] = df['County (If Local Contest)'].apply(lambda x: str(x).strip() if pd.notna(x) else None)
         else:
+            
+            
             df['county'] = pd.NA
             
         # Other required but often absent columns
@@ -679,7 +681,6 @@ class GeorgiaCleaner:
         # Return only baseline columns, dropping any extras
         return df[alaska_order]
 
-
 def clean_georgia_candidates(input_file: str, output_file: Optional[str] = None, output_dir: str = DEFAULT_OUTPUT_DIR) -> pd.DataFrame:
     """
     Main function to clean Georgia candidate data.
@@ -729,7 +730,6 @@ def clean_georgia_candidates(input_file: str, output_file: Optional[str] = None,
 
     return cleaned_df
 
-
 if __name__ == "__main__":
     print("Available Georgia input files:")
     files = list_available_input_files()
@@ -750,5 +750,4 @@ if __name__ == "__main__":
         print(f"\nCleaned {len(cleaned)} records")
         print(f"Columns: {list(cleaned.columns)}")
         print(f"Data saved to: {out_dir}/")
-
 

@@ -167,11 +167,15 @@ class IndianaCleaner:
         if 'Year' in df.columns:
             df['election_year'] = df['Year'].astype(int)
         else:
+            
+            
             df['election_year'] = 2024
         
         if 'Election' in df.columns:
             df['election_type'] = df['Election'].str.capitalize()
         else:
+            
+            
             df['election_type'] = "General"
         
         return df
@@ -220,6 +224,8 @@ class IndianaCleaner:
             df['district'] = [result[1] for result in office_results]
             df['district'] = df['district'].astype('object')
         else:
+            
+            
             df['office'] = pd.NA
             df['district'] = pd.NA
         
@@ -251,6 +257,8 @@ class IndianaCleaner:
         if 'Name' in df.columns:
             df['full_name_display'] = df['Name'].apply(clean_name)
         else:
+            # Fallback if no Name column
+            df['full_name_display'] = 'Unknown'
         
         # Parse names into components
         df = self._parse_names(df)
@@ -362,6 +370,8 @@ class IndianaCleaner:
                         first_name = first_middle[0]
                         middle_name = second_part
                 else:
+            
+            
                     # Handle multiple parts
                     first_name = first_middle[0]
                     middle_parts = []
@@ -392,6 +402,8 @@ class IndianaCleaner:
             else:
                 return parts[0], parts[1], parts[2], None, suffix, nickname, f"{parts[0]} {parts[1]} {parts[2]}"
         else:
+            
+            
             # For names with more than 3 parts, treat first as first, last as last, rest as middle
             first = parts[0]
             last = parts[-1]
@@ -457,6 +469,8 @@ class IndianaCleaner:
         if 'Party' in df.columns:
             df['party'] = df['Party'].apply(standardize_party)
         else:
+            
+            
             df['party'] = pd.NA
         
         return df

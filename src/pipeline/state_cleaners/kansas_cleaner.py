@@ -196,6 +196,8 @@ class KansasCleaner:
             df['election_year'] = [result[0] for result in election_results]
             df['election_type'] = [result[1] for result in election_results]
         else:
+            
+            
             # Default values if Election column doesn't exist
                     df['election_year'] = pd.NA
         df['election_type'] = pd.NA
@@ -265,6 +267,8 @@ class KansasCleaner:
         if 'Candidate' in df.columns:
             df['full_name_display'] = df['Candidate'].apply(clean_name)
         else:
+            
+            
         
         # Parse names into components
         df = self._parse_names(df)
@@ -396,6 +400,8 @@ class KansasCleaner:
             else:
                 return parts[0], parts[1], parts[2], None, suffix, nickname, f"{parts[0]} {parts[1]} {parts[2]}"
         else:
+            
+            
             # For names with more than 3 parts, treat first as first, last as last, rest as middle
             first = parts[0]
             last = parts[-1]
@@ -460,6 +466,8 @@ class KansasCleaner:
         if 'Party' in df.columns:
             df['party'] = df['Party'].apply(standardize_party)
         else:
+            
+            
             df['party'] = pd.NA
         
         return df
@@ -516,32 +524,44 @@ class KansasCleaner:
         if 'Home Phone' in df.columns and 'Cell Phone' in df.columns:
             df['phone'] = df.apply(lambda row: clean_phone(row['Home Phone'], row['Cell Phone']), axis=1)
         else:
+            
+            
             df['phone'] = pd.NA
             
         if 'Email' in df.columns:
             df['email'] = df['Email'].apply(clean_email)
         else:
+            
+            
             df['email'] = pd.NA
             
         if 'Home Address' in df.columns and 'Home City' in df.columns and 'Home Zip' in df.columns:
             df['address'] = df.apply(lambda row: clean_address(row['Home Address'], row['Home City'], row['Home Zip']), axis=1)
         else:
+            
+            
             df['address'] = pd.NA
             
         if 'Web Address' in df.columns:
             df['website'] = df['Web Address'].apply(lambda x: str(x).strip() if pd.notna(x) else None)
         else:
+            
+            
             df['website'] = pd.NA
         
         # Extract city and zip separately for the required columns
         if 'Home City' in df.columns:
             df['city'] = df['Home City'].apply(lambda x: str(x).strip() if pd.notna(x) else None)
         else:
+            
+            
             df['city'] = pd.NA
             
         if 'Home Zip' in df.columns:
             df['zip_code'] = df['Home Zip'].apply(lambda x: str(x).strip() if pd.notna(x) else None)
         else:
+            
+            
             df['zip_code'] = pd.NA
         
         return df
@@ -557,6 +577,8 @@ class KansasCleaner:
         if 'Candidate' in df.columns:
             df['original_name'] = df['Candidate'].copy()
         else:
+            
+            
             df['original_name'] = pd.NA
             
         df['original_state'] = df['state'].copy()
@@ -565,11 +587,15 @@ class KansasCleaner:
         if 'Office' in df.columns:
             df['original_office'] = df['Office'].copy()
         else:
+            
+            
             df['original_office'] = pd.NA
             
         if 'Date Filed' in df.columns:
             df['original_filing_date'] = df['Date Filed'].copy()
         else:
+            
+            
             df['original_filing_date'] = pd.NA
         
         # Add missing columns with None values
@@ -599,6 +625,8 @@ class KansasCleaner:
             
             df['filing_date'] = df['Date Filed'].apply(parse_filing_date)
         else:
+            
+            
             df['filing_date'] = pd.NA
         
         return df

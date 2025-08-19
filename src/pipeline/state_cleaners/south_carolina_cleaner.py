@@ -193,6 +193,8 @@ class SouthCarolinaCleaner:
                         else:
                             year = filing_year
                     else:
+            
+            
                         # For non-Presidential candidates, use the filing year as election year
                         year = filing_year
                     

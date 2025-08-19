@@ -187,6 +187,8 @@ class LouisianaCleaner:
             elif 'special' in election_str_lower or 'runoff' in election_str_lower:
                 election_type = "Special"
             else:
+            
+            
                 # Louisiana typically has General elections in odd years
                 election_type = "General"  # Default
             

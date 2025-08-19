@@ -521,6 +521,8 @@ class KentuckyCleaner:
             df['party'] = df[party_col].apply(standardize_party)
             logger.info(f"Found and processed party data from column: {party_col}")
         else:
+            
+            
             # No party data available
             df['party'] = pd.NA
             logger.info("No party data found in raw data")
@@ -551,6 +553,8 @@ class KentuckyCleaner:
         if 'location' in df.columns:
             df['address'] = df['location'].apply(clean_address)
         else:
+            
+            
             df['address'] = pd.NA
         
         return df

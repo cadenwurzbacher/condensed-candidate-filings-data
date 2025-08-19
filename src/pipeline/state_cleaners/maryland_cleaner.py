@@ -259,6 +259,8 @@ class MarylandCleaner:
                     else:
                         return first_part
                 else:
+            
+            
                     # Handle single names
                     if ',' in name_str:
                         last_name, first_name = name_str.split(',', 1)
@@ -284,6 +286,8 @@ class MarylandCleaner:
                 (row['office'] if 'office' in df.columns else (row['Office Name'] if 'Office Name' in df.columns else (row['Office'] if 'Office' in df.columns else None)))
             ), axis=1)
         else:
+            
+            
             # Fallback - create a placeholder name
             df['full_name_display'] = 'Unknown Candidate'
         
@@ -326,9 +330,13 @@ class MarylandCleaner:
                     first_part = original_str.split('/')[0].strip()
                     parsed = self._parse_standard_name(first_part, original_name)
                 else:
+            
+            
                     # Fallback for president candidates without running mates
                     parsed = self._parse_standard_name(original_name, original_name)
             else:
+            
+            
                 # For all other cases, use the original name for parsing
                 parsed = self._parse_standard_name(original_name, original_name)
             
@@ -402,6 +410,8 @@ class MarylandCleaner:
                         first_name = first_middle[0]
                         middle_name = second_part
                 else:
+            
+            
                     # Handle multiple parts
                     first_name = first_middle[0]
                     middle_parts = []
@@ -432,6 +442,8 @@ class MarylandCleaner:
             else:
                 return parts[0], parts[1], parts[2], None, suffix, nickname, f"{parts[0]} {parts[1]} {parts[2]}"
         else:
+            
+            
             # For names with more than 3 parts, treat first as first, last as last, rest as middle
             first = parts[0]
             last = parts[-1]
@@ -584,6 +596,8 @@ class MarylandCleaner:
         elif 'Name' in df.columns:
             df['original_name'] = df['Name'].copy()
         else:
+            
+            
             df['original_name'] = 'Unknown'
         df['original_state'] = df['state'].copy()
         df['original_election_year'] = df['election_year'].copy()
@@ -595,6 +609,8 @@ class MarylandCleaner:
         elif 'office' in df.columns:
             df['original_office'] = df['office'].copy()
         else:
+            
+            
             df['original_office'] = pd.NA
         df['original_filing_date'] = pd.NA  # Not available in Maryland data
         

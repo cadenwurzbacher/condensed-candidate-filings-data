@@ -176,6 +176,8 @@ class NewMexicoCleaner:
             if year_match:
                 year = int(year_match.group())
             else:
+            
+            
                 # Default to 2024 for New Mexico data
                 year = 2024
             
@@ -188,6 +190,8 @@ class NewMexicoCleaner:
             elif 'special' in contest_lower:
                 election_type = "Special"
             else:
+            
+            
                 # Default to General for most contests
                 election_type = "General"
             

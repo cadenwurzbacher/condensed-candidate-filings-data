@@ -223,6 +223,8 @@ class NebraskaCleaner:
         if 'District' in df.columns:
             office_results = df.apply(lambda row: process_office_district(row['Office'], row['District']), axis=1)
         else:
+            
+            
             # If no District column, pass None for district
             office_results = df.apply(lambda row: process_office_district(row['Office'], None), axis=1)
         
@@ -355,6 +357,8 @@ class NebraskaCleaner:
                         first_name = first_middle[0]
                         middle_name = second_part
                 else:
+            
+            
                     # Handle multiple parts
                     first_name = first_middle[0]
                     middle_parts = []
@@ -385,6 +389,8 @@ class NebraskaCleaner:
             else:
                 return parts[0], parts[1], parts[2], None, suffix, nickname, f"{parts[0]} {parts[1]} {parts[2]}"
         else:
+            
+            
             # For names with more than 3 parts, treat first as first, last as last, rest as middle
             first = parts[0]
             last = parts[-1]

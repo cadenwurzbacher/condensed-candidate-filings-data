@@ -482,6 +482,8 @@ class IowaCleaner:
         elif 'Ballot Name(s)' in df.columns:
             df['original_name'] = df['Ballot Name(s)'].copy()
         else:
+            
+            
             df['original_name'] = 'Unknown'
         df['original_state'] = df['state'].copy()
         df['original_election_year'] = df['election_year'].copy()
