@@ -138,6 +138,7 @@ class SouthDakotaCleaner:
             'address',
             'website',
             'state',
+            'address_state',
             'original_name',
             'original_state',
             'original_election_year',
@@ -608,6 +609,15 @@ class SouthDakotaCleaner:
         df['email'] = pd.NA
         df['website'] = pd.NA
         
+        # Derive address_state from address when possible
+        def extract_state(addr: Optional[str]) -> Optional[str]:
+            if addr is None or pd.isna(addr):
+                return None
+            s = str(addr)
+            m = re.search(r"\b([A-Z]{2})\s+\d{5}(?:-\d{4})?\b", s)
+            return m.group(1) if m else None
+        df['address_state'] = df['address'].apply(extract_state)
+        
         return df
     
     def _add_required_columns(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -626,7 +636,7 @@ class SouthDakotaCleaner:
         
         # Add missing columns with None values
         required_columns = [
-            'id', 'stable_id', 'filing_date', 'election_date', 'facebook', 'twitter'
+            'id', 'stable_id', 'address_state', 'filing_date', 'election_date', 'facebook', 'twitter'
         ]
         
         for col in required_columns:
