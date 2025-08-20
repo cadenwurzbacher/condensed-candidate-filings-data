@@ -125,7 +125,10 @@ class AlaskaCleaner:
         # Step 7: Generate stable IDs (skipped - will be done later in process)
         # cleaned_df = self._generate_stable_ids(cleaned_df)
         
-        # Step 8: Remove duplicate columns
+        # Step 8: Parse geographic data from addresses
+        cleaned_df = self._parse_geographic_data(cleaned_df)
+        
+        # Step 9: Remove duplicate columns
         cleaned_df = self._remove_duplicate_columns(cleaned_df)
         
         logger.info(f"Alaska data cleaning completed. Final shape: {cleaned_df.shape}")
@@ -134,6 +137,14 @@ class AlaskaCleaner:
     def _process_election_data(self, df: pd.DataFrame) -> pd.DataFrame:
         """Process election year and type from election column."""
         logger.info("Processing election data...")
+        
+        # Check if election_year already exists (from main pipeline filename extraction)
+        if 'election_year' in df.columns and df['election_year'].notna().any():
+            logger.info("election_year already exists from main pipeline, preserving existing data")
+            # Only set election_type if it doesn't exist
+            if 'election_type' not in df.columns:
+                df['election_type'] = 'General'  # Default for Alaska
+            return df
         
         def extract_election_info(election_str: str) -> Tuple[Optional[int], Optional[str]]:
             if pd.isna(election_str):
@@ -150,7 +161,6 @@ class AlaskaCleaner:
             if year_match:
                 year = int(year_match.group())
             else:
-                
                 return None, None
             
             # Determine election type
@@ -542,7 +552,7 @@ class AlaskaCleaner:
         
         # Add missing columns with None values
         required_columns = [
-            'id', 'stable_id', 'county', 'city', 'zip_code', 'filing_date', 
+            'id', 'stable_id', 'county', 'city', 'zip_code', 'address_state', 'filing_date', 
             'election_date', 'facebook', 'twitter', 'prefix', 'suffix', 'nickname'
         ]
         
@@ -586,6 +596,96 @@ class AlaskaCleaner:
             return hashlib.sha256(id_string.encode('utf-8')).hexdigest()[:16]
         
         df['stable_id'] = df.apply(generate_stable_id, axis=1)
+        
+        return df
+
+    def _parse_geographic_data(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Parse geographic data (city, zip_code, county) from the address column."""
+        logger.info("Parsing geographic data from addresses...")
+        
+        def parse_address(address_str: str) -> Tuple[Optional[str], Optional[str], Optional[str], Optional[str]]:
+            if pd.isna(address_str):
+                return None, None, None, None
+            
+            address_str = str(address_str).strip()
+            
+            # Alaska addresses follow pattern: "Street Address with City, State ZIP"
+            # First, extract the zip code
+            zip_match = re.search(r'\b\d{5}\b', address_str)
+            zip_code = zip_match.group() if zip_match else None
+            
+            if zip_code:
+                # Remove zip code from address
+                address_without_zip = re.sub(r'\b\d{5}\b', '', address_str).strip()
+                
+                # Split by comma to separate street address from state
+                parts = [part.strip() for part in address_without_zip.split(',')]
+                
+                if len(parts) >= 2:
+                    # Format: "Street Address with City, State"
+                    street_address_with_city = parts[0]
+                    state = parts[1]
+                    
+                    # The city is actually the last meaningful part of the street address
+                    # For addresses like "125 Circle Dr. Cross Cross Lakes, WV 25313"
+                    # The city is "Cross Cross Lakes" - the last part before the comma
+                    street_parts = street_address_with_city.split()
+                    
+                    # Common address abbreviations to filter out
+                    address_abbreviations = {
+                        'PO', 'Box', 'St', 'St.', 'Ave', 'Ave.', 'Rd', 'Rd.', 'Dr', 'Dr.', 
+                        'Blvd', 'Blvd.', 'Ln', 'Ln.', 'Way', 'Ct', 'Ct.', 'Pl', 'Pl.',
+                        'Ste', 'Ste.', 'Suite', 'Apt', 'Apt.', 'Unit', '#', 'PMB', 'Bldg',
+                        'N', 'S', 'E', 'W', 'NE', 'NW', 'SE', 'SW', 'North', 'South', 'East', 'West'
+                    }
+                    
+                    # Start from the end and collect words until we hit an address abbreviation
+                    city_candidates = []
+                    for i in range(len(street_parts) - 1, -1, -1):
+                        part = street_parts[i]
+                        clean_part = part.rstrip('.,;:')
+                        
+                        # Stop if we hit an address abbreviation, number, or special characters
+                        if (clean_part in address_abbreviations or 
+                            clean_part.isdigit() or 
+                            any(char in clean_part for char in ['#', '-', '/', '\\', '(', ')']) or
+                            len(clean_part) <= 1):
+                            break
+                            
+                        # Add this word to city candidates
+                        city_candidates.insert(0, clean_part)
+                    
+                    # Join the city candidates to form the city name
+                    city = ' '.join(city_candidates) if city_candidates else None
+                    
+                else:
+                    # Single part - try to extract state
+                    city_state = parts[0]
+                    state_match = re.search(r'\b[A-Z]{2}\b', city_state)
+                    if state_match:
+                        state = state_match.group()
+                        # Extract city from the remaining part
+                        city_part = re.sub(r'\b[A-Z]{2}\b', '', city_state).strip()
+                        city = city_part if city_part else None
+                    else:
+                        city = None
+                        state = None
+                
+                # For Alaska, use state as county
+                county = state
+            else:
+                city = None
+                county = None
+                state = None
+            
+            return city, zip_code, county, state
+        
+        # Apply address parsing
+        geographic_data = df['address'].apply(parse_address)
+        df['city'] = [data[0] for data in geographic_data]
+        df['zip_code'] = [data[1] for data in geographic_data]
+        df['county'] = [data[2] for data in geographic_data]
+        df['address_state'] = [data[3] for data in geographic_data]
         
         return df
 
