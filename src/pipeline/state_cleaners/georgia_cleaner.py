@@ -556,6 +556,22 @@ class GeorgiaCleaner:
         
         df["address"] = df.apply(combine_address, axis=1)
         
+        # Derive address_state from explicit State column if present; else parse from address
+        def extract_state_from_row(row) -> Optional[str]:
+            state_val = row.get('State') if 'State' in row.index else None
+            if pd.notna(state_val) and str(state_val).strip():
+                s = str(state_val).strip().upper()
+                if re.fullmatch(r"[A-Z]{2}", s):
+                    return s
+            addr = row.get('address')
+            if addr is None or pd.isna(addr):
+                return None
+            text = str(addr)
+            m = re.search(r"\b([A-Z]{2})\s+\d{5}(?:-\d{4})?\b", text)
+            return m.group(1) if m else None
+        
+        df['address_state'] = df.apply(extract_state_from_row, axis=1)
+        
         df["website"] = df["raw_website"].apply(clean_website)
 
         return df
@@ -608,6 +624,7 @@ class GeorgiaCleaner:
             "filing_date",
             "facebook",
             "twitter",
+            "address_state",
         ]
         for c in required_missing:
             if c not in df.columns:
@@ -665,6 +682,7 @@ class GeorgiaCleaner:
             'address',
             'website',
             'state',
+            'address_state',
             'original_name',
             'original_state',
             'original_election_year',
