@@ -50,7 +50,7 @@ class IowaCleaner:
         ALASKA_COLUMN_ORDER = [
             'election_year', 'election_type', 'office', 'district', 'full_name_display',
             'first_name', 'middle_name', 'last_name', 'prefix', 'suffix', 'nickname',
-            'party', 'phone', 'email', 'address', 'website', 'state', 'original_name',
+            'party', 'phone', 'email', 'address', 'website', 'state', 'address_state', 'original_name',
             'original_state', 'original_election_year', 'original_office', 'original_filing_date',
             'id', 'stable_id', 'county', 'city', 'zip_code', 'filing_date', 'election_date',
             'facebook', 'twitter'
@@ -475,6 +475,15 @@ class IowaCleaner:
         df['address'] = df['Address'].apply(clean_address)
         # Iowa doesn't have Website column - set to None
         df['website'] = None
+        
+        # Extract address_state from Address if present
+        def extract_state(addr: Optional[str]) -> Optional[str]:
+            if addr is None or pd.isna(addr):
+                return None
+            s = str(addr)
+            m = re.search(r"\b([A-Z]{2})\s+\d{5}(?:-\d{4})?\b", s)
+            return m.group(1) if m else None
+        df['address_state'] = df['address'].apply(extract_state)
         
         return df
     
