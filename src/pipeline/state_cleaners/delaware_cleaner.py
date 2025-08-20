@@ -919,6 +919,8 @@ class DelawareCleaner:
         df['email'] = df.apply(lambda x: clean_email(None), axis=1)  # Always None
         df['address'] = df.apply(lambda x: clean_address(None), axis=1)  # Always None
         df['website'] = df['Website'].apply(clean_website)
+        # No address available → address_state should be null
+        df['address_state'] = pd.NA
         
         return df
     
@@ -947,7 +949,7 @@ class DelawareCleaner:
         
         # Add missing columns with None values
         required_columns = [
-            'county', 'city', 'zip_code', 'filing_date', 
+            'county', 'city', 'zip_code', 'address_state', 'filing_date', 
             'election_date', 'facebook', 'twitter', 'prefix', 'suffix', 'nickname'
         ]
         
@@ -1222,6 +1224,7 @@ class DelawareCleaner:
             'address',
             'website',
             'state',
+            'address_state',
             'original_name',
             'original_state',
             'original_election_year',
