@@ -139,6 +139,7 @@ class NewMexicoCleaner:
             'address',
             'website',
             'state',
+            'address_state',
             'original_name',
             'original_state',
             'original_election_year',
@@ -422,6 +423,18 @@ class NewMexicoCleaner:
         df['address'] = df['Address'].apply(clean_address)
         df['website'] = df['Website'].apply(lambda x: str(x).strip() if pd.notna(x) else None)
         
+        # Derive address_state from explicit State field when present, else from address
+        if 'State' in df.columns:
+            df['address_state'] = df['State'].apply(lambda x: str(x).strip().upper() if pd.notna(x) else None)
+        else:
+            def extract_state(addr: Optional[str]) -> Optional[str]:
+                if addr is None or pd.isna(addr):
+                    return None
+                s = str(addr)
+                m = re.search(r"\b([A-Z]{2})\s+\d{5}(?:-\d{4})?\b", s)
+                return m.group(1) if m else None
+            df['address_state'] = df['address'].apply(extract_state)
+        
         return df
     
     def _add_required_columns(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -440,7 +453,7 @@ class NewMexicoCleaner:
         
         # Add missing columns with None values
         required_columns = [
-            'id', 'stable_id', 'county', 'city', 'zip_code', 'filing_date', 
+            'id', 'stable_id', 'county', 'city', 'zip_code', 'address_state', 'filing_date', 
             'election_date', 'facebook', 'twitter', 'prefix', 'suffix', 'nickname'
         ]
         
