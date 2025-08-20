@@ -214,6 +214,7 @@ class KentuckyCleaner:
             'address',
             'website',
             'state',
+            'address_state',
             'original_name',
             'original_state',
             'original_election_year',
@@ -557,11 +558,16 @@ class KentuckyCleaner:
         if 'location' in df.columns:
             df['address'] = df['location'].apply(clean_address)
         else:
-            
-            
-            
-            
             df['address'] = pd.NA
+        
+        # Derive address_state from address when available
+        def extract_state_from_address(addr: Optional[str]) -> Optional[str]:
+            if addr is None or pd.isna(addr):
+                return None
+            s = str(addr)
+            m = re.search(r"\b([A-Z]{2})\s+\d{5}(?:-\d{4})?\b", s)
+            return m.group(1) if m else None
+        df['address_state'] = df['address'].apply(extract_state_from_address)
         
         return df
     
@@ -587,7 +593,7 @@ class KentuckyCleaner:
         
         # Add missing columns with None values
         required_columns = [
-            'id', 'stable_id', 'county', 'city', 'zip_code', 'filing_date', 
+            'id', 'stable_id', 'county', 'city', 'zip_code', 'address_state', 'filing_date', 
             'election_date', 'facebook', 'twitter'
         ]
         
