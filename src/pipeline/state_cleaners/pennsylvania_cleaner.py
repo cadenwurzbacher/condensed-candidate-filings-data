@@ -123,7 +123,7 @@ class PennsylvaniaCleaner:
             'election_year', 'election_type', 'office', 'district', 'full_name_display',
             'first_name', 'middle_name', 'last_name', 'prefix', 'suffix', 'nickname',
             'party', 'phone', 'email', 'address', 'website',
-            'state', 'original_name', 'original_state', 'original_election_year',
+            'state', 'address_state', 'original_name', 'original_state', 'original_election_year',
             'original_office', 'original_filing_date', 'id', 'stable_id', 'county',
             'city', 'zip_code', 'filing_date', 'election_date', 'facebook', 'twitter'
         ]
@@ -606,6 +606,9 @@ class PennsylvaniaCleaner:
         df['address'] = None
         df['website'] = None
         
+        # Pennsylvania has no address data → address_state should be null
+        df['address_state'] = pd.NA
+        
         return df
     
     def _add_required_columns(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -633,7 +636,7 @@ class PennsylvaniaCleaner:
         
         # Add missing columns with None values
         required_columns = [
-            'id', 'stable_id', 'county', 'city', 'zip_code', 'filing_date', 
+            'id', 'stable_id', 'county', 'city', 'zip_code', 'address_state', 'filing_date', 
             'election_date', 'facebook', 'twitter', 'prefix', 'suffix', 'nickname'
         ]
         
