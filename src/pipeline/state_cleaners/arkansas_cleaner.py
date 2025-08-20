@@ -137,6 +137,7 @@ class ArkansasCleaner:
             'address',
             'website',
             'state',
+            'address_state',
             'original_name',
             'original_state',
             'original_election_year',
@@ -473,6 +474,8 @@ class ArkansasCleaner:
         df['email'] = None
         df['address'] = None
         df['website'] = None
+        # No address available → address_state should be null
+        df['address_state'] = None
         
         return df
     
@@ -492,7 +495,7 @@ class ArkansasCleaner:
         
         # Add missing columns with None values
         required_columns = [
-            'id', 'stable_id', 'county', 'city', 'zip_code', 'filing_date', 
+            'id', 'stable_id', 'county', 'city', 'zip_code', 'address_state', 'filing_date', 
             'election_date', 'facebook', 'twitter', 'prefix', 'suffix', 'nickname'
         ]
         

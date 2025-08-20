@@ -485,6 +485,8 @@ class ColoradoCleaner:
         df['email'] = pd.NA
         df['address'] = pd.NA
         df['website'] = pd.NA
+        # No address available → address_state should be null
+        df['address_state'] = pd.NA
         
         return df
     
@@ -504,7 +506,7 @@ class ColoradoCleaner:
         
         # Add missing columns with None values
         required_columns = [
-            'county', 'city', 'zip_code', 'filing_date', 
+            'county', 'city', 'zip_code', 'address_state', 'filing_date', 
             'election_date', 'facebook', 'twitter', 'prefix', 'suffix', 'nickname'
         ]
         
@@ -597,6 +599,7 @@ class ColoradoCleaner:
             'address',
             'website',
             'state',
+            'address_state',
             'original_name',
             'original_state',
             'original_election_year',

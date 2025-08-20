@@ -137,6 +137,7 @@ class ArizonaCleaner:
             'address',
             'website',
             'state',
+            'address_state',
             'original_name',
             'original_state',
             'original_election_year',
@@ -463,6 +464,8 @@ class ArizonaCleaner:
         
         # Clean addresses (not available in Arizona data)
         df['address'] = None
+        # No address available → address_state should be null
+        df['address_state'] = None
         
         # Clean website
         df['website'] = df['Website'].apply(lambda x: str(x).strip() if pd.notna(x) else None)
@@ -491,7 +494,7 @@ class ArizonaCleaner:
         
         # Add missing columns with None values
         required_columns = [
-            'id', 'stable_id', 'county', 'city', 'zip_code', 'filing_date', 
+            'id', 'stable_id', 'county', 'city', 'zip_code', 'address_state', 'filing_date', 
             'election_date', 'prefix', 'suffix', 'nickname'
         ]
         
