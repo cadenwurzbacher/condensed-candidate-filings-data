@@ -137,6 +137,7 @@ class OklahomaCleaner:
             'address',
             'website',
             'state',
+            'address_state',
             'original_name',
             'original_state',
             'original_election_year',
@@ -433,6 +434,9 @@ class OklahomaCleaner:
         df['address'] = None
         df['website'] = None
         
+        # Oklahoma has no address data → address_state should be null
+        df['address_state'] = pd.NA
+        
         return df
     
     def _add_required_columns(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -451,7 +455,7 @@ class OklahomaCleaner:
         
         # Add missing columns with None values
         required_columns = [
-            'id', 'stable_id', 'county', 'city', 'zip_code', 'filing_date', 
+            'id', 'stable_id', 'county', 'city', 'zip_code', 'address_state', 'filing_date', 
             'election_date', 'facebook', 'twitter', 'prefix', 'suffix', 'nickname'
         ]
         

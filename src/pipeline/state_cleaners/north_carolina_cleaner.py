@@ -60,7 +60,7 @@ class NorthCarolinaCleaner:
             'election_year', 'election_type', 'office', 'district', 'full_name_display',
             'first_name', 'middle_name', 'last_name', 'prefix', 'suffix', 'nickname',
             'party', 'phone', 'email', 'address', 'website',
-            'state', 'original_name', 'original_state', 'original_election_year',
+            'state', 'address_state', 'original_name', 'original_state', 'original_election_year',
             'original_office', 'original_filing_date', 'id', 'stable_id', 'county',
             'city', 'zip_code', 'filing_date', 'election_date', 'facebook', 'twitter'
         ]
@@ -612,6 +612,15 @@ class NorthCarolinaCleaner:
         # North Carolina doesn't have website data
         df['website'] = pd.NA
         
+        # Derive address_state from address when possible
+        def extract_state(addr: Optional[str]) -> Optional[str]:
+            if addr is None or pd.isna(addr):
+                return None
+            s = str(addr)
+            m = re.search(r"\b([A-Z]{2})\s+\d{5}(?:-\d{4})?\b", s)
+            return m.group(1) if m else None
+        df['address_state'] = df['address'].apply(extract_state)
+        
         return df
     
     def _add_required_columns(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -633,7 +642,7 @@ class NorthCarolinaCleaner:
         
         # Add missing columns with None values
         required_columns = [
-            'id', 'stable_id', 'county', 'city', 'zip_code', 'filing_date', 
+            'id', 'stable_id', 'county', 'city', 'zip_code', 'address_state', 'filing_date', 
             'election_date', 'facebook', 'twitter', 'prefix', 'suffix', 'nickname'
         ]
         
