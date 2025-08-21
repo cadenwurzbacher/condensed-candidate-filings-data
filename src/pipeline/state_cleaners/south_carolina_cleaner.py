@@ -495,14 +495,78 @@ class SouthCarolinaCleaner:
         df['address'] = df['Contact Address'].apply(clean_address)
         df['website'] = pd.NA  # Not available in South Carolina data
         
-        # Derive address_state from address when possible
-        def extract_state(addr: Optional[str]) -> Optional[str]:
-            if addr is None or pd.isna(addr):
-                return None
-            s = str(addr)
-            m = re.search(r"\b([A-Z]{2})\s+\d{5}(?:-\d{4})?\b", s)
-            return m.group(1) if m else None
-        df['address_state'] = df['address'].apply(extract_state)
+        # Parse address to extract city, zip_code, and address_state
+        def parse_address_components(address_str: str) -> Tuple[Optional[str], Optional[str], Optional[str]]:
+            """Parse South Carolina address to extract city, zip_code, and address_state."""
+            if pd.isna(address_str):
+                return None, None, None
+            
+            address = str(address_str).strip()
+            
+            # South Carolina format: "Street Address City SC, ZIP"
+            # Look for state code followed by comma and zip
+            state_comma_zip_match = re.search(r'\b([A-Z]{2})\s*,?\s*(\d{5}(?:-\d{4})?)\s*$', address)
+            if state_comma_zip_match:
+                state = state_comma_zip_match.group(1)
+                zip_code = state_comma_zip_match.group(2)
+                
+                # Extract city (everything before state)
+                before_state = address[:state_comma_zip_match.start()].strip()
+                if before_state:
+                    # Remove trailing commas and clean up
+                    city = before_state.rstrip(',').strip()
+                    # If city contains street address, try to extract just the city part
+                    if ',' in city:
+                        city_parts = city.split(',')
+                        city = city_parts[-1].strip()  # Take the last part as city
+                    else:
+                        # No comma means we have street address + city
+                        # Take the last word as the city
+                        words = city.split()
+                        if len(words) >= 2:
+                            city = words[-1]  # Last word is city
+                        else:
+                            city = city
+                else:
+                    city = None
+                
+                return city, zip_code, state
+            
+            # Fallback: look for state and zip anywhere, but be more restrictive
+            state_match = re.search(r'\b([A-Z]{2})\s+(\d{5}(?:-\d{4})?)\b', address)
+            if state_match:
+                state = state_match.group(1)
+                zip_code = state_match.group(2)
+                
+                # Try to extract city (everything before state)
+                before_state = address[:state_match.start()].strip()
+                if before_state:
+                    # Remove trailing commas and clean up
+                    city = before_state.rstrip(',').strip()
+                    # If city contains street address, try to extract just the city part
+                    if ',' in city:
+                        city_parts = city.split(',')
+                        city = city_parts[-1].strip()  # Take the last part as city
+                    else:
+                        # No comma means we have street address + city
+                        # Take the last word as the city
+                        words = city.split()
+                        if len(words) >= 2:
+                            city = words[-1]  # Last word is city
+                        else:
+                            city = city
+                else:
+                    city = None
+                
+                return city, zip_code, state
+            
+            return None, None, None
+        
+        # Apply address parsing
+        address_results = df['address'].apply(parse_address_components)
+        df['city'] = [result[0] for result in address_results]
+        df['zip_code'] = [result[1] for result in address_results]
+        df['address_state'] = [result[2] for result in address_results]
         
         return df
     
@@ -522,7 +586,7 @@ class SouthCarolinaCleaner:
         
         # Add missing columns with None values
         required_columns = [
-            'id', 'stable_id', 'county', 'city', 'zip_code', 'address_state', 'filing_date', 
+            'id', 'stable_id', 'filing_date', 
             'election_date', 'facebook', 'twitter', 'prefix', 'nickname'
         ]
         
@@ -617,6 +681,10 @@ def clean_south_carolina_candidates(input_file: str, output_file: str = None, ou
     # Ensure output file is in the output directory
     if not os.path.dirname(output_file):
         output_file = os.path.join(output_dir, output_file)
+    
+    # Ensure output file has .xlsx extension
+    if not output_file.endswith('.xlsx'):
+        output_file = output_file + '.xlsx'
     
     # Save the cleaned data
     logger.info(f"Saving cleaned data to {output_file}...")

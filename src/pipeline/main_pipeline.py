@@ -376,7 +376,18 @@ class MainPipeline:
                         continue
                         
                 elif file_path.endswith('.xls'):
-                    df = pd.read_excel(file_path, engine='xlrd')
+                    # Try to read as HTML first (since some .xls files are actually HTML)
+                    try:
+                        df = pd.read_html(file_path)[0]
+                        logger.info(f"Successfully read {os.path.basename(file_path)} as HTML")
+                    except Exception as html_error:
+                        logger.info(f"File {os.path.basename(file_path)} is not HTML, trying as Excel...")
+                        try:
+                            df = pd.read_excel(file_path, engine='xlrd')
+                            logger.info(f"Successfully read {os.path.basename(file_path)} as Excel")
+                        except Exception as excel_error:
+                            logger.error(f"Failed to read {os.path.basename(file_path)} as either HTML or Excel: {excel_error}")
+                            continue
                 else:
                     df = pd.read_excel(file_path)
                 

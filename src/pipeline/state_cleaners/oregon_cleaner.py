@@ -532,14 +532,69 @@ class OregonCleaner:
         df['address'] = df['Mailing Address'].apply(clean_address)
         df['website'] = df['Website'].apply(lambda x: str(x).strip() if pd.notna(x) else None)
         
-        # Derive address_state from address when possible
-        def extract_state(addr: Optional[str]) -> Optional[str]:
-            if addr is None or pd.isna(addr):
-                return None
-            s = str(addr)
-            m = re.search(r"\b([A-Z]{2})\s+\d{5}(?:-\d{4})?\b", s)
-            return m.group(1) if m else None
-        df['address_state'] = df['address'].apply(extract_state)
+        # Parse address to extract city, zip_code, and address_state
+        if 'Mailing Address' in df.columns:
+            def parse_address_components(address_str: str) -> Tuple[Optional[str], Optional[str], Optional[str]]:
+                """Parse Oregon address to extract city, zip_code, and address_state."""
+                if pd.isna(address_str):
+                    return None, None, None
+                
+                address = str(address_str).strip()
+                
+                # Oregon format: "Street Address, City, State ZIP"
+                # Look for state and zip at end, but avoid directional abbreviations
+                state_zip_match = re.search(r',\s*([A-Z]{2})\s*,?\s*(\d{5}(?:-\d{4})?)\s*$', address)
+                if state_zip_match:
+                    state = state_zip_match.group(1)
+                    zip_code = state_zip_match.group(2)
+                    
+                    # Only accept valid state codes (avoid NE, SE, NW, SW, etc.)
+                    valid_states = {'OR', 'WA', 'CA', 'ID', 'NV', 'MT', 'WY', 'UT', 'AZ', 'CO', 'NM', 'TX', 'OK', 'KS', 'NE', 'SD', 'ND', 'MN', 'IA', 'MO', 'AR', 'LA', 'MS', 'AL', 'GA', 'FL', 'SC', 'NC', 'TN', 'KY', 'VA', 'WV', 'MD', 'DE', 'PA', 'NJ', 'NY', 'CT', 'RI', 'MA', 'VT', 'NH', 'ME', 'AK', 'HI', 'DC'}
+                    
+                    if state in valid_states:
+                        # Extract city (everything between last two commas)
+                        parts = address.split(',')
+                        if len(parts) >= 3:
+                            city = parts[-3].strip()  # Second to last part before state
+                        else:
+                            city = None
+                        
+                        return city, zip_code, state
+                
+                # Fallback: look for state and zip anywhere, but be more restrictive
+                state_match = re.search(r'\b([A-Z]{2})\s+(\d{5}(?:-\d{4})?)\b', address)
+                if state_match:
+                    state = state_match.group(1)
+                    zip_code = state_match.group(2)
+                    
+                    # Only accept valid state codes
+                    valid_states = {'OR', 'WA', 'CA', 'ID', 'NV', 'MT', 'WY', 'UT', 'AZ', 'CO', 'NM', 'TX', 'OK', 'KS', 'NE', 'SD', 'ND', 'MN', 'IA', 'MO', 'AR', 'LA', 'MS', 'AL', 'GA', 'FL', 'SC', 'NC', 'TN', 'KY', 'VA', 'WV', 'MD', 'DE', 'PA', 'NJ', 'NY', 'CT', 'RI', 'MA', 'VT', 'NH', 'ME', 'AK', 'HI', 'DC'}
+                    
+                    if state in valid_states:
+                        # Try to extract city (everything before state)
+                        before_state = address[:state_match.start()].strip()
+                        if before_state:
+                            # Remove trailing commas and clean up
+                            city = before_state.rstrip(',').strip()
+                            # If city contains street address, try to extract just the city part
+                            if ',' in city:
+                                city_parts = city.split(',')
+                                city = city_parts[-1].strip()  # Take the last part as city
+                        else:
+                            city = None
+                        
+                        return city, zip_code, state
+                
+                return None, None, None
+            
+            address_results = df['Mailing Address'].apply(parse_address_components)
+            df['city'] = [result[0] for result in address_results]
+            df['zip_code'] = [result[1] for result in address_results]
+            df['address_state'] = [result[2] for result in address_results]
+        else:
+            df['city'] = pd.NA
+            df['zip_code'] = pd.NA
+            df['address_state'] = pd.NA
         
         return df
     
@@ -559,13 +614,33 @@ class OregonCleaner:
         
         # Add missing columns with None values
         required_columns = [
-            'id', 'stable_id', 'county', 'city', 'zip_code', 'address_state', 'filing_date', 
+            'id', 'stable_id', 'county', 'filing_date', 
             'election_date', 'facebook', 'twitter', 'prefix', 'suffix', 'nickname'
         ]
         
         for col in required_columns:
             if col not in df.columns:
                 df[col] = pd.NA
+        
+        # Map filing_date from Date Filed
+        if 'Date Filed' in df.columns:
+            def parse_filing_date(filing_str: str) -> str:
+                """Parse filing date from Oregon format YYYY-MM-DD."""
+                if pd.isna(filing_str):
+                    return None
+                
+                filing_str = str(filing_str).strip()
+                
+                try:
+                    # Parse and standardize date format
+                    date_obj = pd.to_datetime(filing_str)
+                    return date_obj.strftime('%Y-%m-%d')
+                except:
+                    return filing_str
+            
+            df['filing_date'] = df['Date Filed'].apply(parse_filing_date)
+        else:
+            df['filing_date'] = pd.NA
         
         # Set id to empty string (will be generated later in process)
         df['id'] = ""
@@ -732,9 +807,16 @@ def clean_oregon_candidates(input_file: str, output_file: str = None, output_dir
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         output_file = os.path.join(output_dir, f"{base_name}_cleaned_{timestamp}.xlsx")
     
+    # Ensure output file has proper extension and is in the output directory
+    if not output_file.endswith('.xlsx'):
+        if not output_file.endswith('.'):
+            output_file += '.xlsx'
+        else:
+            output_file = output_file.rstrip('.') + '.xlsx'
+    
     # Ensure output file is in the output directory
-    if not os.path.dirname(output_file):
-        output_file = os.path.join(output_dir, output_file)
+    if not os.path.dirname(output_file) or os.path.dirname(output_file) == '.':
+        output_file = os.path.join(output_dir, os.path.basename(output_file))
     
     # Save the cleaned data
     logger.info(f"Saving cleaned data to {output_file}...")

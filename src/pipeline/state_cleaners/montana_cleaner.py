@@ -58,9 +58,12 @@ class MontanaCleaner:
         """Remove original columns that have been replaced by cleaned versions."""
         logger.info("Removing duplicate columns...")
         
-        # Columns to remove (original versions) - adjust based on Montana data structure
+        # Columns to remove (original versions) - Montana 2020-2024
         columns_to_remove = [
-            'Election', 'Office', 'Name', 'Party', 'Address', 'Email', 'Website', 'Phone Number'
+            'Election', 'Office', 'Name', 'Party', 'Address', 'Email', 'Website', 'Phone Number',
+            'Filing Status', 'Mailing Address', 'City', 'State', 'Zip', 'Phone', 'Web Address',
+            'Filing Date', 'Status', 'District Type', 'District', 'Race', 'Term Type', 'Term Length',
+            'Email/Web Address', 'Party Preference', 'Ballot Order'
         ]
         
         # Only remove if they exist and we have cleaned versions
@@ -594,56 +597,46 @@ class MontanaCleaner:
             cleaned = re.sub(r'\s+', ' ', cleaned)
             return cleaned
         
-        # Apply cleaning - adjust column names based on Montana data structure
-        phone_column = 'Phone Number' if 'Phone Number' in df.columns else 'phone'
-        email_column = 'Email' if 'Email' in df.columns else 'email'
-        address_column = 'Address' if 'Address' in df.columns else 'address'
-        website_column = 'Website' if 'Website' in df.columns else 'website'
+        # Apply cleaning with Montana column mapping
+        # Phone
+        if 'Phone' in df.columns:
+            df['phone'] = df['Phone'].apply(clean_phone)
+        else:
+            df['phone'] = pd.NA
+            
+        # Email
+        if 'Email' in df.columns:
+            df['email'] = df['Email'].apply(clean_email)
+        else:
+            df['email'] = pd.NA
+            
+        # Address
+        if 'Mailing Address' in df.columns:
+            df['address'] = df['Mailing Address'].apply(clean_address)
+        else:
+            df['address'] = pd.NA
+            
+        # Website
+        if 'Web Address' in df.columns:
+            df['website'] = df['Web Address'].apply(lambda x: str(x).strip() if pd.notna(x) else None)
+        else:
+            df['website'] = pd.NA
         
-        if phone_column in df.columns:
-            df['phone'] = df[phone_column].apply(clean_phone)
+        # Map city, zip_code, and address_state from Montana's separate fields
+        if 'City' in df.columns:
+            df['city'] = df['City'].apply(lambda x: str(x).strip() if pd.notna(x) else None)
         else:
+            df['city'] = pd.NA
             
-            
-            
-            
-            df['phone'] = None
-            
-        if email_column in df.columns:
-            df['email'] = df[email_column].apply(clean_email)
+        if 'Zip' in df.columns:
+            df['zip_code'] = df['Zip'].apply(lambda x: str(x).strip() if pd.notna(x) else None)
         else:
+            df['zip_code'] = pd.NA
             
-            
-            
-            
-            df['email'] = None
-            
-        if address_column in df.columns:
-            df['address'] = df[address_column].apply(clean_address)
+        if 'State' in df.columns:
+            df['address_state'] = df['State'].apply(lambda x: str(x).strip() if pd.notna(x) else None)
         else:
-            
-            
-            
-            
-            df['address'] = None
-            
-        if website_column in df.columns:
-            df['website'] = df[website_column].apply(lambda x: str(x).strip() if pd.notna(x) else None)
-        else:
-            
-            
-            
-            
-            df['website'] = None
-        
-        # Derive address_state from address when possible
-        def extract_state(addr: Optional[str]) -> Optional[str]:
-            if addr is None or pd.isna(addr):
-                return None
-            s = str(addr)
-            m = re.search(r"\b([A-Z]{2})\s+\d{5}(?:-\d{4})?\b", s)
-            return m.group(1) if m else None
-        df['address_state'] = df['address'].apply(extract_state)
+            df['address_state'] = pd.NA
         
         return df
     
@@ -662,12 +655,31 @@ class MontanaCleaner:
         df['original_state'] = df['state'].copy()
         df['original_election_year'] = df['election_year'].copy()
         df['original_office'] = df[office_column].copy() if office_column in df.columns else None
-        df['original_filing_date'] = pd.NA  # Not available in Montana data
+        # Map filing date from Montana data
+        if 'Filing Date' in df.columns:
+            def parse_filing_date(filing_str: str) -> str:
+                """Parse filing date from Montana format MM/DD/YYYY."""
+                if pd.isna(filing_str):
+                    return None
+                
+                filing_str = str(filing_str).strip()
+                
+                try:
+                    # Parse and standardize date format
+                    date_obj = pd.to_datetime(filing_str, format='%m/%d/%Y')
+                    return date_obj.strftime('%Y-%m-%d')
+                except:
+                    return filing_str
+            
+            df['filing_date'] = df['Filing Date'].apply(parse_filing_date)
+            df['original_filing_date'] = df['Filing Date'].copy()
+        else:
+            df['filing_date'] = pd.NA
+            df['original_filing_date'] = pd.NA
         
         # Add missing columns with None values
         required_columns = [
-            'id', 'stable_id', 'county', 'city', 'zip_code', 'address_state', 'filing_date', 
-            'election_date', 'facebook', 'twitter', 'prefix', 'suffix', 'nickname'
+            'id', 'stable_id', 'county', 'election_date', 'facebook', 'twitter', 'prefix', 'suffix', 'nickname'
         ]
         
         for col in required_columns:

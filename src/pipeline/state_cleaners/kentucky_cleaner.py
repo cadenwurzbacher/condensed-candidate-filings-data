@@ -162,13 +162,19 @@ class KentuckyCleaner:
         # Step 4: Standardize party names
         cleaned_df = self._standardize_parties(cleaned_df)
         
-        # Step 5: Fix Kentucky-specific address issues
+        # Step 5: Clean contact information (including location parsing)
+        cleaned_df = self._clean_contact_info(cleaned_df)
+        
+        # Step 6: Fix Kentucky-specific address issues
         cleaned_df = self._fix_kentucky_addresses(cleaned_df)
         
-        # Step 6: Remove duplicate columns
+        # Step 7: Add required columns for final schema
+        cleaned_df = self._add_required_columns(cleaned_df)
+        
+        # Step 8: Remove duplicate columns
         cleaned_df = self._remove_duplicate_columns(cleaned_df)
         
-        # Step 7: Final validation and cleanup
+        # Step 9: Final validation and cleanup
         cleaned_df = self._final_validation(cleaned_df)
         
         logger.info(f"Kentucky data cleaning completed. Final record count: {len(cleaned_df)}")
@@ -538,36 +544,86 @@ class KentuckyCleaner:
         """Clean contact information (phone, email, address, website)."""
         logger.info("Cleaning contact information...")
         
-        # Clean addresses from location column
-        def clean_address(address_str: str) -> str:
-            if pd.isna(address_str):
-                return None
+        # Parse location column to extract city, county, and district
+        def parse_location(location_str: str) -> Tuple[Optional[str], Optional[str], Optional[str]]:
+            """Parse Kentucky location field to extract city, county, and district."""
+            if pd.isna(location_str):
+                return None, None, None
             
-            # Remove extra whitespace and quotes
-            cleaned = str(address_str).strip().strip('"\'')
-            # Remove multiple spaces
-            cleaned = re.sub(r'\s+', ' ', cleaned)
-            return cleaned
+            location = str(location_str).strip()
+            
+            # Pattern 1: "City-County" (e.g., "Glasgow-Barren")
+            if '-' in location and 'District' not in location and 'County' not in location:
+                parts = location.split('-', 1)
+                if len(parts) == 2:
+                    city = parts[0].strip()
+                    county = parts[1].strip()
+                    district = None
+                    return city, county, district
+            
+            # Pattern 2: "City-District X" (e.g., "Laurel-District 6")
+            district_match = re.search(r'(.+)-District\s*(\d+)', location, re.IGNORECASE)
+            if district_match:
+                city = district_match.group(1).strip()
+                number = int(district_match.group(2))
+                # Convert to proper ordinal
+                if 10 <= number % 100 <= 20:
+                    suffix = 'th'
+                else:
+                    suffix = {1: 'st', 2: 'nd', 3: 'rd'}.get(number % 10, 'th')
+                district = f"District {number}"  # Store just "District X" in district column
+                county = None
+                return city, county, district
+            
+            # Pattern 3: "City-Xth Ward-County" (e.g., "Hopkinsville-12th Ward-Christian")
+            ward_match = re.search(r'(.+)-(\d+)(?:st|nd|rd|th)\s*Ward-(.+)', location, re.IGNORECASE)
+            if ward_match:
+                city = ward_match.group(1).strip()
+                ward_num = ward_match.group(2)
+                district = f"Ward {ward_num}"  # Store as "Ward X" in district column
+                county = ward_match.group(3).strip()
+                return city, county, district
+            
+            # Pattern 4: "Xth District" (e.g., "52nd District")
+            district_only_match = re.search(r'(\d+)(?:st|nd|rd|th)\s*District', location, re.IGNORECASE)
+            if district_only_match:
+                number = int(district_only_match.group(1))
+                district = f"District {number}"  # Store just "District X" in district column
+                city = None
+                county = None
+                return city, county, district
+            
+            # Pattern 5: "County" only (e.g., "Pulaski")
+            if not any(char in location for char in ['-', 'District', 'Ward']):
+                county = location.strip()
+                city = None
+                district = None
+                return city, county, district
+            
+            # Default: no match
+            return None, None, None
         
         # Kentucky data doesn't have phone, email, or website, so set to NULL
         df['phone'] = pd.NA
         df['email'] = pd.NA
         df['website'] = pd.NA
         
-        # Map location column to address if available
+        # Parse location and extract components
         if 'location' in df.columns:
-            df['address'] = df['location'].apply(clean_address)
+            location_results = df['location'].apply(parse_location)
+            df['city'] = [result[0] for result in location_results]
+            df['county'] = [result[1] for result in location_results]
+            df['district'] = [result[2] for result in location_results]
         else:
-            df['address'] = pd.NA
+            df['city'] = pd.NA
+            df['county'] = pd.NA
+            df['district'] = pd.NA
         
-        # Derive address_state from address when available
-        def extract_state_from_address(addr: Optional[str]) -> Optional[str]:
-            if addr is None or pd.isna(addr):
-                return None
-            s = str(addr)
-            m = re.search(r"\b([A-Z]{2})\s+\d{5}(?:-\d{4})?\b", s)
-            return m.group(1) if m else None
-        df['address_state'] = df['address'].apply(extract_state_from_address)
+        # Kentucky doesn't have street addresses - set to null
+        df['address'] = pd.NA
+        
+        # Set address_state to "KY" for all Kentucky records
+        df['address_state'] = "KY"
         
         return df
     
@@ -593,7 +649,7 @@ class KentuckyCleaner:
         
         # Add missing columns with None values
         required_columns = [
-            'id', 'stable_id', 'county', 'city', 'zip_code', 'address_state', 'filing_date', 
+            'id', 'stable_id', 'zip_code', 'filing_date', 
             'election_date', 'facebook', 'twitter'
         ]
         

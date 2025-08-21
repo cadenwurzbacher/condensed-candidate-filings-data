@@ -1,0 +1,104 @@
+#!/usr/bin/env python3
+"""
+Test script to check North Carolina data issues and test fixes.
+"""
+
+import sys
+import os
+sys.path.append('.')
+
+import pandas as pd
+from src.pipeline.state_cleaners.north_carolina_cleaner import clean_north_carolina_candidates
+
+def test_north_carolina_fix():
+    """Test North Carolina cleaner fixes."""
+    print("=== TESTING NORTH CAROLINA CLEANER FIX ===")
+    
+    # Test with 2025 data first
+    input_file = "data/raw/north_carolina_candidates_2025.csv"
+    print(f"Testing with: {input_file}")
+    
+    if not os.path.exists(input_file):
+        print(f"Error: Input file {input_file} not found!")
+        return
+    
+    # Check raw data structure
+    print("\n--- RAW DATA STRUCTURE ---")
+    raw_df = pd.read_csv(input_file, encoding='latin-1')
+    print(f"Raw data shape: {raw_df.shape}")
+    print(f"Raw columns: {raw_df.columns.tolist()}")
+    
+    # Check sample data
+    print("\n--- SAMPLE RAW DATA ---")
+    print(raw_df.head(3).to_string())
+    
+    # Check key columns
+    print("\n--- KEY COLUMNS CHECK ---")
+    key_cols = ['candidacy_dt', 'county_name', 'street_address', 'city', 'state', 'zip_code']
+    for col in key_cols:
+        if col in raw_df.columns:
+            non_null = raw_df[col].notna().sum()
+            total = len(raw_df)
+            print(f"{col}: {non_null}/{total} ({non_null/total*100:.1f}%)")
+        else:
+            print(f"{col}: NOT FOUND")
+    
+    # Check specific issues mentioned in audit
+    print("\n--- SPECIFIC ISSUES CHECK ---")
+    if 'candidacy_dt' in raw_df.columns:
+        print(f"candidacy_dt sample values: {raw_df['candidacy_dt'].dropna().head(5).tolist()}")
+    
+    if 'county_name' in raw_df.columns:
+        print(f"county_name sample values: {raw_df['county_name'].dropna().head(5).tolist()}")
+    
+    if 'street_address' in raw_df.columns:
+        print(f"street_address sample values: {raw_df['street_address'].dropna().head(5).tolist()}")
+    
+    if 'city' in raw_df.columns:
+        print(f"city sample values: {raw_df['city'].dropna().head(5).tolist()}")
+    
+    if 'state' in raw_df.columns:
+        print(f"state sample values: {raw_df['state'].dropna().head(5).tolist()}")
+    
+    # Run cleaner
+    print("\n--- RUNNING NORTH CAROLINA CLEANER ---")
+    try:
+        cleaned_df = clean_north_carolina_candidates(input_file, "data/processed")
+        print("Cleaner completed successfully!")
+        
+        print(f"\nCleaned data shape: {cleaned_df.shape}")
+        
+        # Check key fields
+        print("\n--- CLEANED DATA QUALITY ---")
+        key_fields = ['office', 'district', 'party', 'filing_date', 'address', 'city', 'county', 'zip_code', 'address_state']
+        for field in key_fields:
+            if field in cleaned_df.columns:
+                non_null = cleaned_df[field].notna().sum()
+                total = len(cleaned_df)
+                print(f"{field}: {non_null}/{total} ({non_null/total*100:.1f}%)")
+            else:
+                print(f"{field}: NOT FOUND")
+        
+        # Check address_state specifically
+        if 'address_state' in cleaned_df.columns:
+            print(f"\nAddress state values:")
+            state_counts = cleaned_df['address_state'].value_counts().head(10)
+            for state, count in state_counts.items():
+                print(f"  {state}: {count}")
+        
+        # Sample results
+        print(f"\nSample parsed results:")
+        sample_cols = ['office', 'district', 'party', 'filing_date', 'city', 'address_state', 'address', 'county']
+        available_cols = [col for col in sample_cols if col in cleaned_df.columns]
+        if available_cols:
+            sample_data = cleaned_df[available_cols].head(3)
+            for idx, row in sample_data.iterrows():
+                print(f"  Row {idx}: " + ", ".join([f"{col}='{row[col]}'" for col in available_cols]))
+        
+    except Exception as e:
+        print(f"Error running cleaner: {e}")
+        import traceback
+        traceback.print_exc()
+
+if __name__ == "__main__":
+    test_north_carolina_fix()

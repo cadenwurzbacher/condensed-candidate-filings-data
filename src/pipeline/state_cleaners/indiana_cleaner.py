@@ -562,13 +562,19 @@ class IndianaCleaner:
         
         # Add missing columns with None values
         required_columns = [
-            'id', 'stable_id', 'county', 'city', 'zip_code', 'address_state', 'filing_date', 
+            'id', 'stable_id', 'county', 'city', 'zip_code', 'address_state', 
             'election_date', 'facebook', 'twitter', 'prefix', 'suffix', 'nickname'
         ]
         
         for col in required_columns:
             if col not in df.columns:
                 df[col] = pd.NA
+        
+        # Map Date Filed to filing_date
+        if 'Date Filed' in df.columns:
+            df['filing_date'] = df['Date Filed']
+        else:
+            df['filing_date'] = pd.NA
         
         # Set id to empty string (will be generated later in process)
         df['id'] = ""

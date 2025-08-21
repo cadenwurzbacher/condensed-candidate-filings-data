@@ -75,9 +75,13 @@ class NewYorkCleaner:
         """Remove original columns that have been replaced by cleaned versions."""
         logger.info("Removing duplicate columns...")
         
-        # Columns to remove (original versions)
+        # Columns to remove (original versions) - New York 1982-2024 (after renaming)
         columns_to_remove = [
-            'Election', 'Office', 'Name', 'Party', 'Address', 'Email', 'Website', 'Phone Number'
+            'Election', 'Office', 'Name', 'Party', 'Email', 'Website', 'Phone Number',
+            'Filer Type', 'Compliance Type', 'Committee Type', 'Filer ID', 'District', 'County',
+            'Address_Date', 'Filing_Date', 'Termination Date', 'Status', 'Candidate Name',
+            'Election Year', 'Candidate Office', 'Candidate District', 'Purpose Type',
+            'Candidate_Filing_Date', 'Candidate Termination Date'
         ]
         
         # Only remove if they exist and we have cleaned versions
@@ -196,42 +200,55 @@ class NewYorkCleaner:
     def _process_office_and_district(self, df: pd.DataFrame) -> pd.DataFrame:
         """Clean and standardize office and district information."""
         logger.info("Processing office and district information...")
-        
-        def process_office_district(office_str: str) -> Tuple[str, Optional[str]]:
-            if pd.isna(office_str):
-                return None, None
-            
-            office_str = str(office_str).strip()
-            
-            # Handle US President/Vice President
-            if "US PRESIDENT" in office_str or "US VICE PRESIDENT" in office_str:
-                return "US President", None
-            
-            # Handle US Representative
-            if "UNITED STATES REPRESENTATIVE" in office_str:
-                return "US Representative", "At Large"
-            
-            # Handle Senate districts
-            senate_match = re.match(r'SENATE DISTRICT ([A-Z])', office_str)
-            if senate_match:
-                district = senate_match.group(1)
-                return "State Senate", district
-            
-            # Handle House districts
-            house_match = re.match(r'HOUSE DISTRICT (\d+)', office_str)
-            if house_match:
-                district = house_match.group(1)
-                return "State House", district
-            
-            # Handle other offices (keep as is)
-            return office_str, None
-        
-        # Apply office and district processing
-        office_results = df['Office'].apply(process_office_district)
-        df['office'] = [result[0] for result in office_results]
-        df['district'] = [result[1] for result in office_results]
-        df['district'] = df['district'].astype('object')
-        
+
+        # Choose best available columns
+        office_source_col = 'Office' if 'Office' in df.columns else None
+        candidate_office_col = 'Candidate Office' if 'Candidate Office' in df.columns else None
+        district_source_col = 'District' if 'District' in df.columns else None
+        candidate_district_col = 'Candidate District' if 'Candidate District' in df.columns else None
+
+        def _looks_numeric(value: object) -> bool:
+            try:
+                s = str(value).strip()
+                if s == "":
+                    return False
+                # pure digits or float-like
+                float(s)
+                return True
+            except Exception:
+                return False
+
+        def choose_office(row) -> Optional[str]:
+            primary = row.get(office_source_col) if office_source_col else pd.NA
+            secondary = row.get(candidate_office_col) if candidate_office_col else pd.NA
+            # Prefer primary textual office
+            if pd.notna(primary) and str(primary).strip():
+                return str(primary).strip()
+            # Fallback to candidate office only if it is non-numeric text
+            if pd.notna(secondary) and str(secondary).strip() and not _looks_numeric(secondary):
+                return str(secondary).strip()
+            return None
+
+        def choose_district(row) -> Optional[str]:
+            primary = row.get(district_source_col) if district_source_col else pd.NA
+            secondary = row.get(candidate_district_col) if candidate_district_col else pd.NA
+            val = primary if pd.notna(primary) and str(primary).strip() else secondary
+            if pd.isna(val) or val is None or str(val).strip() == "":
+                return None
+            # Normalize numeric-like districts (floats -> ints -> str)
+            try:
+                # Some CSVs read as floats like 31.0
+                num = float(val)
+                if num.is_integer():
+                    return str(int(num))
+                return str(val)
+            except Exception:
+                return str(val).strip()
+
+        # Derive office/district
+        df['office'] = df.apply(choose_office, axis=1)
+        df['district'] = df.apply(choose_district, axis=1).astype('object')
+
         return df
     
     def _process_full_name_displays(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -539,40 +556,100 @@ class NewYorkCleaner:
                 return None
             
             # Remove extra whitespace and quotes
-            cleaned = str(address_str).strip().strip('"\'')
+            cleaned = str(address_str).strip().strip("\"'")
             # Remove multiple spaces
             cleaned = re.sub(r'\s+', ' ', cleaned)
+            # Only remove PO Box if it appears after a street address (not if it's the only address)
+            # Look for patterns like "Street Address P.O. Box XXXX" but keep "P.O. Box XXXX"
+            po_box_patterns = [
+                r'^(.+?)\s+P\.?O\.?\s*Box\s+[A-Z0-9]+.*$',
+                r'^(.+?)\s+Post\s+Office\s+Box\s+[A-Z0-9]+.*$',
+                r'^(.+?)\s+Box\s+[A-Z0-9]+.*$'
+            ]
+            for pattern in po_box_patterns:
+                match = re.search(pattern, cleaned, re.IGNORECASE)
+                if match and match.group(1).strip():  # Only if there's content before PO Box
+                    cleaned = match.group(1).strip()
+                    break
             return cleaned
         
-        # Apply cleaning - handle different column names
-        if 'Phone Number' in df.columns:
-            df['phone'] = df['Phone Number'].apply(clean_phone)
-        else:
-            df['phone'] = pd.NA
-            
-        if 'Email' in df.columns:
-            df['email'] = df['Email'].apply(clean_email)
-        else:
-            df['email'] = pd.NA
-            
+        # Apply cleaning with New York column mapping
+        # New York doesn't have phone, email, or website data
+        df['phone'] = pd.NA
+        df['email'] = pd.NA
+        df['website'] = pd.NA
+        
+        # Parse address to extract components
+        # Now using the renamed 'Address' column (was 'Municipality')
         if 'Address' in df.columns:
             df['address'] = df['Address'].apply(clean_address)
+            
+            # Parse city, zip_code, and address_state from Address field
+            def parse_address_components(address_str: str) -> Tuple[Optional[str], Optional[str], Optional[str]]:
+                """Parse New York address to extract city, zip_code, and address_state.
+                Heuristics:
+                  - Prefer pattern ending with STATE ZIP
+                  - City = tokens immediately before STATE that are likely city words (no digits, not street types)
+                """
+                if pd.isna(address_str):
+                    return None, None, None
+
+                address = str(address_str).strip()
+
+                # Fallback: look for state and zip at end and then derive city by walking tokens backwards
+                state_zip_match = re.search(r'\b([A-Z]{2})\s+(\d{5}(?:-\d{4})?)\s*$', address)
+                if state_zip_match:
+                    state = state_zip_match.group(1)
+                    zip_code = state_zip_match.group(2)
+                    before = address[:state_zip_match.start()].strip()
+                    tokens = before.split()
+                    # Normalize street-type tokens
+                    street_types = {
+                        'st','st.','street','ave','ave.','avenue','blvd','blvd.','road','rd','rd.','dr','dr.','pl','pl.','plz','plz.',
+                        'way','hwy','highway','ln','ln.','lane','ct','ct.','circle','cir','cir.','terrace','ter','ter.','parkway','pkwy','pkwy.'
+                    }
+                    city_parts: List[str] = []
+                    # Walk backwards to collect city tokens until a street-type or numeric token
+                    for tok in reversed(tokens):
+                        low = tok.lower().strip(',')
+                        if any(ch.isdigit() for ch in tok) or low in street_types:
+                            break
+                        # Stop if token looks like unit designator
+                        if low in {'apt','apt.','suite','ste','ste.','#','unit'}:
+                            break
+                        city_parts.insert(0, tok.strip(',').strip())
+                    # If we captured too many (e.g., included part of street), trim to last 1-2 tokens
+                    if len(city_parts) > 2:
+                        city_parts = city_parts[-2:]
+                    city = ' '.join(city_parts) if city_parts else None
+                    return city, zip_code, state
+
+                return None, None, None
+            
+            address_results = df['Address'].apply(parse_address_components)
+            df['city'] = [result[0] for result in address_results]
+            df['zip_code'] = [result[1] for result in address_results]
+            df['address_state'] = [result[2] for result in address_results]
         else:
             df['address'] = pd.NA
-            
-        if 'Website' in df.columns:
-            df['website'] = df['Website'].apply(lambda x: str(x).strip() if pd.notna(x) else None)
-        else:
-            df['website'] = pd.NA
+            df['city'] = pd.NA
+            df['zip_code'] = pd.NA
+            df['address_state'] = pd.NA
         
-        # Derive address_state from address when possible
-        def extract_state(addr: Optional[str]) -> Optional[str]:
-            if addr is None or pd.isna(addr):
-                return None
-            s = str(addr)
-            m = re.search(r"\b([A-Z]{2})\s+\d{5}(?:-\d{4})?\b", s)
-            return m.group(1) if m else None
-        df['address_state'] = df['address'].apply(extract_state)
+        # Set address_state to "NY" for all New York records (fallback)
+        df['address_state'] = df['address_state'].fillna("NY")
+        
+        # Map county from New York data
+        if 'County' in df.columns:
+            def clean_county(val: object) -> Optional[str]:
+                if pd.isna(val):
+                    return None
+                s = str(val).strip()
+                s = re.sub(r',?\s*(County|City)$', '', s, flags=re.IGNORECASE).strip()
+                return s if s else None
+            df['county'] = df['County'].apply(clean_county)
+        else:
+            df['county'] = pd.NA
         
         return df
     
@@ -584,11 +661,40 @@ class NewYorkCleaner:
         df['state'] = self.state_name
         
         # Add original data preservation columns
-        df['original_name'] = df['Name'].copy()
+        # Prefer Name, fallback to Candidate Name for original_name
+        if 'Name' in df.columns and 'Candidate Name' in df.columns:
+            df['original_name'] = df['Name']
+            df['original_name'] = df['original_name'].fillna(df['Candidate Name'])
+        elif 'Name' in df.columns:
+            df['original_name'] = df['Name'].copy()
+        elif 'Candidate Name' in df.columns:
+            df['original_name'] = df['Candidate Name'].copy()
+        else:
+            df['original_name'] = pd.NA
         df['original_state'] = df['state'].copy()
         df['original_election_year'] = df['election_year'].copy()
         df['original_office'] = df['Office'].copy()
-        df['original_filing_date'] = pd.NA  # Not available in New York data
+        # Map filing date from New York data
+        if 'Filing_Date' in df.columns:
+            def parse_filing_date(filing_str: str) -> str:
+                """Parse filing date from New York format MM/DD/YYYY."""
+                if pd.isna(filing_str):
+                    return None
+                
+                filing_str = str(filing_str).strip()
+                
+                try:
+                    # Parse and standardize date format
+                    date_obj = pd.to_datetime(filing_str, format='%m/%d/%Y')
+                    return date_obj.strftime('%Y-%m-%d')
+                except:
+                    return filing_str
+            
+            df['filing_date'] = df['Filing_Date'].apply(parse_filing_date)
+            df['original_filing_date'] = df['Filing_Date'].copy()
+        else:
+            df['filing_date'] = pd.NA
+            df['original_filing_date'] = pd.NA
         
         # Add candidate_name column (same as full_name_display, with fallback to original_name)
         df['candidate_name'] = df['full_name_display'].copy()
@@ -596,8 +702,7 @@ class NewYorkCleaner:
         
         # Add missing columns with None values
         required_columns = [
-            'id', 'stable_id', 'county', 'city', 'zip_code', 'address_state', 'filing_date', 
-            'election_date', 'facebook', 'twitter', 'prefix', 'suffix', 'nickname'
+            'id', 'stable_id', 'election_date', 'facebook', 'twitter', 'prefix', 'suffix', 'nickname'
         ]
         
         for col in required_columns:
@@ -757,7 +862,22 @@ def clean_new_york_candidates(input_file: str, output_dir: str = DEFAULT_OUTPUT_
     
     # Handle both CSV and Excel files
     if input_file.endswith('.csv'):
-        df = pd.read_csv(input_file)
+        df = pd.read_csv(input_file, low_memory=False)
+        
+        # Fix column names for New York CSV (columns are misaligned)
+        # The 'Address' column actually contains dates, 'Municipality' contains addresses
+        # Rename columns to be more intuitive
+        column_mapping = {
+            'Municipality': 'Address',  # Municipality contains the real addresses
+            'Address': 'Address_Date',  # Address column contains dates (misleading name)
+            'Registration Date': 'Filing_Date',  # More descriptive name
+            'Candidate Registration Date': 'Candidate_Filing_Date'  # More descriptive name
+        }
+        
+        # Rename the columns
+        df = df.rename(columns=column_mapping)
+        
+        logger.info("Fixed New York CSV column names for clarity")
     else:
         df = pd.read_excel(input_file)
     

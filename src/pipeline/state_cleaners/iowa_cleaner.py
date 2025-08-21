@@ -44,6 +44,30 @@ class IowaCleaner:
         if not os.path.exists(self.output_dir):
             os.makedirs(self.output_dir)
             logger.info(f"Created output directory: {self.output_dir}")
+    
+    def _preprocess_iowa_format(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Preprocess Iowa data to handle the weird format with blank office cells."""
+        logger.info("Preprocessing Iowa data format...")
+        
+        # Step 1: Fill in blank office cells by forward-filling from row above
+        logger.info("Filling in blank office cells...")
+        df['Office'] = df['Office'].ffill()
+        
+        # Step 2: Filter out rows where candidate name is "No Candidate"
+        logger.info("Filtering out 'No Candidate' rows...")
+        initial_count = len(df)
+        df = df[~df['Ballot Name(s)'].str.contains('No Candidate', na=False)]
+        filtered_count = len(df)
+        logger.info(f"Filtered out {initial_count - filtered_count} 'No Candidate' rows")
+        
+        # Step 3: Convert "-" values to null across all columns
+        logger.info("Converting '-' values to null...")
+        for col in df.columns:
+            if df[col].dtype == 'object':  # Only process string columns
+                df.loc[:, col] = df[col].replace('-', pd.NA)
+        
+        logger.info(f"Preprocessing completed. Shape after preprocessing: {df.shape}")
+        return df
         
     def ensure_column_order(self, df: pd.DataFrame) -> pd.DataFrame:
         """Ensure columns match Alaska's exact order."""
@@ -68,10 +92,13 @@ class IowaCleaner:
         
         cleaned_df = df.copy()
         
-        # Step 1: Handle election year and type
+        # Step 1: Preprocess Iowa-specific data format issues
+        cleaned_df = self._preprocess_iowa_format(cleaned_df)
+        
+        # Step 2: Handle election year and type
         cleaned_df = self._process_election_data(cleaned_df, filename)
         
-        # Step 2: Clean and standardize office and district information
+        # Step 3: Clean and standardize office and district information
         cleaned_df = self._process_office_and_district(cleaned_df)
         
         # Step 3: Clean candidate names
@@ -509,11 +536,17 @@ class IowaCleaner:
         df['original_state'] = df['state'].copy()
         df['original_election_year'] = df['election_year'].copy()
         df['original_office'] = df['Office'].copy()
-        df['original_filing_date'] = pd.NA
+        # Map Filing Date to filing_date
+        if 'Filing Date' in df.columns:
+            df['original_filing_date'] = df['Filing Date'].copy()
+            df['filing_date'] = df['Filing Date'].copy()
+        else:
+            df['original_filing_date'] = pd.NA
+            df['filing_date'] = pd.NA
         
         # Add missing columns with None values
         required_columns = [
-            'id', 'stable_id', 'county', 'city', 'zip_code', 'filing_date', 
+            'id', 'stable_id', 'county', 'city', 'zip_code', 
             'election_date', 'facebook', 'twitter', 'prefix', 'suffix', 'nickname'
         ]
         

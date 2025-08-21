@@ -242,6 +242,20 @@ class NorthCarolinaCleaner:
                 district = house_match.group(1)
                 return "State House", district
             
+            # Handle North Carolina specific patterns
+            # Look for DISTRICT XX or WARD XX patterns
+            district_match = re.search(r'(?:DISTRICT|WARD)\s+(\d+)', office_str, re.IGNORECASE)
+            if district_match:
+                district_num = district_match.group(1)
+                # Check if it's a WARD or DISTRICT
+                if 'WARD' in office_str.upper():
+                    district = f"Ward {district_num}"
+                else:
+                    district = district_num
+                # Clean up the office name by removing the district part
+                clean_office = re.sub(r'\s+(?:DISTRICT|WARD)\s+\d+', '', office_str, flags=re.IGNORECASE).strip()
+                return clean_office, district
+            
             # Handle other offices (keep as is)
             return office_str, None
         
@@ -598,7 +612,7 @@ class NorthCarolinaCleaner:
         if 'email' in df.columns:
             df['email'] = df['email'].apply(clean_email)
         elif 'Email' in df.columns:
-            df['email'] = df['Email'].apply(clean_email)
+            df['Email'].apply(clean_email)
         else:
             df['email'] = pd.NA
             
@@ -612,14 +626,36 @@ class NorthCarolinaCleaner:
         # North Carolina doesn't have website data
         df['website'] = pd.NA
         
-        # Derive address_state from address when possible
-        def extract_state(addr: Optional[str]) -> Optional[str]:
-            if addr is None or pd.isna(addr):
-                return None
-            s = str(addr)
-            m = re.search(r"\b([A-Z]{2})\s+\d{5}(?:-\d{4})?\b", s)
-            return m.group(1) if m else None
-        df['address_state'] = df['address'].apply(extract_state)
+        # Map county from county_name column
+        if 'county_name' in df.columns:
+            df['county'] = df['county_name'].apply(lambda x: str(x).strip() if pd.notna(x) else None)
+        else:
+            df['county'] = pd.NA
+        
+        # Map city from city column
+        if 'city' in df.columns:
+            df['city'] = df['city'].apply(lambda x: str(x).strip() if pd.notna(x) else None)
+        else:
+            df['city'] = pd.NA
+        
+        # Map zip_code from zip_code column
+        if 'zip_code' in df.columns:
+            df['zip_code'] = df['zip_code'].apply(lambda x: str(x).strip() if pd.notna(x) else None)
+        else:
+            df['zip_code'] = pd.NA
+        
+        # Map address_state from state column (North Carolina data has explicit state field)
+        if 'state' in df.columns:
+            df['address_state'] = df['state'].apply(lambda x: str(x).strip() if pd.notna(x) else None)
+        else:
+            # Fallback: derive address_state from address when possible
+            def extract_state(addr: Optional[str]) -> Optional[str]:
+                if addr is None or pd.isna(addr):
+                    return None
+                s = str(addr)
+                m = re.search(r"\b([A-Z]{2})\s+\d{5}(?:-\d{4})?\b", s)
+                return m.group(1) if m else None
+            df['address_state'] = df['address'].apply(extract_state)
         
         return df
     
@@ -642,13 +678,35 @@ class NorthCarolinaCleaner:
         
         # Add missing columns with None values
         required_columns = [
-            'id', 'stable_id', 'county', 'city', 'zip_code', 'address_state', 'filing_date', 
+            'id', 'stable_id', 'filing_date', 
             'election_date', 'facebook', 'twitter', 'prefix', 'suffix', 'nickname'
         ]
         
         for col in required_columns:
             if col not in df.columns:
                 df[col] = pd.NA
+        
+        # Map filing_date from candidacy_dt
+        if 'candidacy_dt' in df.columns:
+            def parse_filing_date(filing_str: str) -> str:
+                """Parse filing date from North Carolina format MM/DD/YYYY."""
+                if pd.isna(filing_str):
+                    return None
+                
+                filing_str = str(filing_str).strip()
+                
+                try:
+                    # Parse and standardize date format
+                    date_obj = pd.to_datetime(filing_str, format='%m/%d/%Y')
+                    return date_obj.strftime('%Y-%m-%d')
+                except:
+                    return filing_str
+            
+            df['filing_date'] = df['candidacy_dt'].apply(parse_filing_date)
+            df['original_filing_date'] = df['candidacy_dt'].copy()
+        else:
+            df['filing_date'] = pd.NA
+            df['original_filing_date'] = pd.NA
         
         # Set id to empty string (will be generated later in process)
         df['id'] = ""
@@ -805,7 +863,7 @@ def clean_north_carolina_candidates(input_file: str, output_dir: str = DEFAULT_O
     # Load the data - handle both CSV and Excel files
     logger.info(f"Loading North Carolina data from {input_file}...")
     if input_file.endswith('.csv'):
-        df = pd.read_csv(input_file)
+        df = pd.read_csv(input_file, encoding='latin-1')
     else:
         df = pd.read_excel(input_file)
     

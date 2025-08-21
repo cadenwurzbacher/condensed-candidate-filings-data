@@ -562,14 +562,8 @@ class KansasCleaner:
             
             df['website'] = pd.NA
         
-        # Derive address_state from combined address when present
-        def infer_state_from_address(addr: Optional[str]) -> Optional[str]:
-            if addr is None or pd.isna(addr):
-                return None
-            s = str(addr)
-            m = re.search(r"\b([A-Z]{2})\s+\d{5}(?:-\d{4})?\b", s)
-            return m.group(1) if m else None
-        df['address_state'] = df['address'].apply(infer_state_from_address)
+        # Set address_state to "KS" for all Kansas records
+        df['address_state'] = "KS"
         
         # Extract city and zip separately for the required columns
         if 'Home City' in df.columns:
@@ -589,6 +583,9 @@ class KansasCleaner:
             
             
             df['zip_code'] = pd.NA
+        
+        # Kansas doesn't have county data, so set to null
+        df['county'] = pd.NA
         
         return df
     
@@ -632,7 +629,7 @@ class KansasCleaner:
         
         # Add missing columns with None values
         required_columns = [
-            'id', 'stable_id', 'county', 'address_state', 'filing_date', 'election_date', 'facebook', 'twitter'
+            'id', 'stable_id', 'address_state', 'filing_date', 'election_date', 'facebook', 'twitter'
         ]
         
         for col in required_columns:

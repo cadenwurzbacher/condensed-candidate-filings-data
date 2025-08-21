@@ -184,41 +184,82 @@ class PennsylvaniaCleaner:
         """Clean and standardize office and district information."""
         logger.info("Processing office and district information...")
         
-        def process_office_district(office_str: str) -> Tuple[str, Optional[str]]:
+        def process_office_district(office_str: str, district_str: str) -> Tuple[str, Optional[str]]:
             if pd.isna(office_str):
                 return None, None
             
             office_str = str(office_str).strip()
+            district_str = str(district_str).strip() if pd.notna(district_str) else ""
             
             # Handle US President/Vice President
             if "US PRESIDENT" in office_str or "US VICE PRESIDENT" in office_str:
                 return "US President", None
             
             # Handle US Representative
-            if "UNITED STATES REPRESENTATIVE" in office_str:
-                return "US Representative", "At Large"
+            if "UNITED STATES REPRESENTATIVE" in office_str or "US REPRESENTATIVE" in office_str:
+                # Extract district number if present
+                district_match = re.search(r'DISTRICT (\d+)', office_str, re.IGNORECASE)
+                if district_match:
+                    district = district_match.group(1)
+                else:
+                    district = "At Large"
+                return "US Representative", district
             
-            # Handle Senate districts
-            senate_match = re.match(r'SENATE DISTRICT ([A-Z])', office_str)
+            # Handle US Senate
+            if "UNITED STATES SENATOR" in office_str or "US SENATOR" in office_str:
+                return "US Senator", None
+            
+            # Handle State Senate districts
+            senate_match = re.match(r'STATE SENATE DISTRICT (\d+)', office_str, re.IGNORECASE)
             if senate_match:
                 district = senate_match.group(1)
                 return "State Senate", district
             
-            # Handle House districts
-            house_match = re.match(r'HOUSE DISTRICT (\d+)', office_str)
+            # Handle State House districts
+            house_match = re.match(r'STATE HOUSE DISTRICT (\d+)', office_str, re.IGNORECASE)
             if house_match:
                 district = house_match.group(1)
                 return "State House", district
             
+            # Handle Pennsylvania specific patterns
+            # Look for district info in the District Name column
+            if district_str:
+                # Extract district number from patterns like "6th Congressional District", "19th Legislative District"
+                district_match = re.search(r'(\d+)(?:st|nd|rd|th)\s+(.+?)\s*District', district_str, re.IGNORECASE)
+                if district_match:
+                    district_num = district_match.group(1)
+                    district_type = district_match.group(2).strip()
+                    
+                    # Clean up the office name by removing district info
+                    clean_office = re.sub(r'\s*\d+(?:st|nd|rd|th)\s+.+?\s*District', '', office_str, flags=re.IGNORECASE).strip()
+                    
+                    return clean_office, district_num
+                
+                # Handle other district patterns
+                district_match = re.search(r'(\d+)(?:st|nd|rd|th)\s+(.+?)(?:\s*District)?$', district_str, re.IGNORECASE)
+                if district_match:
+                    district_num = district_match.group(1)
+                    return office_str, district_num
+            
             # Handle other offices (keep as is)
             return office_str, None
         
-        # Apply office and district processing - handle different column names
-        # Pennsylvania files have headers in first row, data starts in second row
-        office_col = 'Election Info' if 'Election Info' in df.columns else 'Office'
-        office_results = df[office_col].apply(process_office_district)
-        df['office'] = [result[0] for result in office_results]
-        df['district'] = [result[1] for result in office_results]
+        # Apply office and district processing
+        office_col = 'Office' if 'Office' in df.columns else None
+        district_col = 'District Name' if 'District Name' in df.columns else None
+        
+        if office_col and district_col:
+            office_district_results = df.apply(lambda row: process_office_district(row[office_col], row[district_col]), axis=1)
+            df['office'] = [result[0] for result in office_district_results]
+            df['district'] = [result[1] for result in office_district_results]
+        elif office_col:
+            # Fallback: just process office without district
+            df['office'] = df[office_col].apply(lambda x: str(x).strip() if pd.notna(x) else None)
+            df['district'] = pd.NA
+        else:
+            df['office'] = pd.NA
+            df['district'] = pd.NA
+        
         df['district'] = df['district'].astype('object')
         
         return df
@@ -559,55 +600,30 @@ class PennsylvaniaCleaner:
         """Clean contact information (phone, email, address, website)."""
         logger.info("Cleaning contact information...")
         
-        # Clean phone numbers
-        def clean_phone(phone_str: str) -> str:
-            if pd.isna(phone_str):
-                return None
-            
-            # Remove all non-digit characters
-            digits = re.sub(r'[^\d]', '', str(phone_str))
-            
-            # Validate US phone number
-            if len(digits) == 10:
-                return digits
-            elif len(digits) == 11 and digits.startswith('1'):
-                return digits[1:]
-            
-            return None
+        # Apply cleaning - Pennsylvania has Municipality and County data
+        # Map Municipality to city
+        if 'Municipality' in df.columns:
+            df['city'] = df['Municipality'].apply(lambda x: str(x).strip() if pd.notna(x) else None)
+        else:
+            df['city'] = pd.NA
         
-        # Clean email addresses
-        def clean_email(email_str: str) -> str:
-            if pd.isna(email_str):
-                return None
-            
-            email = str(email_str).strip().lower()
-            
-            # Basic email validation
-            if '@' in email and '.' in email.split('@')[1]:
-                return email
-            
-            return None
+        # Map County to county
+        if 'County' in df.columns:
+            df['county'] = df['County'].apply(lambda x: str(x).strip() if pd.notna(x) else None)
+        else:
+            df['county'] = pd.NA
         
-        # Clean addresses
-        def clean_address(address_str: str) -> str:
-            if pd.isna(address_str):
-                return None
-            
-            # Remove extra whitespace and quotes
-            cleaned = str(address_str).strip().strip('"\'')
-            # Remove multiple spaces
-            cleaned = re.sub(r'\s+', ' ', cleaned)
-            return cleaned
+        # Pennsylvania doesn't have phone, email, address, website data
+        df['phone'] = pd.NA
+        df['email'] = pd.NA
+        df['address'] = pd.NA
+        df['website'] = pd.NA
         
-        # Apply cleaning - Pennsylvania doesn't have these contact fields
-        # Set them to None since they're not available in the raw data
-        df['phone'] = None
-        df['email'] = None
-        df['address'] = None
-        df['website'] = None
+        # All Pennsylvania candidates are in PA
+        df['address_state'] = "PA"
         
-        # Pennsylvania has no address data → address_state should be null
-        df['address_state'] = pd.NA
+        # Pennsylvania doesn't have zip code data
+        df['zip_code'] = pd.NA
         
         return df
     
@@ -636,7 +652,7 @@ class PennsylvaniaCleaner:
         
         # Add missing columns with None values
         required_columns = [
-            'id', 'stable_id', 'county', 'city', 'zip_code', 'address_state', 'filing_date', 
+            'id', 'stable_id', 'filing_date', 
             'election_date', 'facebook', 'twitter', 'prefix', 'suffix', 'nickname'
         ]
         
@@ -829,9 +845,16 @@ def clean_pennsylvania_candidates(input_file: str, output_file: str = None, outp
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         output_file = os.path.join(output_dir, f"{base_name}_cleaned_{timestamp}.xlsx")
     
+    # Ensure output file has proper extension and is in the output directory
+    if not output_file.endswith('.xlsx'):
+        if not output_file.endswith('.'):
+            output_file += '.xlsx'
+        else:
+            output_file = output_file.rstrip('.') + '.xlsx'
+    
     # Ensure output file is in the output directory
-    if not os.path.dirname(output_file):
-        output_file = os.path.join(output_dir, output_file)
+    if not os.path.dirname(output_file) or os.path.dirname(output_file) == '.':
+        output_file = os.path.join(output_dir, os.path.basename(output_file))
     
     # Save the cleaned data
     logger.info(f"Saving cleaned data to {output_file}...")

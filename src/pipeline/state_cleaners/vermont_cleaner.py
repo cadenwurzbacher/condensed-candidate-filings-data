@@ -180,7 +180,14 @@ class VermontCleaner:
         """Clean and standardize office and district information."""
         logger.info("Processing office and district information...")
         
-        def process_office_district(office_str: str, district_str: str) -> Tuple[str, Optional[str]]:
+        def process_office_district(office_str: str, district_str: str, name_str: str) -> Tuple[str, Optional[str]]:
+            # Handle presidential candidates (rows where Contest is NaN but Name On Ballot contains presidential candidates)
+            if pd.isna(office_str) and pd.notna(name_str):
+                name_lower = str(name_str).lower()
+                # Check if this looks like a presidential candidate
+                if any(pres in name_lower for pres in ['harris', 'trump', 'kennedy', 'west', 'oliver']):
+                    return "US President", None
+            
             if pd.isna(office_str):
                 return None, None
             
@@ -227,7 +234,7 @@ class VermontCleaner:
             return office_str, district_str
         
         # Apply office and district processing
-        office_results = df.apply(lambda row: process_office_district(row['Contest'], row['District Name']), axis=1)
+        office_results = df.apply(lambda row: process_office_district(row['Contest'], row['District Name'], row['Name On Ballot']), axis=1)
         df['office'] = [result[0] for result in office_results]
         df['district'] = [result[1] for result in office_results]
         df['district'] = df['district'].astype('object')
@@ -505,14 +512,11 @@ class VermontCleaner:
         df['address'] = df['Address'].apply(clean_address)
         df['website'] = df['Website'].apply(lambda x: str(x).strip() if pd.notna(x) else None)
         
-        # Derive address_state from address when possible
-        def extract_state(addr: Optional[str]) -> Optional[str]:
-            if addr is None or pd.isna(addr):
-                return None
-            s = str(addr)
-            m = re.search(r"\b([A-Z]{2})\s+\d{5}(?:-\d{4})?\b", s)
-            return m.group(1) if m else None
-        df['address_state'] = df['address'].apply(extract_state)
+        # Map address components from Vermont data
+        df['city'] = df['City'].copy()
+        df['zip_code'] = df['Zip'].copy()
+        df['address_state'] = df['State'].copy()
+        df['county'] = df['Town Of Residence'].copy()
         
         return df
     
@@ -532,7 +536,7 @@ class VermontCleaner:
         
         # Add missing columns with None values
         required_columns = [
-            'id', 'stable_id', 'county', 'city', 'zip_code', 'address_state', 'filing_date', 
+            'id', 'stable_id', 'filing_date', 
             'election_date', 'facebook', 'twitter', 'prefix', 'suffix', 'nickname'
         ]
         
@@ -543,9 +547,7 @@ class VermontCleaner:
         # Set id to empty string (will be generated later in process)
         df['id'] = ""
         
-        # Map city and zip from Vermont data
-        df['city'] = df['City'].copy()
-        df['zip_code'] = df['Zip'].copy()
+        # City, zip_code, and address_state are now handled in _clean_contact_info
         
         return df
     
@@ -716,8 +718,8 @@ def clean_vermont_candidates(input_file: str, output_file: str = None, output_di
     # Reset column names
     data_rows.columns = headers
     
-    # Remove rows where Contest is NaN (empty rows)
-    data_rows = data_rows.dropna(subset=['Contest'])
+    # Don't remove rows where Contest is NaN - these are presidential candidates
+    # We'll handle them in the office processing logic
     
     # Initialize cleaner with output directory
     cleaner = VermontCleaner(output_dir=output_dir)
@@ -735,6 +737,10 @@ def clean_vermont_candidates(input_file: str, output_file: str = None, output_di
     # Ensure output file is in the output directory
     if not os.path.dirname(output_file):
         output_file = os.path.join(output_dir, output_file)
+    
+    # Ensure output file has .xlsx extension
+    if not output_file.endswith('.xlsx'):
+        output_file = output_file + '.xlsx'
     
     # Save the cleaned data
     logger.info(f"Saving cleaned data to {output_file}...")

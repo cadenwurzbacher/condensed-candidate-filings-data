@@ -474,7 +474,7 @@ class NebraskaCleaner:
         # Clean phone numbers
         def clean_phone(phone_str: str) -> str:
             if pd.isna(phone_str):
-                return None
+                return pd.NA
             
             # Remove all non-digit characters
             digits = re.sub(r'[^\d]', '', str(phone_str))
@@ -485,21 +485,47 @@ class NebraskaCleaner:
             elif len(digits) == 11 and digits.startswith('1'):
                 return digits[1:]
             
-            return None
+            return pd.NA
         
         # Clean email addresses (not available in Nebraska data)
         def clean_email(email_str: str) -> str:
-            return None  # Nebraska data doesn't have email
+            return pd.NA  # Nebraska data doesn't have email
         
         # Clean addresses
         def clean_address(address_str: str) -> str:
             if pd.isna(address_str):
-                return None
+                return pd.NA
             
             # Remove extra whitespace and quotes
             cleaned = str(address_str).strip().strip('"\'')
             # Remove multiple spaces
             cleaned = re.sub(r'\s+', ' ', cleaned)
+            
+            # If address contains both street address and PO box, keep only the street address
+            # Look for patterns like "Street Address P.O. Box XXXX" or "Street Address PO Box XXXX"
+            po_box_patterns = [
+                r'\s+P\.?O\.?\s*Box\s+[A-Z0-9]+.*$',  # "P.O. Box XXXX" or "PO Box XXXX" (any alphanumeric)
+                r'\s+Post\s+Office\s+Box\s+[A-Z0-9]+.*$',  # "Post Office Box XXXX" (any alphanumeric)
+                r'\s+Box\s+[A-Z0-9]+.*$'  # "Box XXXX" (any alphanumeric)
+            ]
+            
+            for pattern in po_box_patterns:
+                if re.search(pattern, cleaned, re.IGNORECASE):
+                    cleaned = re.sub(pattern, '', cleaned, flags=re.IGNORECASE).strip()
+                    break
+            
+            # If address contains multiple street addresses, keep only the first one
+            # This handles cases like "8542 S. 160th Ave. 18406 Pasadena Ave."
+            # Simple approach: if we have two numbers that look like addresses, keep first
+            parts = cleaned.split()
+            for i, part in enumerate(parts):
+                if part.isdigit() and i > 0:  # Found a number that's not the first word
+                    # Check if this looks like the start of a second address
+                    if i + 1 < len(parts) and parts[i + 1][0].isupper():
+                        # This is likely the start of a second address, keep everything before it
+                        cleaned = ' '.join(parts[:i]).strip()
+                        break
+            
             return cleaned
         
         # Apply cleaning
@@ -508,14 +534,12 @@ class NebraskaCleaner:
         df['address'] = df['Address'].apply(clean_address)
         df['website'] = pd.NA  # Nebraska data doesn't have website
         
-        # Derive address_state from address when possible
-        def extract_state(addr: Optional[str]) -> Optional[str]:
-            if addr is None or pd.isna(addr):
-                return None
-            s = str(addr)
-            m = re.search(r"\b([A-Z]{2})\s+\d{5}(?:-\d{4})?\b", s)
-            return m.group(1) if m else None
-        df['address_state'] = df['address'].apply(extract_state)
+        # Set address_state to "NE" for all Nebraska records (addresses don't have state info)
+        df['address_state'] = "NE"
+        
+        # Nebraska addresses are funky - set city and zip to null since we can't reliably parse them
+        df['city'] = pd.NA
+        df['zip_code'] = pd.NA
         
         return df
     
@@ -535,7 +559,7 @@ class NebraskaCleaner:
         
         # Add missing columns with None values
         required_columns = [
-            'id', 'stable_id', 'county', 'city', 'zip_code', 'address_state', 'filing_date', 
+            'id', 'stable_id', 'county', 'filing_date', 
             'election_date', 'facebook', 'twitter', 'prefix', 'suffix', 'nickname'
         ]
         

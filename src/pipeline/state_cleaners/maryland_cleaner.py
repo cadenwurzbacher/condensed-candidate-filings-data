@@ -58,9 +58,13 @@ class MarylandCleaner:
         """Remove original columns that have been replaced by cleaned versions."""
         logger.info("Removing duplicate columns...")
         
-        # Columns to remove (original versions)
+        # Columns to remove (original versions) - Maryland 2022-2026
         columns_to_remove = [
-            'Election', 'Office', 'Name', 'Party', 'Address', 'Email', 'Website', 'Phone Number'
+            'Election', 'Office', 'Name', 'Party', 'Address', 'Email', 'Website', 'Phone Number',
+            'Office Name', 'Contest Run By District Name and Number', 'Candidate Ballot Last Name and Suffix',
+            'Candidate First Name and Middle Name', 'Office Political Party', 'Candidate Residential Jurisdiction',
+            'Filing Type and Date', 'Campaign Mailing Address', 'Campaign Mailing City State and Zip',
+            'Public Phone', 'Facebook', 'Twitter', 'X', 'Other', 'Committee Name'
         ]
         
         # Only remove if they exist and we have cleaned versions
@@ -229,11 +233,30 @@ class MarylandCleaner:
             # Handle other offices (keep as is)
             return office_str, None
         
-        # Apply office and district processing - handle different column names
-        office_col = 'Office Name' if 'Office Name' in df.columns else 'Office'
-        office_results = df[office_col].apply(process_office_district)
-        df['office'] = [result[0] for result in office_results]
-        df['district'] = [result[1] for result in office_results]
+        # Apply office and district processing for Maryland 2022-2026
+        if 'Office Name' in df.columns:
+            # Process office names
+            office_results = df['Office Name'].apply(process_office_district)
+            df['office'] = [result[0] for result in office_results]
+            
+            # Handle district from "Contest Run By District Name and Number"
+            if 'Contest Run By District Name and Number' in df.columns:
+                df['district'] = df['Contest Run By District Name and Number'].apply(
+                    lambda x: str(x).strip() if pd.notna(x) else None
+                )
+            else:
+                df['district'] = [result[1] for result in office_results]
+        else:
+            # Fallback to old method
+            office_col = 'Office' if 'Office' in df.columns else None
+            if office_col:
+                office_results = df[office_col].apply(process_office_district)
+                df['office'] = [result[0] for result in office_results]
+                df['district'] = [result[1] for result in office_results]
+            else:
+                df['office'] = pd.NA
+                df['district'] = pd.NA
+        
         df['district'] = df['district'].astype('object')
         
         return df
@@ -581,38 +604,93 @@ class MarylandCleaner:
             cleaned = re.sub(r'\s+', ' ', cleaned)
             return cleaned
         
-        # Apply cleaning with robust column fallbacks
-        phone_col = None
-        for candidate in ['Public Phone', 'Phone Number', 'Phone']:
-            if candidate in df.columns:
-                phone_col = candidate
-                break
-        df['phone'] = df[phone_col].apply(clean_phone) if phone_col else None
-
-        email_col = 'Email' if 'Email' in df.columns else None
-        df['email'] = df[email_col].apply(clean_email) if email_col else None
-
-        address_col = None
-        for candidate in ['Campaign Mailing Address', 'Address']:
-            if candidate in df.columns:
-                address_col = candidate
-                break
-        df['address'] = df[address_col].apply(clean_address) if address_col else None
-
-        website_col = 'Website' if 'Website' in df.columns else None
-        df['website'] = df[website_col].apply(lambda x: str(x).strip() if pd.notna(x) else None) if website_col else None
-        
-        # Derive address_state from explicit State column when present, else from address
-        if 'State' in df.columns:
-            df['address_state'] = df['State'].apply(lambda x: str(x).strip().upper() if pd.notna(x) else None)
+        # Apply cleaning with Maryland 2022-2026 column mapping
+        # Phone
+        if 'Public Phone' in df.columns:
+            df['phone'] = df['Public Phone'].apply(clean_phone)
         else:
-            def extract_state(addr: Optional[str]) -> Optional[str]:
-                if addr is None or pd.isna(addr):
-                    return None
-                s = str(addr)
-                m = re.search(r"\b([A-Z]{2})\s+\d{5}(?:-\d{4})?\b", s)
-                return m.group(1) if m else None
-            df['address_state'] = df['address'].apply(extract_state)
+            df['phone'] = pd.NA
+
+        # Email
+        if 'Email' in df.columns:
+            df['email'] = df['Email'].apply(clean_email)
+        else:
+            df['email'] = pd.NA
+
+        # Address
+        if 'Campaign Mailing Address' in df.columns:
+            df['address'] = df['Campaign Mailing Address'].apply(clean_address)
+        else:
+            df['address'] = pd.NA
+
+        # Website
+        if 'Website' in df.columns:
+            df['website'] = df['Website'].apply(lambda x: str(x).strip() if pd.notna(x) else None)
+        else:
+            df['website'] = pd.NA
+
+        # Facebook
+        if 'Facebook' in df.columns:
+            df['facebook'] = df['Facebook'].apply(lambda x: str(x).strip() if pd.notna(x) else None)
+        else:
+            df['facebook'] = pd.NA
+
+        # Twitter/X
+        twitter_col = None
+        for col in ['Twitter', 'X']:
+            if col in df.columns:
+                twitter_col = col
+                break
+        if twitter_col:
+            df['twitter'] = df[twitter_col].apply(lambda x: str(x).strip() if pd.notna(x) else None)
+        else:
+            df['twitter'] = pd.NA
+        
+        # Parse city, zip_code, and address_state from "Campaign Mailing City State and Zip"
+        if 'Campaign Mailing City State and Zip' in df.columns:
+            def parse_city_state_zip(location_str: str) -> Tuple[Optional[str], Optional[str], Optional[str]]:
+                """Parse city, state, zip from Maryland location field."""
+                if pd.isna(location_str):
+                    return None, None, None
+                
+                location = str(location_str).strip()
+                
+                # Pattern: "City State ZIP" (e.g., "Frostburg MD 21532")
+                match = re.match(r'^(.+?)\s+([A-Z]{2})\s+(\d{5}(?:-\d{4})?)$', location)
+                if match:
+                    city = match.group(1).strip()
+                    state = match.group(2).strip()
+                    zip_code = match.group(3).strip()
+                    return city, zip_code, state
+                
+                # Pattern: "City, State ZIP" (e.g., "Frostburg, MD 21532")
+                match = re.match(r'^(.+?),\s*([A-Z]{2})\s+(\d{5}(?:-\d{4})?)$', location)
+                if match:
+                    city = match.group(1).strip()
+                    state = match.group(2).strip()
+                    zip_code = match.group(3).strip()
+                    return city, zip_code, state
+                
+                # Fallback: try to extract state and zip
+                state_match = re.search(r'\b([A-Z]{2})\s+(\d{5}(?:-\d{4})?)\b', location)
+                if state_match:
+                    state = state_match.group(1)
+                    zip_code = state_match.group(2)
+                    # Extract city (everything before state)
+                    city_part = location[:state_match.start()].strip().rstrip(',').strip()
+                    city = city_part if city_part else None
+                    return city, zip_code, state
+                
+                return None, None, None
+            
+            location_results = df['Campaign Mailing City State and Zip'].apply(parse_city_state_zip)
+            df['city'] = [result[0] for result in location_results]
+            df['zip_code'] = [result[1] for result in location_results]
+            df['address_state'] = [result[2] for result in location_results]
+        else:
+            df['city'] = pd.NA
+            df['zip_code'] = pd.NA
+            df['address_state'] = pd.NA
         
         return df
     
@@ -650,12 +728,43 @@ class MarylandCleaner:
             
             
             df['original_office'] = pd.NA
-        df['original_filing_date'] = pd.NA  # Not available in Maryland data
+        # Map filing date from Maryland 2022-2026 format
+        if 'Filing Type and Date' in df.columns:
+            def parse_filing_date(filing_str: str) -> str:
+                """Parse filing date from Maryland format 'Regular - MM/DD/YYYY'."""
+                if pd.isna(filing_str):
+                    return None
+                
+                filing_str = str(filing_str).strip()
+                
+                # Extract date from "Regular - MM/DD/YYYY" format
+                date_match = re.search(r'Regular\s*-\s*(\d{1,2}/\d{1,2}/\d{4})', filing_str)
+                if date_match:
+                    date_str = date_match.group(1)
+                    try:
+                        # Parse and standardize date format
+                        date_obj = pd.to_datetime(date_str, format='%m/%d/%Y')
+                        return date_obj.strftime('%Y-%m-%d')
+                    except:
+                        return date_str
+                
+                return filing_str
+            
+            df['filing_date'] = df['Filing Type and Date'].apply(parse_filing_date)
+            df['original_filing_date'] = df['Filing Type and Date'].copy()
+        else:
+            df['filing_date'] = pd.NA
+            df['original_filing_date'] = pd.NA
+        
+        # Map county from Maryland 2022-2026 format
+        if 'Candidate Residential Jurisdiction' in df.columns:
+            df['county'] = df['Candidate Residential Jurisdiction'].apply(lambda x: str(x).strip() if pd.notna(x) else None)
+        else:
+            df['county'] = pd.NA
         
         # Add missing columns with None values
         required_columns = [
-            'id', 'stable_id', 'county', 'city', 'zip_code', 'address_state', 'filing_date', 
-            'election_date', 'facebook', 'twitter', 'prefix', 'suffix', 'nickname'
+            'id', 'stable_id', 'election_date', 'prefix', 'suffix', 'nickname'
         ]
         
         for col in required_columns:
