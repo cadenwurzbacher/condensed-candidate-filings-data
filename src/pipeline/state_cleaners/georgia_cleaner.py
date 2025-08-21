@@ -418,19 +418,67 @@ class GeorgiaCleaner:
             name = re.sub(suffix_pattern, '', name, flags=re.IGNORECASE).strip()
             name = re.sub(r"\.$", "", name).strip()
 
-        # With comma => Last, First Middle
+        # With comma => Last, First Middle OR Last, Suffix
         if "," in name:
             parts = [p.strip() for p in name.split(",")]
             if len(parts) >= 2:
                 last_name = parts[0]
-                first_middle = parts[1].split()
-                if len(first_middle) == 1:
-                    first_name = first_middle[0]
-                elif len(first_middle) >= 2:
-                    first_name = first_middle[0]
-                    middle_name = " ".join(first_middle[1:])
-                display_name = self._build_display_name(first_name, middle_name, last_name, suffix, nickname)
-                return first_name, middle_name, last_name, prefix, suffix, nickname, display_name
+                second_part = parts[1].strip()
+                
+                # Check if second part is just a suffix (Jr, Sr, II, III, etc.)
+                suffix_pattern = r"^(Jr\.?|Sr\.?|II|III|IV|V|VI|VII|VIII|IX|X)$"
+                if re.match(suffix_pattern, second_part, re.IGNORECASE):
+                    # This is "Last, Suffix" format
+                    suffix = second_part
+                    # Try to extract first/middle from the original name before suffix removal
+                    name_before_suffix = name.replace(f", {suffix}", "").strip()
+                    if "," in name_before_suffix:
+                        # Still has comma, this is "Last, First Middle, Suffix"
+                        name_parts = name_before_suffix.split(",")
+                        if len(name_parts) >= 2:
+                            last_name = name_parts[0].strip()
+                            first_middle = name_parts[1].strip().split()
+                            if len(first_middle) == 1:
+                                first_name = first_middle[0]
+                            elif len(first_middle) >= 2:
+                                first_name = first_middle[0]
+                                middle_name = " ".join(first_middle[1:])
+                            else:
+                                first_name = None
+                                middle_name = None
+                        else:
+                            first_name = None
+                            middle_name = None
+                    else:
+                        # No comma, this is just "Last Suffix"
+                        name_parts = name_before_suffix.split()
+                        if len(name_parts) == 1:
+                            first_name = None
+                            middle_name = None
+                        elif len(name_parts) == 2:
+                            first_name = name_parts[0]
+                            middle_name = None
+                        else:
+                            first_name = name_parts[0]
+                            middle_name = " ".join(name_parts[1:-1])
+                            last_name = name_parts[-1]
+                    
+                    display_name = self._build_display_name(first_name, middle_name, last_name, suffix, nickname)
+                    return first_name, middle_name, last_name, prefix, suffix, nickname, display_name
+                else:
+                    # This is "Last, First Middle" format
+                    first_middle = second_part.split()
+                    if len(first_middle) == 1:
+                        first_name = first_middle[0]
+                    elif len(first_middle) >= 2:
+                        first_name = first_middle[0]
+                        middle_name = " ".join(first_middle[1:])
+                    else:
+                        first_name = None
+                        middle_name = None
+                    
+                    display_name = self._build_display_name(first_name, middle_name, last_name, suffix, nickname)
+                    return first_name, middle_name, last_name, prefix, suffix, nickname, display_name
 
         # Space separated
         parts = name.split()

@@ -399,7 +399,13 @@ class DelawareCleaner:
         # Apply office and district processing
         office_results = df.apply(lambda row: process_office_district(row['Office'], row['District']), axis=1)
         df['office'] = [result[0] for result in office_results]
-        df['district'] = [result[1] for result in office_results]
+        
+        # Map district from raw District column, with fallback to extracted district
+        df['district'] = df['District'].fillna('')
+        # Only use extracted district if raw District is empty
+        for i, (raw_district, extracted_district) in enumerate(zip(df['District'], [result[1] for result in office_results])):
+            if pd.isna(raw_district) or raw_district == '':
+                df.loc[i, 'district'] = extracted_district if extracted_district else ''
         
         # Log some examples of office processing for debugging
         logger.info("Office processing examples:")
@@ -460,33 +466,27 @@ class DelawareCleaner:
             
             return None
         
-        # Extract county information from office names and add to county column
-        def extract_county_from_office(office_str: str) -> Optional[str]:
-            if pd.isna(office_str):
+        # Map county from raw County column instead of extracting from office names
+        def map_county_from_raw(county_code: str) -> Optional[str]:
+            if pd.isna(county_code) or county_code == '':
                 return None
             
-            office_str = str(office_str).strip()
+            county_code = str(county_code).strip().upper()
             
-            # Extract county names from office strings using multiple patterns
+            # Map Delaware county codes to full names
+            county_mapping = {
+                'N': 'New Castle',
+                'S': 'Sussex', 
+                'K': 'Kent',
+                'NK': 'New Castle/Kent',
+                'KS': 'Kent/Sussex',
+                'N,K': 'New Castle/Kent',
+                'K, S': 'Kent/Sussex',
+                'N, K': 'New Castle/Kent',
+                'N/K': 'New Castle/Kent'
+            }
             
-            # Pattern 1: "[County Name] County [Additional Text]" - highest priority
-            county_match = re.search(r'([A-Za-z]+(?:\s+[A-Za-z]+)*)\s+County', office_str, re.IGNORECASE)
-            if county_match:
-                county_name = county_match.group(1).strip()
-                # Only return if it's a valid county name (not a common word)
-                if county_name.lower() not in ['of', 'president', 'pres', 'city', 'council', 'member', 'district', 'at', 'large', 'mayor', 'treasurer']:
-                    return county_name.title()  # Convert to title case
-            
-            # Pattern 2: "[COUNTY NAME] COUNTY" (all caps format)
-            county_match = re.search(r'([A-Z]+(?:\s+[A-Z]+)*)\s+COUNTY', office_str)
-            if county_match:
-                county_name = county_match.group(1).strip()
-                return county_name.title()  # Convert to title case
-            
-            # Pattern 3: Look for specific Delaware counties in any context
-            delaware_counties = [
-                'New Castle', 'Kent', 'Sussex'
-            ]
+            return county_mapping.get(county_code, county_code)
             
             for county in delaware_counties:
                 # Check for county name in various formats, but be more precise
@@ -496,9 +496,9 @@ class DelawareCleaner:
             
             return None
         
-        # Apply county extraction FIRST to the original Office column
-        df['county'] = df['Office'].apply(extract_county_from_office)
-        logger.info(f"County extraction completed. Sample results: {df['county'].value_counts().head(5).to_dict()}")
+        # Map county from raw County column
+        df['county'] = df['County'].apply(map_county_from_raw)
+        logger.info(f"County mapping completed. Sample results: {df['county'].value_counts().head(5).to_dict()}")
         
         # Apply city extraction AFTER county extraction to avoid conflicts
         df['city'] = df['Office'].apply(extract_city_from_office)

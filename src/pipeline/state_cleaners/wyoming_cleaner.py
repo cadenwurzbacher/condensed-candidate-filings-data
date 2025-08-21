@@ -536,14 +536,43 @@ class WyomingCleaner:
         df['address'] = df['Address'].apply(clean_address)
         df['website'] = None  # Website column not available in Wyoming data
         
-        # Derive address_state from address when possible
-        def extract_state(addr: Optional[str]) -> Optional[str]:
+        # Parse Wyoming address format: "Street City, State ZIP" or "PO Box City, State ZIP"
+        def parse_wyoming_address(addr: Optional[str]) -> Tuple[Optional[str], Optional[str], Optional[str], Optional[str]]:
             if addr is None or pd.isna(addr):
-                return None
-            s = str(addr)
-            m = re.search(r"\b([A-Z]{2})\s+\d{5}(?:-\d{4})?\b", s)
-            return m.group(1) if m else None
-        df['address_state'] = df['address'].apply(extract_state)
+                return None, None, None, None
+            
+            s = str(addr).strip()
+            
+            # Look for pattern: "City, State ZIP" at the end
+            # This handles both "Street City, State ZIP" and "PO Box City, State ZIP"
+            city_state_zip_match = re.search(r',\s*([^,]+),\s*([A-Z]{2})\s+(\d{5}(?:-\d{4})?)\s*$', s)
+            if city_state_zip_match:
+                city = city_state_zip_match.group(1).strip()
+                state = city_state_zip_match.group(2)
+                zip_code = city_state_zip_match.group(3)
+                return s, city, state, zip_code
+            
+            # Fallback: look for state and zip anywhere in the address
+            state_match = re.search(r'\b([A-Z]{2})\s+\d{5}(?:-\d{4})?\b', s)
+            if state_match:
+                state = state_match.group(1)
+                zip_match = re.search(r'\b(\d{5}(?:-\d{4})?)\b', s)
+                zip_code = zip_match.group(1) if zip_match else None
+                
+                # Try to extract city (last word before state)
+                city_match = re.search(r'([^,]+),\s*[A-Z]{2}\s+\d{5}', s)
+                city = city_match.group(1).strip().split()[-1] if city_match else None
+                
+                return s, city, state, zip_code
+            
+            return s, None, None, None
+        
+        # Apply address parsing
+        address_results = df['address'].apply(parse_wyoming_address)
+        df['address'] = [result[0] for result in address_results]
+        df['city'] = [result[1] for result in address_results]
+        df['address_state'] = [result[2] for result in address_results]
+        df['zip_code'] = [result[3] for result in address_results]
         
         return df
     
@@ -559,11 +588,11 @@ class WyomingCleaner:
         df['original_state'] = df['state'].copy()
         df['original_election_year'] = df['election_year'].copy()
         df['original_office'] = df['Office'].copy()
-        df['original_filing_date'] = pd.NA  # Not available in Wyoming data
+        df['original_filing_date'] = df['Date Filed'].copy() if 'Date Filed' in df.columns else pd.NA
         
         # Add missing columns with None values
         required_columns = [
-            'id', 'stable_id', 'county', 'city', 'zip_code', 'address_state', 'filing_date', 
+            'id', 'stable_id', 'county', 'filing_date', 
             'election_date', 'facebook', 'twitter', 'prefix', 'suffix', 'nickname'
         ]
         
@@ -573,6 +602,12 @@ class WyomingCleaner:
         
         # Set id to empty string (will be generated later in process)
         df['id'] = ""
+        
+        # Map filing_date from Date Filed column
+        if 'Date Filed' in df.columns:
+            df['filing_date'] = df['Date Filed'].copy()
+        else:
+            df['filing_date'] = pd.NA
         
         return df
     
@@ -739,6 +774,10 @@ def clean_wyoming_candidates(input_file: str, output_file: str = None, output_di
     # Ensure output file is in the output directory
     if not os.path.dirname(output_file):
         output_file = os.path.join(output_dir, output_file)
+    
+    # Ensure output file has .xlsx extension
+    if not output_file.endswith('.xlsx'):
+        output_file = output_file + '.xlsx'
     
     # Save the cleaned data
     logger.info(f"Saving cleaned data to {output_file}...")

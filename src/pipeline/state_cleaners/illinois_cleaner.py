@@ -387,13 +387,17 @@ class IllinoisCleaner:
                 # Remove nickname from the name for further processing
                 name = re.sub(r'["""\'\u201c\u201d\u2018\u2019][^""""\'\u201c\u201d\u2018\u2019]+["""\'\u201c\u201d\u2018\u2019]', '', name).strip()
         
-        # Extract suffix from the end of the name
-        suffix_pattern = r'\b(Jr|Sr|II|III|IV|V|VI|VII|VIII|IX|X)\b'
+        # Extract suffix from anywhere in the name
+        suffix_pattern = r'\b(Jr\.?|Sr\.?|II|III|IV|V|VI|VII|VIII|IX|X)\b'
         suffix_match = re.search(suffix_pattern, name, re.IGNORECASE)
         if suffix_match:
             suffix = suffix_match.group(1)
             # Remove suffix from the name for further processing
             name = re.sub(suffix_pattern, '', name, flags=re.IGNORECASE).strip()
+            # Clean up any extra commas or spaces left behind
+            name = re.sub(r'\s*,\s*,', ',', name)  # Remove double commas
+            name = re.sub(r'^\s*,\s*|\s*,\s*$', '', name)  # Remove leading/trailing commas
+            name = re.sub(r'\s+', ' ', name).strip()  # Clean up extra spaces
         
         # Handle names with commas (Last, First Middle format)
         if ',' in name:

@@ -60,8 +60,8 @@ class WashingtonCleaner:
         
         # Columns to remove (original versions)
         columns_to_remove = [
-            'district_type', 'district', 'race', 'term_type', 'term_length', 'name',
-            'mailing_address', 'email', 'phone', 'filing_date', 'party_preference',
+            'district_type', 'race', 'term_type', 'term_length', 'name',
+            'mailing_address', 'email', 'phone', 'party_preference',
             'status', 'election_status', 'ballot_order', 'election'
         ]
         
@@ -544,13 +544,29 @@ class WashingtonCleaner:
         df['address'] = df['mailing_address'].apply(clean_address)
         df['website'] = pd.NA  # Not available in Washington data
         
-        # Derive address_state from address when possible
+        # Extract address_state from Washington address format: "Street, City, State, ZIP"
         def extract_state(addr: Optional[str]) -> Optional[str]:
             if addr is None or pd.isna(addr):
                 return None
             s = str(addr)
-            m = re.search(r"\b([A-Z]{2})\s+\d{5}(?:-\d{4})?\b", s)
-            return m.group(1) if m else None
+            
+            # Look for state code in Washington format: "City, WA, ZIP"
+            # Pattern: comma, space, 2 capital letters, comma, space, zip
+            state_match = re.search(r',\s*([A-Z]{2})\s*,\s*\d{5}(?:-\d{4})?', s)
+            if state_match:
+                return state_match.group(1)
+            
+            # Fallback: look for any 2 capital letters that could be a state
+            state_match = re.search(r'\b([A-Z]{2})\b', s)
+            if state_match:
+                state = state_match.group(1)
+                # Filter out common non-state abbreviations
+                non_state_abbrevs = {'PO', 'ST', 'RD', 'DR', 'LN', 'CT', 'BL', 'APT', 'STE', 'UNIT'}
+                if state not in non_state_abbrevs:
+                    return state
+            
+            return None
+        
         df['address_state'] = df['address'].apply(extract_state)
         
         return df
@@ -571,7 +587,7 @@ class WashingtonCleaner:
         
         # Add missing columns with None values
         required_columns = [
-            'id', 'stable_id', 'county', 'city', 'zip_code', 'address_state', 'filing_date', 
+            'id', 'stable_id', 'county', 'city', 'zip_code', 'address_state', 
             'election_date', 'facebook', 'twitter', 'prefix', 'suffix', 'nickname'
         ]
         
@@ -583,7 +599,11 @@ class WashingtonCleaner:
         df['id'] = ""
         
         # Process filing_date and election_date
-        df['filing_date'] = df['filing_date'].copy()
+        # Map filing_date from raw data
+        if 'filing_date' in df.columns:
+            df['filing_date'] = df['filing_date'].copy()
+        else:
+            df['filing_date'] = pd.NA
         
         # Extract election date from election column
         def extract_election_date(election_str: str) -> str:
@@ -787,6 +807,10 @@ def clean_washington_candidates(input_file: str, output_file: str = None, output
     # Ensure output file is in the output directory
     if not os.path.dirname(output_file):
         output_file = os.path.join(output_dir, output_file)
+    
+    # Ensure output file has .xlsx extension
+    if not output_file.endswith('.xlsx'):
+        output_file = output_file + '.xlsx'
     
     # Save the cleaned data
     logger.info(f"Saving cleaned data to {output_file}...")

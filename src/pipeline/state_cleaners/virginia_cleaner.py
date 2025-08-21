@@ -510,18 +510,32 @@ class VirginiaCleaner:
             logger.warning("No email column found in Virginia data, setting to None")
             df['email'] = None
         
-        # Handle address - check multiple possible column names
-        if 'Campaign Address Line 1' in df.columns:
-            df['address'] = df['Campaign Address Line 1'].apply(clean_address)
-        elif 'CampaignAddressLine1' in df.columns:
-            df['address'] = df['CampaignAddressLine1'].apply(clean_address)
-        elif 'Address' in df.columns:
-            df['address'] = df['Address'].apply(clean_address)
-        elif 'Address 1' in df.columns:
-            df['address'] = df['Address 1'].apply(clean_address)
-        else:
-            logger.warning("No address column found in Virginia data, setting to None")
-            df['address'] = None
+        # Handle address - combine multiple address columns for better coverage
+        def combine_addresses(row):
+            address_parts = []
+            
+            # Check for Campaign Address columns first (most specific)
+            if 'Campaign Address Line 1' in row and pd.notna(row['Campaign Address Line 1']):
+                address_parts.append(str(row['Campaign Address Line 1']).strip())
+            if 'Campaign Address Line 2' in row and pd.notna(row['Campaign Address Line 2']):
+                address_parts.append(str(row['Campaign Address Line 2']).strip())
+            
+            # Fallback to general Address columns
+            if not address_parts and 'Address 1' in row and pd.notna(row['Address 1']):
+                address_parts.append(str(row['Address 1']).strip())
+            if 'Address 2' in row and pd.notna(row['Address 2']):
+                address_parts.append(str(row['Address 2']).strip())
+            
+            # Final fallback
+            if not address_parts and 'Address' in row and pd.notna(row['Address']):
+                address_parts.append(str(row['Address']).strip())
+            
+            if address_parts:
+                combined = ' '.join(address_parts)
+                return clean_address(combined)
+            return None
+        
+        df['address'] = df.apply(combine_addresses, axis=1)
         
         # Handle website - check multiple possible column names
         if 'Campaign Website' in df.columns:
@@ -532,14 +546,18 @@ class VirginiaCleaner:
             logger.warning("No website column found in Virginia data, setting to None")
             df['website'] = None
         
-        # Derive address_state from address when possible
-        def extract_state(addr: Optional[str]) -> Optional[str]:
-            if addr is None or pd.isna(addr):
-                return None
-            s = str(addr)
-            m = re.search(r"\b([A-Z]{2})\s+\d{5}(?:-\d{4})?\b", s)
-            return m.group(1) if m else None
-        df['address_state'] = df['address'].apply(extract_state)
+        # Map address_state from State column (Virginia has 100% coverage)
+        if 'State' in df.columns:
+            df['address_state'] = df['State'].apply(lambda x: str(x).strip() if pd.notna(x) else None)
+        else:
+            # Fallback: derive address_state from address when possible
+            def extract_state(addr: Optional[str]) -> Optional[str]:
+                if addr is None or pd.isna(addr):
+                    return None
+                s = str(addr)
+                m = re.search(r"\b([A-Z]{2})\s+\d{5}(?:-\d{4})?\b", s)
+                return m.group(1) if m else None
+            df['address_state'] = df['address'].apply(extract_state)
         
         return df
     
@@ -638,8 +656,8 @@ class VirginiaCleaner:
             logger.warning("No county/locality column found in Virginia data, setting to None")
             df['county'] = None
         
-        # Map district data (already handled in _process_office_and_district but ensure it's preserved)
-        if 'District' in df.columns and 'district' not in df.columns:
+        # Map district data - preserve original District column data
+        if 'District' in df.columns:
             df['district'] = df['District'].apply(lambda x: str(x).strip() if pd.notna(x) else None)
         
         return df
@@ -754,6 +772,10 @@ def clean_virginia_candidates(input_file: str, output_file: str = None, output_d
     
     if not os.path.dirname(output_file):
         output_file = os.path.join(output_dir, output_file)
+    
+    # Ensure output file has .xlsx extension
+    if not output_file.endswith('.xlsx'):
+        output_file = output_file + '.xlsx'
     
     logger.info(f"Saving cleaned data to {output_file}...")
     cleaned_df.to_excel(output_file, index=False)

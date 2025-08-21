@@ -243,12 +243,18 @@ class WestVirginiaCleaner:
             return office_str, None
         
         # Apply office and district processing - adjust column name based on WV data structure
-        office_column = 'Office' if 'Office' in df.columns else 'office'
+        office_column = ' Race' if ' Race' in df.columns else 'office'
+        district_column = ' District/Circuit' if ' District/Circuit' in df.columns else 'district'
+        
         if office_column in df.columns:
             office_results = df[office_column].apply(process_office_district)
             df['office'] = [result[0] for result in office_results]
             df['district'] = [result[1] for result in office_results]
             df['district'] = df['district'].astype('object')
+        
+        # Also map the district column directly if it exists
+        if district_column in df.columns:
+            df['district'] = df[district_column].fillna(df['district'])
         
         return df
     
@@ -288,8 +294,8 @@ class WestVirginiaCleaner:
             return cleaned
         
         # Apply name cleaning with office context - adjust column names based on WV data structure
-        name_column = 'Name' if 'Name' in df.columns else 'full_name_display'
-        office_column = 'Office' if 'Office' in df.columns else 'office'
+        name_column = ' Name' if ' Name' in df.columns else 'full_name_display'
+        office_column = ' Race' if ' Race' in df.columns else 'office'
         
         if name_column in df.columns and office_column in df.columns:
             df['full_name_display'] = df.apply(lambda row: clean_name(row[name_column], row[office_column]), axis=1)
@@ -522,7 +528,7 @@ class WestVirginiaCleaner:
             return party_mapping.get(party_lower, party_str)
         
         # Apply party standardization - adjust column name based on WV data structure
-        party_column = 'Party' if 'Party' in df.columns else 'party'
+        party_column = ' Party' if ' Party' in df.columns else 'party'
         if party_column in df.columns:
             df['party'] = df[party_column].apply(standardize_party)
         
@@ -573,9 +579,9 @@ class WestVirginiaCleaner:
             return cleaned
         
         # Apply cleaning - adjust column names based on WV data structure
-        phone_column = 'Phone Number' if 'Phone Number' in df.columns else 'phone'
-        email_column = 'Email' if 'Email' in df.columns else 'email'
-        address_column = 'Address' if 'Address' in df.columns else 'address'
+        phone_column = ' CampaignPhoneNumber' if ' CampaignPhoneNumber' in df.columns else 'phone'
+        email_column = ' Email' if ' Email' in df.columns else 'email'
+        address_column = ' MailingAddress' if ' MailingAddress' in df.columns else 'address'
         website_column = 'Website' if 'Website' in df.columns else 'website'
         
         if phone_column in df.columns:
@@ -606,14 +612,17 @@ class WestVirginiaCleaner:
         df['state'] = self.state_name
         
         # Add original data preservation columns
-        name_column = 'Name' if 'Name' in df.columns else 'full_name_display'
-        office_column = 'Office' if 'Office' in df.columns else 'office'
+        name_column = ' Name' if ' Name' in df.columns else 'full_name_display'
+        office_column = ' Race' if ' Race' in df.columns else 'office'
+        filing_date_column = ' Filing Date' if ' Filing Date' in df.columns else 'filing_date'
+        county_column = ' County' if ' County' in df.columns else 'county'
+        state_column = ' State' if ' State' in df.columns else 'state'
         
         df['original_name'] = df[name_column].copy() if name_column in df.columns else df['full_name_display'].copy()
         df['original_state'] = df['state'].copy()
         df['original_election_year'] = df['election_year'].copy() if 'election_year' in df.columns else pd.NA
         df['original_office'] = df[office_column].copy() if office_column in df.columns else pd.NA
-        df['original_filing_date'] = pd.NA  # Not available in WV data
+        df['original_filing_date'] = df[filing_date_column].copy() if filing_date_column in df.columns else pd.NA
         
         # Add missing columns with None values
         required_columns = [
@@ -627,6 +636,17 @@ class WestVirginiaCleaner:
         
         # Set id to empty string (will be generated later in process)
         df['id'] = ""
+        
+        # Map county and filing_date from WV data
+        if county_column in df.columns:
+            df['county'] = df[county_column].copy()
+        else:
+            df['county'] = pd.NA
+            
+        if filing_date_column in df.columns:
+            df['filing_date'] = df[filing_date_column].copy()
+        else:
+            df['filing_date'] = pd.NA
         
         return df
     
@@ -798,6 +818,10 @@ def clean_west_virginia_candidates(input_file: str, output_file: str = None, out
     # Ensure output file is in the output directory
     if not os.path.dirname(output_file):
         output_file = os.path.join(output_dir, output_file)
+    
+    # Ensure output file has .xlsx extension
+    if not output_file.endswith('.xlsx'):
+        output_file = output_file + '.xlsx'
     
     # Save the cleaned data as Excel
     logger.info(f"Saving cleaned data to {output_file}...")
