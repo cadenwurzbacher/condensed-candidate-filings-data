@@ -58,6 +58,7 @@ from .state_cleaners.wyoming_cleaner import WyomingCleaner
 # Import structural cleaners (new)
 from .structural_cleaners.alaska_structural_cleaner import AlaskaStructuralCleaner
 from .structural_cleaners.arizona_structural_cleaner import ArizonaStructuralCleaner
+from .structural_cleaners.arkansas_structural_cleaner import ArkansasStructuralCleaner
 
 # Import processors
 from .office_standardizer import OfficeStandardizer
@@ -122,6 +123,7 @@ class MainPipeline:
         self.structural_cleaners = {
             'alaska': AlaskaStructuralCleaner(),
             'arizona': ArizonaStructuralCleaner(),
+            'arkansas': ArkansasStructuralCleaner(),
             # Add other structural cleaners as we implement them
         }
         
