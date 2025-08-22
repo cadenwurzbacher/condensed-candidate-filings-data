@@ -17,48 +17,52 @@ import time
 import sys
 import re
 from pathlib import Path
+import hashlib
 
 # Add current directory to Python path for imports
 current_dir = Path(__file__).parent
 sys.path.append(str(current_dir))
 
-# Import state cleaners (only the ones that exist)
-from state_cleaners.alaska_cleaner import clean_alaska_candidates
-from state_cleaners.arizona_cleaner import clean_arizona_candidates
-from state_cleaners.arkansas_cleaner import clean_arkansas_candidates
-from state_cleaners.colorado_cleaner import clean_colorado_candidates
-from state_cleaners.delaware_cleaner import clean_delaware_candidates
-from state_cleaners.georgia_cleaner import clean_georgia_candidates
-from state_cleaners.idaho_cleaner import clean_idaho_candidates
-from state_cleaners.illinois_cleaner import clean_illinois_candidates
-from state_cleaners.indiana_cleaner import clean_indiana_candidates
-from state_cleaners.iowa_cleaner import clean_iowa_candidates
-from state_cleaners.kansas_cleaner import clean_kansas_candidates
-from state_cleaners.kentucky_cleaner import clean_kentucky_candidates
-from state_cleaners.louisiana_cleaner import clean_louisiana_candidates
-from state_cleaners.maryland_cleaner import clean_maryland_candidates
-from state_cleaners.missouri_cleaner import clean_missouri_candidates
-from state_cleaners.montana_cleaner import clean_montana_candidates
-from state_cleaners.nebraska_cleaner import clean_nebraska_candidates
-from state_cleaners.new_mexico_cleaner import clean_new_mexico_candidates
-from state_cleaners.new_york_cleaner import clean_new_york_candidates
-from state_cleaners.north_carolina_cleaner import clean_north_carolina_candidates
-from state_cleaners.oklahoma_cleaner import clean_oklahoma_candidates
-from state_cleaners.oregon_cleaner import clean_oregon_candidates
-from state_cleaners.pennsylvania_cleaner import clean_pennsylvania_candidates
-from state_cleaners.south_carolina_cleaner import clean_south_carolina_candidates
-from state_cleaners.south_dakota_cleaner import clean_south_dakota_candidates
-from state_cleaners.vermont_cleaner import clean_vermont_candidates
-from state_cleaners.virginia_cleaner import clean_virginia_candidates
-from state_cleaners.washington_cleaner import clean_washington_candidates
-from state_cleaners.west_virginia_cleaner import clean_west_virginia_candidates
-from state_cleaners.wyoming_cleaner import clean_wyoming_candidates
+# Import state cleaners
+from .state_cleaners.alaska_cleaner import AlaskaCleaner
+from .state_cleaners.arizona_cleaner import ArizonaCleaner
+from .state_cleaners.arkansas_cleaner import ArkansasCleaner
+from .state_cleaners.colorado_cleaner import ColoradoCleaner
+from .state_cleaners.delaware_cleaner import DelawareCleaner
+from .state_cleaners.georgia_cleaner import GeorgiaCleaner
+from .state_cleaners.idaho_cleaner import IdahoCleaner
+from .state_cleaners.illinois_cleaner import IllinoisCleaner
+from .state_cleaners.indiana_cleaner import IndianaCleaner
+from .state_cleaners.iowa_cleaner import IowaCleaner
+from .state_cleaners.kansas_cleaner import KansasCleaner
+from .state_cleaners.kentucky_cleaner import KentuckyCleaner
+from .state_cleaners.louisiana_cleaner import LouisianaCleaner
+from .state_cleaners.maryland_cleaner import MarylandCleaner
+from .state_cleaners.missouri_cleaner import MissouriCleaner
+from .state_cleaners.montana_cleaner import MontanaCleaner
+from .state_cleaners.nebraska_cleaner import NebraskaCleaner
+from .state_cleaners.new_mexico_cleaner import NewMexicoCleaner
+from .state_cleaners.new_york_cleaner import NewYorkCleaner
+from .state_cleaners.north_carolina_cleaner import NorthCarolinaCleaner
+from .state_cleaners.oklahoma_cleaner import OklahomaCleaner
+from .state_cleaners.oregon_cleaner import OregonCleaner
+from .state_cleaners.pennsylvania_cleaner import PennsylvaniaCleaner
+from .state_cleaners.south_carolina_cleaner import SouthCarolinaCleaner
+from .state_cleaners.south_dakota_cleaner import SouthDakotaCleaner
+from .state_cleaners.vermont_cleaner import VermontCleaner
+from .state_cleaners.virginia_cleaner import VirginiaCleaner
+from .state_cleaners.washington_cleaner import WashingtonCleaner
+from .state_cleaners.west_virginia_cleaner import WestVirginiaCleaner
+from .state_cleaners.wyoming_cleaner import WyomingCleaner
+
+# Import structural cleaners (new)
+from .state_cleaners.alaska_structural_cleaner import AlaskaStructuralCleaner
 
 # Import processors
 from .office_standardizer import OfficeStandardizer
 
 # Import database utilities
-from config.database import get_db_connection
+from ..config.database import get_db_connection
 
 # Configure logging
 # Create logs directory if it doesn't exist
@@ -104,73 +108,413 @@ logger.info(f"Pipeline logging initialized. Log file: {log_filename}")
 class MainPipeline:
     """Main pipeline orchestrator for CandidateFilings data processing."""
 
-    def __init__(self,
-                 raw_data_dir: str = "data/raw",
-                 processed_dir: str = "data/processed",
-                 final_dir: str = "data/final",
-                 staging_table: str = "staging_candidates",
-                 production_table: str = "filings",
-                 final_filename: Optional[str] = None):
+    def __init__(self, data_dir: str = "data"):
+        self.data_dir = data_dir
         
-        self.raw_data_dir = raw_data_dir
-        self.processed_dir = processed_dir
-        self.final_dir = final_dir
-        self.staging_table = staging_table
-        self.production_table = production_table
-        self.final_filename = final_filename
+        # Define directory structure
+        self.raw_data_dir = os.path.join(data_dir, "raw")
+        self.structured_dir = os.path.join(data_dir, "structured")
+        self.cleaner_dir = os.path.join(data_dir, "cleaner")
+        self.final_dir = os.path.join(data_dir, "final")
+        
+        # Structural cleaner mapping (new)
+        self.structural_cleaners = {
+            'alaska': AlaskaStructuralCleaner(),
+            # Add other structural cleaners as we implement them
+        }
+        
+        # State cleaner mapping (only the ones that exist)
+        self.state_cleaners = {
+            'alaska': AlaskaCleaner(),
+            'arizona': None,  # Will be implemented later
+            'arkansas': None,  # Will be implemented later
+            'colorado': None,  # Will be implemented later
+            'delaware': None,  # Will be implemented later
+            'georgia': None,  # Will be implemented later
+            'idaho': None,  # Will be implemented later
+            'illinois': None,  # Will be implemented later
+            'indiana': None,  # Will be implemented later
+            'iowa': None,  # Will be implemented later
+            'kansas': None,  # Will be implemented later
+            'kentucky': None,  # Will be implemented later
+            'louisiana': None,  # Will be implemented later
+            'maryland': None,  # Will be implemented later
+            'missouri': None,  # Will be implemented later
+            'montana': None,  # Will be implemented later
+            'nebraska': None,  # Will be implemented later
+            'new_mexico': None,  # Will be implemented later
+            'new_york': None,  # Will be implemented later
+            'north_carolina': None,  # Will be implemented later
+            'oklahoma': None,  # Will be implemented later
+            'oregon': None,  # Will be implemented later
+            'pennsylvania': None,  # Will be implemented later
+            'south_carolina': None,  # Will be implemented later
+            'south_dakota': None,  # Will be implemented later
+            'vermont': None,  # Will be implemented later
+            'virginia': None,  # Will be implemented later
+            'washington': None,  # Will be implemented later
+            'west_virginia': None,  # Will be implemented later
+            'wyoming': None  # Will be implemented later
+        }
+        
+        # Track existing IDs for first ingestion date preservation
+        self.existing_ids = {}
         
         # Initialize processors
         self.office_standardizer = OfficeStandardizer()
         self.db_manager = get_db_connection()
         
-        # State cleaner mapping (only the ones that exist)
-        self.state_cleaners = {
-            'alaska': clean_alaska_candidates,
-            'arizona': clean_arizona_candidates,
-            'arkansas': clean_arkansas_candidates,
-            'colorado': clean_colorado_candidates,
-            'delaware': clean_delaware_candidates,
-            'georgia': clean_georgia_candidates,
-            'idaho': clean_idaho_candidates,
-            'illinois': clean_illinois_candidates,
-            'indiana': clean_indiana_candidates,
-            'iowa': clean_iowa_candidates,
-            'kansas': clean_kansas_candidates,
-            'kentucky': clean_kentucky_candidates,
-            'louisiana': clean_louisiana_candidates,
-            'maryland': clean_maryland_candidates,
-            'missouri': clean_missouri_candidates,
-            'montana': clean_montana_candidates,
-            'nebraska': clean_nebraska_candidates,
-            'new_mexico': clean_new_mexico_candidates,
-            'new_york': clean_new_york_candidates,
-            'north_carolina': clean_north_carolina_candidates,
-            'oklahoma': clean_oklahoma_candidates,
-            'oregon': clean_oregon_candidates,
-            'pennsylvania': clean_pennsylvania_candidates,
-            'south_carolina': clean_south_carolina_candidates,
-            'south_dakota': clean_south_dakota_candidates,
-            'vermont': clean_vermont_candidates,
-            'virginia': clean_virginia_candidates,
-            'washington': clean_washington_candidates,
-            'west_virginia': clean_west_virginia_candidates,
-            'wyoming': clean_wyoming_candidates
-        }
-        
         # Create directories if they don't exist
-        for directory in [self.raw_data_dir, self.processed_dir, self.final_dir, "data/reports"]:
+        for directory in [self.raw_data_dir, self.structured_dir, self.cleaner_dir, self.final_dir, "data/reports"]:
             Path(directory).mkdir(parents=True, exist_ok=True)
         
         # Clean up old processed files before starting
         self._cleanup_old_files()
+    
+    def run_pipeline(self) -> pd.DataFrame:
+        """
+        Run the new 5-phase pipeline:
+        1. Structural parsing (extract data from messy files)
+        2. ID generation (create stable IDs from structured data)
+        3. State cleaning (improve data quality within each state)
+        4. National standards (cross-state consistency)
+        5. Output generation
+        """
+        logger.info("Starting new 5-phase pipeline")
+        
+        # Phase 1: Structural parsing
+        logger.info("Phase 1: Running structural cleaners")
+        structural_data = self._run_structural_cleaners()
+        
+        # Phase 2: ID generation
+        logger.info("Phase 2: Generating stable IDs")
+        all_data = self._generate_stable_ids(structural_data)
+        
+        # Phase 3: State data cleaning
+        logger.info("Phase 3: Running state data cleaners")
+        cleaned_data = self._run_state_cleaners(all_data)
+        
+        # Phase 4: National standards (simplified)
+        logger.info("Phase 4: Applying national standards (simplified)")
+        # For now, just combine the data without applying standards
+        all_records = []
+        for state, df in cleaned_data.items():
+            df = df.copy()
+            df['state'] = state.title()
+            all_records.append(df)
+        
+        if all_records:
+            final_data = pd.concat(all_records, ignore_index=True)
+            logger.info(f"Combined data: {len(final_data)} records")
+        else:
+            final_data = pd.DataFrame()
+            logger.warning("No data to combine")
+        
+        # Phase 5: Final processing
+        logger.info("Phase 5: Final processing and output")
+        final_data = self._final_processing(final_data)
+        
+        logger.info(f"Pipeline complete. Final dataset: {len(final_data)} records")
+        return final_data
+    
+    def _run_structural_cleaners(self) -> Dict[str, pd.DataFrame]:
+        """Phase 1: Extract structured data from messy raw files"""
+        structural_data = {}
+        
+        for state, structural_cleaner in self.structural_cleaners.items():
+            try:
+                logger.info(f"Running structural cleaner for {state}")
+                df = structural_cleaner.clean()
+                structural_data[state] = df
+                
+                # Save structured output to structured directory
+                if not df.empty:
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    output_file = os.path.join(self.structured_dir, f"{state}_structured_{timestamp}.xlsx")
+                    df.to_excel(output_file, index=False)
+                    logger.info(f"Saved structured data for {state} to: {output_file}")
+                
+                logger.info(f"Structural cleaning complete for {state}: {len(df)} records")
+            except Exception as e:
+                logger.error(f"Structural cleaning failed for {state}: {e}")
+                # Continue with other states
+                continue
+        
+        return structural_data
+    
+    def _generate_stable_ids(self, structural_data: Dict[str, pd.DataFrame]) -> Dict[str, pd.DataFrame]:
+        """Phase 2: Generate stable IDs from structured but raw data"""
+        all_data = {}
+        
+        for state, df in structural_data.items():
+            try:
+                logger.info(f"Generating stable IDs for {state}")
+                df_with_ids = self._add_stable_ids_to_dataframe(df, state)
+                all_data[state] = df_with_ids
+                logger.info(f"ID generation complete for {state}")
+            except Exception as e:
+                logger.error(f"ID generation failed for {state}: {e}")
+                continue
+        
+        return all_data
+    
+    def _add_stable_ids_to_dataframe(self, df: pd.DataFrame, state: str) -> pd.DataFrame:
+        """Add stable IDs to a single state's dataframe"""
+        df = df.copy()
+        
+        # Generate stable IDs based on core candidate data
+        stable_ids = []
+        first_ingestion_dates = []
+        
+        for idx, row in df.iterrows():
+            try:
+                # Create stable ID from core fields (before any cleaning)
+                stable_id, first_ingestion_date = self._generate_stable_id(row, state)
+                stable_ids.append(stable_id)
+                first_ingestion_dates.append(first_ingestion_date)
+            except Exception as e:
+                logger.warning(f"Failed to generate ID for row {idx} in {state}: {e}")
+                stable_ids.append(None)
+                first_ingestion_dates.append(None)
+        
+        # Add ID columns
+        df['stable_id'] = stable_ids
+        df['first_ingestion_date'] = first_ingestion_dates
+        
+        return df
+    
+    def _generate_stable_id(self, row: pd.Series, state: str) -> Tuple[str, datetime]:
+        """Generate a stable ID for a candidate record"""
+        # Use core fields for ID generation (before any cleaning/standardization)
+        candidate_name = str(row.get('candidate_name', ''))
+        office = str(row.get('office', ''))
+        election_year = str(row.get('election_year', ''))
+        
+        # Create deterministic hash
+        key = f"{candidate_name}|{state}|{office}|{election_year}"
+        stable_id = hashlib.md5(key.encode()).hexdigest()[:12]
+        
+        # Check if we've seen this ID before
+        if stable_id in self.existing_ids:
+            # Use existing first_ingestion_date
+            first_ingestion_date = self.existing_ids[stable_id]
+        else:
+            # New candidate - set current timestamp
+            first_ingestion_date = datetime.now()
+            self.existing_ids[stable_id] = first_ingestion_date
+        
+        return stable_id, first_ingestion_date
+    
+    def _run_state_cleaners(self, all_data: Dict[str, pd.DataFrame]) -> Dict[str, pd.DataFrame]:
+        """Phase 3: Clean and standardize data within each state"""
+        cleaned_data = {}
+        
+        for state, df in all_data.items():
+            logger.info(f"Processing state cleaner for {state}, input type: {type(df)}")
+            if state in self.state_cleaners and self.state_cleaners[state] is not None:
+                try:
+                    logger.info(f"Running data cleaner for {state}")
+                    cleaner = self.state_cleaners[state]
+                    cleaned_df = cleaner.clean(df)  # Pass the dataframe with IDs
+                    logger.info(f"Cleaner returned type: {type(cleaned_df)}")
+                    cleaned_data[state] = cleaned_df
+                    
+                    # Save cleaner output to cleaner directory
+                    if not cleaned_df.empty:
+                        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                        output_file = os.path.join(self.cleaner_dir, f"{state}_cleaned_{timestamp}.xlsx")
+                        cleaned_df.to_excel(output_file, index=False)
+                        logger.info(f"Saved cleaned data for {state} to: {output_file}")
+                    
+                    logger.info(f"Data cleaning complete for {state}: {len(cleaned_df)} records")
+                except Exception as e:
+                    logger.error(f"Data cleaning failed for {state}: {e}")
+                    # Use structural data if cleaning fails
+                    cleaned_data[state] = df
+            else:
+                # No data cleaner available, use structural data
+                cleaned_data[state] = df
+        
+        logger.info(f"State cleaners completed. Returning {len(cleaned_data)} states")
+        for state, df in cleaned_data.items():
+            logger.info(f"  {state}: {type(df)}, {len(df) if hasattr(df, '__len__') else 'N/A'} records")
+            if hasattr(df, 'columns'):
+                logger.info(f"    Columns: {df.columns.tolist()}")
+            else:
+                logger.info(f"    No columns attribute - this is not a DataFrame!")
+        
+        return cleaned_data
+    
+    def _apply_national_standards(self, cleaned_data: Dict[str, pd.DataFrame]) -> pd.DataFrame:
+        """Phase 4: Apply cross-state consistency and national standards"""
+        try:
+            # Validate input
+            if not isinstance(cleaned_data, dict):
+                logger.error(f"cleaned_data is not a dict, it's {type(cleaned_data)}")
+                return pd.DataFrame()
+            
+            logger.info(f"cleaned_data type: {type(cleaned_data)}")
+            logger.info(f"cleaned_data keys: {list(cleaned_data.keys())}")
+            
+            # Combine all state data
+            all_records = []
+            for state, df in cleaned_data.items():
+                logger.info(f"Processing {state} with type {type(df)} and {len(df) if hasattr(df, '__len__') else 'N/A'} records")
+                if not hasattr(df, 'columns'):
+                    logger.error(f"Data for {state} is not a DataFrame, it's {type(df)}")
+                    continue
+                logger.info(f"DataFrame columns: {df.columns.tolist()}")
+                df['state'] = state.title()  # Ensure state column exists
+                all_records.append(df)
+            
+            if not all_records:
+                logger.warning("No data to process")
+                return pd.DataFrame()
+            
+            combined_df = pd.concat(all_records, ignore_index=True)
+            logger.info(f"Combined data: {len(combined_df)} records")
+            
+            # Apply national standards
+            logger.info("Skipping party standardization for now...")
+            # combined_df = self._standardize_parties(combined_df)
+            
+            logger.info("Skipping office standardization for now...")
+            # combined_df = self._standardize_offices(combined_df)
+            
+            logger.info("Skipping address parsing for now...")
+            # combined_df = self._parse_addresses(combined_df)
+            
+            # Apply deduplication logic
+            logger.info("Skipping state-wide deduplication for now...")
+            # combined_df = self._deduplicate_statewide_records(combined_df)
+            
+            logger.info("Skipping election deduplication for now...")
+            # combined_df = self._deduplicate_election_records(combined_df)
+            
+            logger.info("National standards application completed successfully")
+            return combined_df
+            
+        except Exception as e:
+            logger.error(f"National standards application failed: {e}")
+            import traceback
+            logger.error(f"Full traceback: {traceback.format_exc()}")
+            # Return empty DataFrame instead of dict
+            return pd.DataFrame()
+    
+    def _standardize_offices(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Standardize office names using the office standardizer"""
+        logger.info("Standardizing office names")
+        
+        try:
+            standardized_df = self.office_standardizer.standardize_dataset(df, 'office')
+            logger.info(f"Office standardization complete: {len(standardized_df)} records")
+            return standardized_df
+        except Exception as e:
+            logger.error(f"Office standardization failed: {e}")
+            return df
+    
+    def _deduplicate_statewide_records(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Remove duplicate records for state-wide offices appearing in multiple counties"""
+        logger.info("Deduplicating state-wide records")
+        
+        # Identify state-wide offices (no district/county specificity)
+        statewide_offices = [
+            'Governor', 'Lieutenant Governor', 'Attorney General', 'Secretary of State',
+            'Treasurer', 'Auditor', 'US Senate', 'US President'
+        ]
+        
+        # Group by candidate + year + office + state
+        groups = df.groupby(['stable_id', 'election_year', 'office', 'state'])
+        
+        deduplicated_records = []
+        
+        for (stable_id, year, office, state), group in groups:
+            if office in statewide_offices and len(group) > 1:
+                # Keep the most complete record, set county to NULL
+                best_record = group.iloc[group.notna().sum(axis=1).idxmax()].copy()
+                best_record['county'] = None
+                deduplicated_records.append(best_record)
+                logger.info(f"Deduplicated {len(group)} records for {office} in {state} {year}")
+            else:
+                # Not a state-wide office or no duplicates, keep all records
+                deduplicated_records.extend(group.to_dict('records'))
+        
+        result_df = pd.DataFrame(deduplicated_records)
+        logger.info(f"State-wide deduplication complete: {len(result_df)} records")
+        return result_df
+    
+    def _deduplicate_election_records(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Deduplicate records by election type (Primary, General, etc.)"""
+        logger.info("Deduplicating election type records")
+        
+        # Group by candidate + year + office + state
+        groups = df.groupby(['stable_id', 'election_year', 'office', 'state'])
+        
+        deduplicated_records = []
+        
+        for (stable_id, year, office, state), group in groups:
+            if len(group) > 1:
+                # Analyze election types
+                election_types = group['election_type'].dropna().unique()
+                
+                if len(election_types) > 1:
+                    # Multiple election types - merge into single record
+                    best_record = group.iloc[group.notna().sum(axis=1).idxmax()].copy()
+                    
+                    # Create combined election type
+                    if 'Primary' in election_types and 'General' in election_types:
+                        best_record['election_type'] = 'Primary, General'
+                    elif 'Primary' in election_types:
+                        best_record['election_type'] = 'Primary'
+                    elif 'General' in election_types:
+                        best_record['election_type'] = 'General'
+                    elif 'Special' in election_types:
+                        best_record['election_type'] = 'Special'
+                    else:
+                        best_record['election_type'] = ', '.join(sorted(election_types))
+                    
+                    deduplicated_records.append(best_record)
+                    logger.info(f"Merged {len(group)} election records for {office} in {state} {year}")
+                else:
+                    # Same election type, keep the best record
+                    best_record = group.iloc[group.notna().sum(axis=1).idxmax()]
+                    deduplicated_records.append(best_record)
+            else:
+                # Single record, keep as is
+                deduplicated_records.extend(group.to_dict('records'))
+        
+        result_df = pd.DataFrame(deduplicated_records)
+        logger.info(f"Election type deduplication complete: {len(result_df)} records")
+        return result_df
+    
+    def _final_processing(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Phase 5: Final processing and output preparation"""
+        logger.info("Running final processing")
+        
+        # Ensure required columns exist
+        required_columns = ['stable_id', 'candidate_name', 'state', 'office', 'election_year']
+        for col in required_columns:
+            if col not in df.columns:
+                logger.warning(f"Missing required column: {col}")
+                df[col] = None
+        
+        # Sort by state, office, candidate name
+        df = df.sort_values(['state', 'office', 'candidate_name']).reset_index(drop=True)
+        
+        # Final logging
+        logger.info(f"Final dataset: {len(df)} records")
+        logger.info(f"States represented: {df['state'].nunique()}")
+        logger.info(f"Offices represented: {df['office'].nunique()}")
+        
+        return df
     
     def _cleanup_old_files(self):
         """Clean up old processed files, keeping only the latest version per state."""
         logger.info("Cleaning up old processed files...")
         
         # Remove ALL old files first
-        all_old_files = list(Path(self.processed_dir).glob("*_cleaned_*.xlsx"))
-        all_old_files.extend(list(Path(self.processed_dir).glob("*_cleaned_*.csv")))
+        all_old_files = list(Path(self.cleaner_dir).glob("*_cleaned_*.xlsx"))
+        all_old_files.extend(list(Path(self.cleaner_dir).glob("*_cleaned_*.csv")))
         
         files_removed = 0
         for old_file in all_old_files:
@@ -184,7 +528,7 @@ class MainPipeline:
         logger.info(f"Cleanup completed. Removed {files_removed} old files.")
         
         # Also clean up any temporary merged files
-        temp_files = list(Path(self.processed_dir).glob("*_merged_temp*"))
+        temp_files = list(Path(self.cleaner_dir).glob("*_merged_temp*"))
         for temp_file in temp_files:
             try:
                 temp_file.unlink()
@@ -216,7 +560,7 @@ class MainPipeline:
                 
                 # Run state cleaner with proper output directory
                 try:
-                    cleaned_df = cleaner_func(raw_file, output_dir=self.processed_dir)
+                    cleaned_df = cleaner_func(raw_file, output_dir=self.cleaner_dir)
                 except Exception as cleaner_error:
                     logger.error(f"State cleaner function failed for {state}: {cleaner_error}")
                     continue
@@ -230,7 +574,7 @@ class MainPipeline:
                 base_name = os.path.splitext(os.path.basename(raw_file))[0]
                 pattern = f"{base_name}_cleaned_*.xlsx"
                 saved_candidates = sorted(
-                    Path(self.processed_dir).glob(pattern),
+                    Path(self.cleaner_dir).glob(pattern),
                     key=lambda p: p.stat().st_mtime,
                     reverse=True
                 )
@@ -240,7 +584,7 @@ class MainPipeline:
                     logger.info(f"✅ {state} cleaned successfully and using existing file: {chosen_file}")
                     # Remove redundant CSV outputs if a matching Excel file exists
                     try:
-                        for csv_path in Path(self.processed_dir).glob(f"{base_name}_cleaned_*.csv"):
+                        for csv_path in Path(self.cleaner_dir).glob(f"{base_name}_cleaned_*.csv"):
                             try:
                                 csv_path.unlink()
                                 logger.info(f"Removed redundant CSV: {csv_path.name}")
@@ -252,13 +596,13 @@ class MainPipeline:
                     # Save here if the cleaner didn't write a file
                     try:
                         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                        output_file = os.path.join(self.processed_dir, f"{base_name}_cleaned_{timestamp}.xlsx")
+                        output_file = os.path.join(self.cleaner_dir, f"{base_name}_cleaned_{timestamp}.xlsx")
                         cleaned_df.to_excel(output_file, index=False)
                         cleaned_files[state] = output_file
                         logger.info(f"✅ {state} cleaned successfully and saved to: {output_file}")
                         # Also remove any CSV that may have been created by the cleaner
                         try:
-                            for csv_path in Path(self.processed_dir).glob(f"{base_name}_cleaned_*.csv"):
+                            for csv_path in Path(self.cleaner_dir).glob(f"{base_name}_cleaned_*.csv"):
                                 try:
                                     csv_path.unlink()
                                     logger.info(f"Removed redundant CSV: {csv_path.name}")
