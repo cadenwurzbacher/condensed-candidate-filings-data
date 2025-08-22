@@ -57,6 +57,7 @@ from .state_cleaners.wyoming_cleaner import WyomingCleaner
 
 # Import structural cleaners (new)
 from .structural_cleaners.alaska_structural_cleaner import AlaskaStructuralCleaner
+from .structural_cleaners.arizona_structural_cleaner import ArizonaStructuralCleaner
 
 # Import processors
 from .office_standardizer import OfficeStandardizer
@@ -120,6 +121,7 @@ class MainPipeline:
         # Structural cleaner mapping (new)
         self.structural_cleaners = {
             'alaska': AlaskaStructuralCleaner(),
+            'arizona': ArizonaStructuralCleaner(),
             # Add other structural cleaners as we implement them
         }
         
@@ -168,6 +170,10 @@ class MainPipeline:
         for directory in [self.raw_data_dir, self.structured_dir, self.cleaner_dir, self.final_dir, "data/reports"]:
             Path(directory).mkdir(parents=True, exist_ok=True)
         
+        # Create OLD folder within final directory
+        old_final_dir = os.path.join(self.final_dir, "OLD")
+        Path(old_final_dir).mkdir(parents=True, exist_ok=True)
+        
         # Clean up old processed files before starting
         self._cleanup_old_files()
     
@@ -213,6 +219,17 @@ class MainPipeline:
         # Phase 5: Final processing
         logger.info("Phase 5: Final processing and output")
         final_data = self._final_processing(final_data)
+        
+        # Save final output to final directory
+        if not final_data.empty:
+            # Move old final files to OLD folder
+            self._archive_old_final_files()
+            
+            # Save new final file
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            output_file = os.path.join(self.final_dir, f"candidate_filings_{timestamp}.xlsx")
+            final_data.to_excel(output_file, index=False)
+            logger.info(f"✅ Final output saved to: {output_file}")
         
         logger.info(f"Pipeline complete. Final dataset: {len(final_data)} records")
         return final_data
@@ -535,6 +552,35 @@ class MainPipeline:
                 logger.info(f"Removed temporary file: {temp_file.name}")
             except Exception as e:
                 logger.warning(f"Could not remove temporary file {temp_file.name}: {e}")
+    
+    def _archive_old_final_files(self):
+        """Move old final files to OLD folder instead of deleting them."""
+        logger.info("Archiving old final files to OLD folder...")
+        
+        old_final_dir = os.path.join(self.final_dir, "OLD")
+        files_moved = 0
+        
+        # Find all Excel files in final directory (excluding OLD folder)
+        for file_path in Path(self.final_dir).glob("*.xlsx"):
+            if "OLD" not in str(file_path):
+                try:
+                    # Create timestamped filename for OLD folder
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    base_name = file_path.stem
+                    new_name = f"{base_name}_archived_{timestamp}.xlsx"
+                    new_path = os.path.join(old_final_dir, new_name)
+                    
+                    # Move file to OLD folder
+                    file_path.rename(new_path)
+                    files_moved += 1
+                    logger.info(f"Moved old final file to OLD folder: {new_name}")
+                except Exception as e:
+                    logger.warning(f"Could not move old final file {file_path.name}: {e}")
+        
+        if files_moved > 0:
+            logger.info(f"Archive completed. Moved {files_moved} old final files to OLD folder")
+        else:
+            logger.info("No old final files to archive")
 
     def run_state_cleaners(self) -> Dict[str, str]:
         """Run all state cleaners on raw data."""

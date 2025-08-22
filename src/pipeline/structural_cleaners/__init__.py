@@ -7,7 +7,9 @@ transforming the data content - they only parse and organize the structure.
 """
 
 from .alaska_structural_cleaner import AlaskaStructuralCleaner
+from .arizona_structural_cleaner import ArizonaStructuralCleaner
 
 __all__ = [
     'AlaskaStructuralCleaner',
+    'ArizonaStructuralCleaner',
 ]
