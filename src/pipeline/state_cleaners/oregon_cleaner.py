@@ -536,54 +536,99 @@ class OregonCleaner:
         if 'Mailing Address' in df.columns:
             def parse_address_components(address_str: str) -> Tuple[Optional[str], Optional[str], Optional[str]]:
                 """Parse Oregon address to extract city, zip_code, and address_state."""
-                if pd.isna(address_str):
+                if pd.isna(address_str) or not address_str:
                     return None, None, None
                 
                 address = str(address_str).strip()
                 
-                # Oregon format: "Street Address, City, State ZIP"
-                # Look for state and zip at end, but avoid directional abbreviations
-                state_zip_match = re.search(r',\s*([A-Z]{2})\s*,?\s*(\d{5}(?:-\d{4})?)\s*$', address)
+                # Skip exempt addresses
+                if 'exempt from public record' in address.lower():
+                    return None, None, None
+                
+                # Valid state codes
+                valid_states = {'OR', 'WA', 'CA', 'ID', 'NV', 'MT', 'WY', 'UT', 'AZ', 'CO', 'NM', 'TX', 'OK', 'KS', 'NE', 'SD', 'ND', 'MN', 'IA', 'MO', 'AR', 'LA', 'MS', 'AL', 'GA', 'FL', 'SC', 'NC', 'TN', 'KY', 'VA', 'WV', 'MD', 'DE', 'PA', 'NJ', 'NY', 'CT', 'RI', 'MA', 'VT', 'NH', 'ME', 'AK', 'HI', 'DC'}
+                
+                # Pattern 1: Oregon comma format: "Street Address, City, OR, ZIP"
+                state_zip_match = re.search(r',\s*([A-Z]{2})\s*,\s*(\d{4,5}(?:-\d{4})?)\s*$', address)
                 if state_zip_match:
                     state = state_zip_match.group(1)
                     zip_code = state_zip_match.group(2)
                     
-                    # Only accept valid state codes (avoid NE, SE, NW, SW, etc.)
-                    valid_states = {'OR', 'WA', 'CA', 'ID', 'NV', 'MT', 'WY', 'UT', 'AZ', 'CO', 'NM', 'TX', 'OK', 'KS', 'NE', 'SD', 'ND', 'MN', 'IA', 'MO', 'AR', 'LA', 'MS', 'AL', 'GA', 'FL', 'SC', 'NC', 'TN', 'KY', 'VA', 'WV', 'MD', 'DE', 'PA', 'NJ', 'NY', 'CT', 'RI', 'MA', 'VT', 'NH', 'ME', 'AK', 'HI', 'DC'}
+                    # Fix short ZIP codes (add leading zero)
+                    if len(zip_code) == 4:
+                        zip_code = '0' + zip_code
                     
                     if state in valid_states:
                         # Extract city (everything between last two commas)
                         parts = address.split(',')
                         if len(parts) >= 3:
                             city = parts[-3].strip()  # Second to last part before state
-                        else:
-                            city = None
-                        
-                        return city, zip_code, state
+                            return city, zip_code, state
                 
-                # Fallback: look for state and zip anywhere, but be more restrictive
-                state_match = re.search(r'\b([A-Z]{2})\s+(\d{5}(?:-\d{4})?)\b', address)
-                if state_match:
-                    state = state_match.group(1)
-                    zip_code = state_match.group(2)
+                # Pattern 2: Standard format: "Street Address, City, State ZIP"
+                state_zip_match = re.search(r',\s*([A-Z]{2})\s+(\d{4,5}(?:-\d{4})?)\s*$', address)
+                if state_zip_match:
+                    state = state_zip_match.group(1)
+                    zip_code = state_zip_match.group(2)
                     
-                    # Only accept valid state codes
-                    valid_states = {'OR', 'WA', 'CA', 'ID', 'NV', 'MT', 'WY', 'UT', 'AZ', 'CO', 'NM', 'TX', 'OK', 'KS', 'NE', 'SD', 'ND', 'MN', 'IA', 'MO', 'AR', 'LA', 'MS', 'AL', 'GA', 'FL', 'SC', 'NC', 'TN', 'KY', 'VA', 'WV', 'MD', 'DE', 'PA', 'NJ', 'NY', 'CT', 'RI', 'MA', 'VT', 'NH', 'ME', 'AK', 'HI', 'DC'}
+                    # Fix short ZIP codes
+                    if len(zip_code) == 4:
+                        zip_code = '0' + zip_code
                     
                     if state in valid_states:
-                        # Try to extract city (everything before state)
-                        before_state = address[:state_match.start()].strip()
-                        if before_state:
-                            # Remove trailing commas and clean up
-                            city = before_state.rstrip(',').strip()
-                            # If city contains street address, try to extract just the city part
-                            if ',' in city:
-                                city_parts = city.split(',')
-                                city = city_parts[-1].strip()  # Take the last part as city
+                        # Extract city (everything before state)
+                        before_state = address[:state_zip_match.start()].strip()
+                        if ',' in before_state:
+                            city_parts = before_state.split(',')
+                            city = city_parts[-1].strip()  # Take the last part as city
                         else:
-                            city = None
-                        
+                            city = before_state
                         return city, zip_code, state
+                
+                # Pattern 3: Space-separated format: "Street Address City State ZIP" or "PO Box 123 ZIP"
+                zip_match = re.search(r'(\d{4,5}(?:-\d{4})?)\s*$', address)
+                if zip_match:
+                    zip_code = zip_match.group(1)
+                    
+                    # Fix short ZIP codes
+                    if len(zip_code) == 4:
+                        zip_code = '0' + zip_code
+                    
+                    # Remove ZIP from address to find state and city
+                    address_without_zip = address[:zip_match.start()].strip()
+                    
+                    # Look for state abbreviation before ZIP
+                    state_match = re.search(r'\s+([A-Z]{2})\s*$', address_without_zip)
+                    if state_match:
+                        state = state_match.group(1)
+                        if state in valid_states:
+                            # Remove state to find city
+                            address_without_state = address_without_zip[:state_match.start()].strip()
+                            
+                            # Extract city from remaining address
+                            if address_without_state.upper().startswith('PO BOX'):
+                                # For PO Box addresses, assume no city in address
+                                return None, zip_code, state
+                            else:
+                                # Look for city name by finding words that aren't street types
+                                parts = address_without_state.split()
+                                if len(parts) >= 2:
+                                    # Look backwards for city name
+                                    for i in range(len(parts) - 1, -1, -1):
+                                        word = parts[i].lower()
+                                        if (word not in ['street', 'avenue', 'road', 'drive', 'lane', 'court', 'way', 'place', 'circle', 'boulevard', 'apt', 'suite'] and
+                                            word not in ['st', 'ave', 'rd', 'dr', 'ln', 'ct', 'blvd', 'ste'] and
+                                            not word.endswith('st') and not word.endswith('rd') and not word.endswith('ave')):
+                                            city = parts[i]
+                                            return city, zip_code, state
+                                
+                                # Fallback: use last word as city
+                                city = parts[-1] if parts else None
+                                return city, zip_code, state
+                    else:
+                        # No state found, assume Oregon if ZIP looks like Oregon ZIP
+                        if zip_code.startswith('97'):
+                            return None, zip_code, 'OR'
                 
                 return None, None, None
             

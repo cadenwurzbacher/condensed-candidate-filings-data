@@ -170,13 +170,16 @@ class MissouriCleaner:
         # Step 6: Clean contact information
         cleaned_df = self._clean_contact_info(cleaned_df)
         
-        # Step 7: Add required columns for final schema
+        # Step 7: Map geographic data from addresses
+        cleaned_df = self._map_geographic_data(cleaned_df)
+        
+        # Step 8: Add required columns for final schema
         cleaned_df = self._add_required_columns(cleaned_df)
         
-        # Step 8: Generate stable IDs (skipped - will be done later in process)
+        # Step 9: Generate stable IDs (skipped - will be done later in process)
         # cleaned_df = self._generate_stable_ids(cleaned_df)
         
-        # Step 9: Remove duplicate columns
+        # Step 10: Remove duplicate columns
         cleaned_df = self._remove_duplicate_columns(cleaned_df)
         
         # Final step: Ensure column order matches Alaska's exact structure
@@ -612,6 +615,100 @@ class MissouriCleaner:
             m = re.search(r"\b([A-Z]{2})\s+\d{5}(?:-\d{4})?\b", s)
             return m.group(1) if m else None
         df['address_state'] = df['address'].apply(extract_state)
+        
+        return df
+    
+    def _map_geographic_data(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Map geographic data from Missouri address fields."""
+        logger.info("Mapping geographic data...")
+        
+        # Enhanced address parsing: extract city and zip from address field
+        def parse_missouri_address(address_str: str) -> tuple:
+            """Parse Missouri address to extract city and zip code."""
+            if pd.isna(address_str) or not address_str:
+                return None, None
+            
+            address = str(address_str).strip()
+            
+            # Missouri format: "Street Address CITY MO ZIP" or "PO BOX XXXX CITY MO ZIP"
+            # Look for ZIP code at the end
+            zip_match = re.search(r'(\d{5}(?:-\d{4})?)\s*$', address)
+            if zip_match:
+                zip_code = zip_match.group(1)
+                # Remove ZIP from address to find city
+                address_without_zip = address[:zip_match.start()].strip()
+                
+                # Look for state abbreviation before ZIP
+                state_match = re.search(r'\s+([A-Z]{2})\s*$', address_without_zip)
+                if state_match:
+                    state = state_match.group(1)
+                    if state == 'MO':
+                        # Remove state to find city
+                        address_without_state = address_without_zip[:state_match.start()].strip()
+                        
+                        # Extract city from remaining address
+                        if address_without_state.upper().startswith(('PO BOX', 'P. O. BOX')):
+                            # For PO Box addresses, city is after the PO Box number
+                            parts = address_without_state.split()
+                            if len(parts) >= 3:
+                                # Find where the city starts by looking for the first non-numeric word after PO BOX
+                                city_start_idx = 3  # Start after "PO BOX"
+                                for i in range(3, len(parts)):
+                                    if not parts[i].replace('.', '').isdigit():  # Skip numeric parts (including "491.")
+                                        city_start_idx = i
+                                        break
+                                
+                                city_parts = parts[city_start_idx:]
+                                if city_parts:
+                                    city = ' '.join(city_parts)
+                                    return city, zip_code
+                        else:
+                            # For street addresses, use a simpler approach
+                            # Look for common city patterns in the address
+                            address_lower = address_without_state.lower()
+                            
+                            # Known Missouri cities to look for
+                            missouri_cities = [
+                                'st. louis', 'st louis', 'kansas city', 'springfield', 'columbia', 'independence',
+                                'lees summit', 'o\'fallon', 'st. joseph', 'st joseph', 'st. charles', 'st charles',
+                                'st. peters', 'st peters', 'jefferson city', 'columbia', 'lee\'s summit',
+                                'richmond heights', 'university city', 'webster groves', 'kirkwood', 'maplewood',
+                                'creve coeur', 'chesterfield', 'ballwin', 'manchester', 'ellisville', 'wildwood',
+                                'eureka', 'fenton', 'arnold', 'imperial', 'festus', 'crystal city', 'herculaneum',
+                                'hannibal', 'quincy', 'mexico', 'fulton', 'jefferson city', 'columbia', 'rolla',
+                                'cape girardeau', 'poplar bluff', 'sikeston', 'kennett', 'malden', 'caruthersville',
+                                'cottleville', 'wentzville', 'lake saint louis', 'dardenne prairie', 'o\'fallon',
+                                'st. charles', 'st charles', 'st. peters', 'st peters', 'florissant', 'bridgeton',
+                                'hazelwood', 'maryland heights', 'overland', 'st. ann', 'st ann', 'creve coeur',
+                                'chesterfield', 'ballwin', 'manchester', 'ellisville', 'wildwood', 'eureka', 'fenton'
+                            ]
+                            
+                            # Look for exact city matches
+                            for city_name in missouri_cities:
+                                if city_name in address_lower:
+                                    # Find the original case version
+                                    city_start = address_lower.find(city_name)
+                                    city_end = city_start + len(city_name)
+                                    city = address_without_state[city_start:city_end]
+                                    return city, zip_code
+                            
+                            # Fallback: use last word as city
+                            parts = address_without_state.split()
+                            if parts:
+                                city = parts[-1]
+                                return city, zip_code
+            
+            return None, None
+        
+        # Apply enhanced address parsing to extract city and zip_code
+        for idx, row in df.iterrows():
+            address = row['address']
+            if pd.notna(address):
+                parsed_city, parsed_zip = parse_missouri_address(address)
+                if parsed_city:
+                    df.at[idx, 'city'] = parsed_city
+                if parsed_zip:
+                    df.at[idx, 'zip_code'] = parsed_zip
         
         return df
     

@@ -111,6 +111,9 @@ class WestVirginiaCleaner:
         # Step 8: Remove duplicate columns
         cleaned_df = self._remove_duplicate_columns(cleaned_df)
         
+        # Step 9: Map geographic data from addresses
+        cleaned_df = self._map_geographic_data(cleaned_df)
+        
         # Final step: Ensure column order matches Alaska's exact structure
         cleaned_df = self.ensure_column_order(cleaned_df)
         
@@ -593,14 +596,83 @@ class WestVirginiaCleaner:
         if website_column in df.columns:
             df['website'] = df[website_column].apply(lambda x: str(x).strip() if pd.notna(x) else None)
         
-        # Derive address_state from address when possible
-        def extract_state(addr: Optional[str]) -> Optional[str]:
-            if addr is None or pd.isna(addr):
-                return None
-            s = str(addr)
-            m = re.search(r"\b([A-Z]{2})\s+\d{5}(?:-\d{4})?\b", s)
-            return m.group(1) if m else None
-        df['address_state'] = df['address'].apply(extract_state)
+        # Note: address_state, city, and zip_code extraction moved to _map_geographic_data method
+        # where the address field is fully processed
+        
+        return df
+    
+    def _map_geographic_data(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Map geographic data from West Virginia address fields."""
+        logger.info("Mapping geographic data...")
+        
+        # Enhanced address parsing: extract city and zip from address field
+        def parse_west_virginia_address(address_str: str) -> tuple:
+            """Parse West Virginia address to extract city, zip code, and state."""
+            if pd.isna(address_str) or not address_str:
+                return None, None, None
+            
+            address = str(address_str).strip()
+            
+            # Handle PO Box addresses
+            if re.match(r'^PO\s+BOX\s+\d+', address, re.IGNORECASE):
+                # Extract city, state, and zip from PO Box format: "PO BOX 123 CITY STATE ZIP"
+                city_state_zip_match = re.search(r'PO\s+BOX\s+\d+\s+(.+?)\s+([A-Z]{2})\s+(\d{5}(?:-\d{4})?)$', address, re.IGNORECASE)
+                if city_state_zip_match:
+                    city = city_state_zip_match.group(1).strip()
+                    state = city_state_zip_match.group(2)
+                    zip_code = city_state_zip_match.group(3)
+                    return city, zip_code, state
+            
+            # Handle regular addresses: "Street Address CITY STATE ZIP"
+            # Look for ZIP code at the end
+            zip_match = re.search(r'(\d{5}(?:-\d{4})?)$', address)
+            if zip_match:
+                zip_code = zip_match.group(1)
+                # Remove ZIP from address to find city and state
+                address_without_zip = address[:zip_match.start()].strip()
+                
+                # Look for state abbreviation before ZIP
+                state_match = re.search(r'\s+([A-Z]{2})$', address_without_zip)
+                if state_match:
+                    state = state_match.group(1)
+                    # Remove state from address to find city
+                    address_without_state = address_without_zip[:state_match.start()].strip()
+                    
+                    # City is likely the last word(s) after the street address
+                    parts = address_without_state.split()
+                    if len(parts) >= 2:
+                        # Look for city name by finding words that aren't street types
+                        for i in range(len(parts) - 1, -1, -1):
+                            word = parts[i].lower()
+                            if (word not in ['street', 'avenue', 'road', 'drive', 'lane', 'court', 'way', 'place', 'circle', 'boulevard'] and
+                                word not in ['st', 'ave', 'rd', 'dr', 'ln', 'ct', 'blvd', 'ste', 'suite'] and
+                                not word.endswith('st') and not word.endswith('rd') and not word.endswith('ave')):
+                                # Found potential city name - take this word and possibly previous ones
+                                if i == len(parts) - 1:
+                                    # Last word, likely single-word city
+                                    city = parts[i]
+                                else:
+                                    # Multi-word city, take from this position to end
+                                    city = ' '.join(parts[i:])
+                                return city, zip_code, state
+                        
+                        # Fallback: use last word as city
+                        city = parts[-1]
+                        return city, zip_code, state
+            
+            return None, None, None
+        
+        # Apply enhanced address parsing to extract city, zip_code, and address_state
+        for idx, row in df.iterrows():
+            address = row['address']
+            if pd.notna(address):
+                parsed_city, parsed_zip, parsed_state = parse_west_virginia_address(address)
+                if parsed_city:
+                    df.at[idx, 'city'] = parsed_city
+                if parsed_zip:
+                    df.at[idx, 'zip_code'] = parsed_zip
+                if parsed_state:
+                    df.at[idx, 'address_state'] = parsed_state
         
         return df
     
