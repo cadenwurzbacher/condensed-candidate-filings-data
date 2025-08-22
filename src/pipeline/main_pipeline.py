@@ -781,6 +781,17 @@ class MainPipeline:
             df['has_zip'] = False
             df['has_state'] = False
         
+        # Fix Alaska county capitalization
+        if 'county' in df.columns and 'state' in df.columns:
+            try:
+                # Fix Alaska counties from ALL CAPS to Proper Case
+                alaska_mask = df['state'].str.contains('Alaska', case=False, na=False)
+                if alaska_mask.any():
+                    df.loc[alaska_mask, 'county'] = df.loc[alaska_mask, 'county'].str.title()
+                    logger.info(f"Fixed capitalization for {alaska_mask.sum()} Alaska county records")
+            except Exception as e:
+                logger.warning(f"Alaska county capitalization fix failed: {e}")
+        
         return df
 
     def _apply_national_standards(self, df: pd.DataFrame) -> pd.DataFrame:

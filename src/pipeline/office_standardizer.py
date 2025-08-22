@@ -61,6 +61,12 @@ class OfficeStandardizer:
             'UNITED STATES PRESIDENT / VICE PRESIDENT': 'US President',
             'PRESIDENT OF THE UNITED STATES - DEMOCRATIC PARTY': 'US President',
             'PRESIDENT OF THE UNITED STATES - REPUBLICAN PARTY': 'US President',
+            'PRESIDENT AND VICE PRESIDENT': 'US President',
+            'PRESIDENT/VICE PRESIDENT': 'US President',
+            'PRESIDENT / VICE PRESIDENT': 'US President',
+            'PRESIDENTVICE PRESIDENT': 'US President',
+            'US PRESIDENT /US VICE PRESIDENT': 'US President',
+            'UNITED STATES PRESIDENT / VICE PRESIDENT': 'US President',
             
             # State executive offices
             'GOVERNOR': 'Governor',
@@ -241,6 +247,20 @@ class OfficeStandardizer:
         if state_court_alt_match:
             district_info = state_court_alt_match.group(2)
             office_clean = state_court_alt_match.group(1)
+            return office_clean, district_info
+        
+        # Pattern 12: "100th Representative" → "State House", district: "100"
+        ordinal_rep_match = re.search(r'^(\d+)(?:st|nd|rd|th)\s+(?:Representative|Rep)(?:\s+District)?(?:\s*,\s*Office\s*[AB])?', office_str, re.IGNORECASE)
+        if ordinal_rep_match:
+            district_info = ordinal_rep_match.group(1)
+            office_clean = 'State House'
+            return office_clean, district_info
+        
+        # Pattern 13: "100th Senator" → "State Senate", district: "100"
+        ordinal_sen_match = re.search(r'^(\d+)(?:st|nd|rd|th)\s+(?:Senator|Sen)(?:\s+District)?(?:\s*,\s*Office\s*[AB])?', office_str, re.IGNORECASE)
+        if ordinal_sen_match:
+            district_info = ordinal_sen_match.group(1)
+            office_clean = 'State Senate'
             return office_clean, district_info
         
         # No district found, return original office name
