@@ -61,6 +61,7 @@ from .structural_cleaners.arizona_structural_cleaner import ArizonaStructuralCle
 from .structural_cleaners.arkansas_structural_cleaner import ArkansasStructuralCleaner
 from .structural_cleaners.colorado_structural_cleaner import ColoradoStructuralCleaner
 from .structural_cleaners.delaware_structural_cleaner import DelawareStructuralCleaner
+from .structural_cleaners.georgia_structural_cleaner import GeorgiaStructuralCleaner
 
 # Import processors
 from .office_standardizer import OfficeStandardizer
@@ -128,6 +129,7 @@ class MainPipeline:
             'arkansas': ArkansasStructuralCleaner(),
             'colorado': ColoradoStructuralCleaner(),
             'delaware': DelawareStructuralCleaner(),
+            'georgia': GeorgiaStructuralCleaner(),
             # Add other structural cleaners as we implement them
         }
         
