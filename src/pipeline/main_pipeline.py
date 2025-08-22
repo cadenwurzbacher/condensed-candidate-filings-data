@@ -543,32 +543,109 @@ class MainPipeline:
             return None
 
     def _standardize_parties(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Standardize party names to major parties only."""
+        """Comprehensive party name standardization."""
         logger.info("Standardizing party names...")
         
-        # Major party mappings
+        # Comprehensive party mappings
         party_mappings = {
+            # Democratic variations
             'democrat': 'Democratic',
             'democratic': 'Democratic',
             'dem': 'Democratic',
+            'democratic party': 'Democratic',
+            'democrats': 'Democratic',
+            
+            # Republican variations
             'republican': 'Republican',
+            'republicans': 'Republican',
             'rep': 'Republican',
             'gop': 'Republican',
+            'grand old party': 'Republican',
+            
+            # Independent variations
             'independent': 'Independent',
             'ind': 'Independent',
+            'independents': 'Independent',
+            'no party': 'Independent',
+            'no party preference': 'Independent',
+            'unaffiliated': 'Independent',
+            'una': 'Independent',
+            
+            # Libertarian variations
             'libertarian': 'Libertarian',
             'lib': 'Libertarian',
+            'libertarians': 'Libertarian',
+            'lbt': 'Libertarian',
+            
+            # Green Party variations
             'green': 'Green Party',
+            'green party': 'Green Party',
+            'gre': 'Green Party',
+            'greens': 'Green Party',
+            
+            # Constitution Party variations
             'constitution': 'Constitution Party',
-            'constitution party': 'Constitution Party'
+            'constitution party': 'Constitution Party',
+            'cst': 'Constitution Party',
+            'constitutional': 'Constitution Party',
+            
+            # Nonpartisan variations
+            'nonpartisan': 'Nonpartisan',
+            'non-partisan': 'Nonpartisan',
+            'non partisan': 'Nonpartisan',
+            'nonpartisan judicial': 'Nonpartisan',
+            'non-partisan judicial': 'Nonpartisan',
+            
+            # Progressive variations
+            'progressive': 'Progressive',
+            'progressive party': 'Progressive',
+            
+            # Other parties
+            'reform': 'Reform Party',
+            'natural law': 'Natural Law Party',
+            'socialist': 'Socialist Party',
+            'communist': 'Communist Party',
+            'american independent': 'American Independent Party',
+            'peace and freedom': 'Peace and Freedom Party',
+            'working families': 'Working Families Party',
+            'women\'s equality': 'Women\'s Equality Party',
+            'independence': 'Independence Party',
+            'conservative': 'Conservative Party',
+            'liberal': 'Liberal Party',
+            'moderate': 'Moderate Party',
+            'tea party': 'Tea Party',
+            'write-in': 'Write-In',
+            'other': 'Other'
         }
         
         if 'party' in df.columns:
             try:
-                # Ensure party column is string type before using .str methods
+                # Step 1: Infer party from office context if party is missing
+                df = self._infer_party_from_office(df)
+                
+                # Step 2: Standardize party names using comprehensive mappings
                 party_series = df['party'].astype(str)
-                df['party_standardized'] = party_series.str.lower().map(party_mappings).fillna(df['party'])
-                logger.info("Party standardization completed")
+                
+                # Handle case variations first (ALL CAPS → Title Case)
+                party_series = party_series.str.title()
+                
+                # Apply comprehensive party mappings
+                df['party_standardized'] = party_series.str.lower().map(party_mappings).fillna(party_series)
+                
+                # Clean up any remaining issues
+                df['party_standardized'] = df['party_standardized'].replace({
+                    'nan': None,
+                    'None': None,
+                    '': None
+                })
+                
+                logger.info("Comprehensive party standardization completed")
+                
+                # Log improvement statistics
+                original_coverage = df['party'].notna().sum()
+                improved_coverage = df['party_standardized'].notna().sum()
+                logger.info(f"Party coverage improved from {original_coverage:,} to {improved_coverage:,} records")
+                
             except Exception as e:
                 logger.error(f"Party standardization failed: {e}")
                 # Add a default column if standardization fails
@@ -578,7 +655,101 @@ class MainPipeline:
             df['party_standardized'] = None
         
         return df
-
+    
+    def _infer_party_from_office(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Infer missing party information from office context."""
+        logger.info("Inferring party from office context...")
+        
+        if 'office' not in df.columns:
+            return df
+        
+        # Create a copy to avoid modifying original
+        df_inferred = df.copy()
+        
+        # Party indicators in office names - comprehensive coverage
+        party_indicators = {
+            # Single letter indicators
+            r'\(D\)': 'Democratic',
+            r'\(R\)': 'Republican', 
+            r'\(I\)': 'Independent',
+            r'\(L\)': 'Libertarian',
+            r'\(G\)': 'Green Party',
+            r'\(C\)': 'Constitution Party',
+            r'\(P\)': 'Progressive',
+            r'\(W\)': 'Working Families',
+            r'\(N\)': 'Natural Law',
+            r'\(S\)': 'Socialist',
+            r'\(A\)': 'American Independent',
+            r'\(F\)': 'Peace and Freedom',
+            r'\(E\)': 'Women\'s Equality',
+            
+            # Full party names
+            r'Democratic Party': 'Democratic',
+            r'Republican Party': 'Republican',
+            r'Independent Party': 'Independent',
+            r'Libertarian Party': 'Libertarian',
+            r'Green Party': 'Green Party',
+            r'Constitution Party': 'Constitution Party',
+            r'Progressive Party': 'Progressive',
+            r'Working Families Party': 'Working Families',
+            r'Natural Law Party': 'Natural Law',
+            r'Socialist Party': 'Socialist',
+            r'American Independent Party': 'American Independent',
+            r'Peace and Freedom Party': 'Peace and Freedom',
+            r'Women\'s Equality Party': 'Women\'s Equality',
+            
+            # Abbreviated party names
+            r'DEM': 'Democratic',
+            r'REP': 'Republican',
+            r'IND': 'Independent',
+            r'LIB': 'Libertarian',
+            r'GRE': 'Green Party',
+            r'CST': 'Constitution Party',
+            r'PRO': 'Progressive',
+            r'WFP': 'Working Families',
+            r'NLP': 'Natural Law',
+            r'SOC': 'Socialist',
+            r'AIP': 'American Independent',
+            r'PFP': 'Peace and Freedom',
+            r'WEP': 'Women\'s Equality',
+            
+            # Party indicators in different positions
+            r'- Democratic': 'Democratic',
+            r'- Republican': 'Republican',
+            r'- Independent': 'Independent',
+            r'- Libertarian': 'Libertarian',
+            r'- Green': 'Green Party',
+            r'- Constitution': 'Constitution Party',
+            r'- Progressive': 'Progressive',
+            r'- Working Families': 'Working Families',
+            r'- Natural Law': 'Natural Law',
+            r'- Socialist': 'Socialist',
+            r'- American Independent': 'American Independent',
+            r'- Peace and Freedom': 'Peace and Freedom',
+            r'- Women\'s Equality': 'Women\'s Equality'
+        }
+        
+        inferred_count = 0
+        
+        for idx, row in df_inferred.iterrows():
+            # Only infer if party is missing or null
+            if pd.isna(row['party']) or str(row['party']).strip() in ['', 'nan', 'None']:
+                office_str = str(row['office']) if pd.notna(row['office']) else ''
+                
+                # Check for party indicators
+                for pattern, party in party_indicators.items():
+                    if re.search(pattern, office_str, re.IGNORECASE):
+                        df_inferred.at[idx, 'party'] = party
+                        inferred_count += 1
+                        break
+        
+        if inferred_count > 0:
+            logger.info(f"Inferred party for {inferred_count:,} records from office context")
+        else:
+            logger.info("No additional party information inferred from office context")
+        
+        return df_inferred
+    
     def _parse_addresses(self, df: pd.DataFrame) -> pd.DataFrame:
         """Parse and standardize address fields."""
         logger.info("Parsing and standardizing addresses...")
