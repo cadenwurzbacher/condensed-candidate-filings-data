@@ -10,10 +10,12 @@ from .alaska_structural_cleaner import AlaskaStructuralCleaner
 from .arizona_structural_cleaner import ArizonaStructuralCleaner
 from .arkansas_structural_cleaner import ArkansasStructuralCleaner
 from .colorado_structural_cleaner import ColoradoStructuralCleaner
+from .delaware_structural_cleaner import DelawareStructuralCleaner
 
 __all__ = [
     'AlaskaStructuralCleaner',
     'ArizonaStructuralCleaner',
     'ArkansasStructuralCleaner',
     'ColoradoStructuralCleaner',
+    'DelawareStructuralCleaner',
 ]
