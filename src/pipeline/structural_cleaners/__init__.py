@@ -9,9 +9,11 @@ transforming the data content - they only parse and organize the structure.
 from .alaska_structural_cleaner import AlaskaStructuralCleaner
 from .arizona_structural_cleaner import ArizonaStructuralCleaner
 from .arkansas_structural_cleaner import ArkansasStructuralCleaner
+from .colorado_structural_cleaner import ColoradoStructuralCleaner
 
 __all__ = [
     'AlaskaStructuralCleaner',
     'ArizonaStructuralCleaner',
     'ArkansasStructuralCleaner',
+    'ColoradoStructuralCleaner',
 ]
