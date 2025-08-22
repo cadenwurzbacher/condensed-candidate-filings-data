@@ -56,7 +56,7 @@ from .state_cleaners.west_virginia_cleaner import WestVirginiaCleaner
 from .state_cleaners.wyoming_cleaner import WyomingCleaner
 
 # Import structural cleaners (new)
-from .state_cleaners.alaska_structural_cleaner import AlaskaStructuralCleaner
+from .structural_cleaners.alaska_structural_cleaner import AlaskaStructuralCleaner
 
 # Import processors
 from .office_standardizer import OfficeStandardizer
