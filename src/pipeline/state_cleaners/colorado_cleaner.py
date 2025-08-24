@@ -139,10 +139,7 @@ class ColoradoCleaner:
         if year_match:
             election_year = int(year_match.group(1))
         else:
-            
-            
-            
-            
+
             # Default to current year if no year found
             election_year = datetime.now().year
             logger.warning(f"No election year found in filename {filename}, using {election_year}")
@@ -185,8 +182,7 @@ class ColoradoCleaner:
                     district = district_match.group(1)
                     return "State Senator", district
                 else:
-            
-            
+
                     return "State Senator", district_str if district_str else None
             
             # Handle State Representative
@@ -197,8 +193,7 @@ class ColoradoCleaner:
                     district = district_match.group(1)
                     return "State Representative", district
                 else:
-            
-            
+
                     return "State Representative", district_str if district_str else None
             
             # Handle State Board of Education Member
@@ -209,8 +204,7 @@ class ColoradoCleaner:
                     district = district_match.group(1)
                     return "State Board of Education Member", district
                 else:
-            
-            
+
                     return "State Board of Education Member", district_str if district_str else None
             
             # Handle Regent of the University of Colorado
@@ -221,8 +215,7 @@ class ColoradoCleaner:
                     district = district_match.group(1)
                     return "Regent of the University of Colorado", district
                 else:
-            
-            
+
                     return "Regent of the University of Colorado", district_str if district_str else None
             
             # Handle District Attorney
@@ -233,8 +226,7 @@ class ColoradoCleaner:
                     district = district_match.group(1)
                     return "District Attorney", district
                 else:
-            
-            
+
                     return "District Attorney", district_str if district_str else None
             
             # For other offices, keep as is
@@ -369,10 +361,7 @@ class ColoradoCleaner:
                         first_name = first_middle[0]
                         middle_name = second_part
                 else:
-            
-            
-            
-            
+
                     # Handle multiple parts
                     first_name = first_middle[0]
                     middle_parts = []
@@ -395,22 +384,17 @@ class ColoradoCleaner:
             if self._is_initial_or_suffix(parts[1]):
                 return parts[0], None, None, None, suffix, nickname, parts[0]
             else:
-            
-            
+
                 return parts[0], None, parts[1], None, suffix, nickname, f"{parts[0]} {parts[1]}"
         elif len(parts) == 3:
             # Check if second part is an initial
             if self._is_initial(parts[1]):
                 return parts[0], parts[1], parts[2], None, suffix, nickname, f"{parts[0]} {parts[1]} {parts[2]}"
             else:
-            
-            
+
                 return parts[0], parts[1], parts[2], None, suffix, nickname, f"{parts[0]} {parts[1]} {parts[2]}"
         else:
-            
-            
-            
-            
+
             # For names with more than 3 parts, treat first as first, last as last, rest as middle
             first = parts[0]
             last = parts[-1]
@@ -516,8 +500,7 @@ class ColoradoCleaner:
         
         # Set ID columns to empty string (will be generated later)
         df['id'] = ""
-        df['stable_id'] = ""
-        
+                
         # Map cleaned columns to final column names
         if 'office_cleaned' in df.columns:
             df['office'] = df['office_cleaned']
@@ -537,44 +520,10 @@ class ColoradoCleaner:
             
             # Ensure empty strings are properly handled
             df['district'] = df['district'].replace('', None)
-        
 
-        
         return df
     
-    def _generate_stable_ids(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Generate stable IDs from original data."""
-        logger.info("Generating stable IDs...")
-        
-        import hashlib
-        
-        def generate_stable_id(row):
-            # Create a comprehensive string from key fields
-            id_parts = []
-            
-            # Key fields for stable ID generation
-            key_fields = [
-                'original_name', 'original_state', 'original_election_year',
-                'original_office', 'party', 'district'
-            ]
-            
-            for field in key_fields:
-                if field in row and pd.notna(row[field]):
-                    value = str(row[field]).strip().lower()
-                    id_parts.append(f"{field}:{value}")
-                else:
-                    id_parts.append(f"{field}:NULL_VALUE")
-            
-            # Sort for consistency
-            id_parts.sort()
-            id_string = "||".join(id_parts)
-            
-            # Generate SHA-256 hash
-            return hashlib.sha256(id_string.encode('utf-8')).hexdigest()[:16]
-        
-        df['stable_id'] = df.apply(generate_stable_id, axis=1)
-        
-        return df
+    return df
     
     def _reorder_columns(self, df: pd.DataFrame) -> pd.DataFrame:
         """Reorder columns to match Alaska's exact schema order."""

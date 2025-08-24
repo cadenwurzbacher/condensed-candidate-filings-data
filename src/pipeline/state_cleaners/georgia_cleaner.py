@@ -656,28 +656,19 @@ class GeorgiaCleaner:
         if 'City' in df.columns:
             df['city'] = df['City'].apply(lambda x: str(x).strip() if pd.notna(x) else None)
         else:
-            
-            
-            
-            
+
             df['city'] = pd.NA
             
         if 'Zip' in df.columns:
             df['zip_code'] = df['Zip'].apply(lambda x: str(x).strip() if pd.notna(x) else None)
         else:
-            
-            
-            
-            
+
             df['zip_code'] = pd.NA
             
         if 'County (If Local Contest)' in df.columns:
             df['county'] = df['County (If Local Contest)'].apply(lambda x: str(x).strip() if pd.notna(x) else None)
         else:
-            
-            
-            
-            
+
             df['county'] = pd.NA
             
         # Other required but often absent columns

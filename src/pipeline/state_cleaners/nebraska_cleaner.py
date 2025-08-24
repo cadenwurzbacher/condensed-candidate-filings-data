@@ -227,10 +227,7 @@ class NebraskaCleaner:
         if 'District' in df.columns:
             office_results = df.apply(lambda row: process_office_district(row['Office'], row['District']), axis=1)
         else:
-            
-            
-            
-            
+
             # If no District column,  None for district
             office_results = df.apply(lambda row: process_office_district(row['Office'], None), axis=1)
         
@@ -363,10 +360,7 @@ class NebraskaCleaner:
                         first_name = first_middle[0]
                         middle_name = second_part
                 else:
-            
-            
-            
-            
+
                     # Handle multiple parts
                     first_name = first_middle[0]
                     middle_parts = []
@@ -389,22 +383,17 @@ class NebraskaCleaner:
             if self._is_initial_or_suffix(parts[1]):
                 return parts[0], None, None, None, suffix, nickname, parts[0]
             else:
-            
-            
+
                 return parts[0], None, parts[1], None, suffix, nickname, f"{parts[0]} {parts[1]}"
         elif len(parts) == 3:
             # Check if second part is an initial
             if self._is_initial(parts[1]):
                 return parts[0], parts[1], parts[2], None, suffix, nickname, f"{parts[0]} {parts[1]} {parts[2]}"
             else:
-            
-            
+
                 return parts[0], parts[1], parts[2], None, suffix, nickname, f"{parts[0]} {parts[1]} {parts[2]}"
         else:
-            
-            
-            
-            
+
             # For names with more than 3 parts, treat first as first, last as last, rest as middle
             first = parts[0]
             last = parts[-1]
@@ -687,39 +676,7 @@ class NebraskaCleaner:
         
         return df
     
-    def _generate_stable_ids(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Generate stable IDs from original data."""
-        logger.info("Generating stable IDs...")
-        
-        import hashlib
-        
-        def generate_stable_id(row):
-            # Create a comprehensive string from key fields
-            id_parts = []
-            
-            # Key fields for stable ID generation
-            key_fields = [
-                'original_name', 'original_state', 'original_election_year',
-                'original_office', 'party', 'address', 'email', 'phone'
-            ]
-            
-            for field in key_fields:
-                if field in row and pd.notna(row[field]):
-                    value = str(row[field]).strip().lower()
-                    id_parts.append(f"{field}:{value}")
-                else:
-                    id_parts.append(f"{field}:NULL_VALUE")
-            
-            # Sort for consistency
-            id_parts.sort()
-            id_string = "||".join(id_parts)
-            
-            # Generate SHA-256 hash
-            return hashlib.sha256(id_string.encode('utf-8')).hexdigest()[:16]
-        
-        df['stable_id'] = df.apply(generate_stable_id, axis=1)
-        
-        return df
+    return df
 
     def _is_initial_or_suffix(self, part: str) -> bool:
         """Check if a name part is an initial, suffix, or nickname."""

@@ -194,10 +194,7 @@ class SouthCarolinaCleaner:
                         else:
                             year = filing_year
                     else:
-            
-            
-            
-            
+
                         # For non-Presidential candidates, use the filing year as election year
                         year = filing_year
                     
@@ -338,8 +335,7 @@ class SouthCarolinaCleaner:
             elif last_suffix:
                 return last_suffix
             else:
-            
-            
+
                 return None
         
         # Apply name cleaning
@@ -615,39 +611,7 @@ class SouthCarolinaCleaner:
         
         return df
     
-    def _generate_stable_ids(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Generate stable IDs from original data."""
-        logger.info("Generating stable IDs...")
-        
-        import hashlib
-        
-        def generate_stable_id(row):
-            # Create a comprehensive string from key fields
-            id_parts = []
-            
-            # Key fields for stable ID generation
-            key_fields = [
-                'original_name', 'original_state', 'original_election_year',
-                'original_office', 'party', 'address', 'email', 'phone'
-            ]
-            
-            for field in key_fields:
-                if field in row and pd.notna(row[field]):
-                    value = str(row[field]).strip().lower()
-                    id_parts.append(f"{field}:{value}")
-                else:
-                    id_parts.append(f"{field}:NULL_VALUE")
-            
-            # Sort for consistency
-            id_parts.sort()
-            id_string = "||".join(id_parts)
-            
-            # Generate SHA-256 hash
-            return hashlib.sha256(id_string.encode('utf-8')).hexdigest()[:16]
-        
-        df['stable_id'] = df.apply(generate_stable_id, axis=1)
-        
-        return df
+    return df
 
 def clean_south_carolina_candidates(input_file: str, output_file: str = None, output_dir: str = DEFAULT_OUTPUT_DIR) -> pd.DataFrame:
     """

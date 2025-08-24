@@ -319,31 +319,20 @@ class NationalStandards:
     
     def _generate_stable_id(self, name: str, state: str, office: str, election_year: str, county: str = None) -> str:
         """
-        Generate stable ID for a candidate
+        Generate stable ID for a candidate (DEPRECATED - use Main Pipeline stable IDs)
         
         Args:
             name: Candidate name
             state: State
             office: Office
             election_year: Election year
-            county: County (optional, set to None for statewide candidates)
+            county: County (ignored)
             
         Returns:
-            Stable ID string
+            Stable ID string (should match Main Pipeline format)
         """
-        # Clean and standardize inputs
-        clean_name = str(name).strip().upper() if pd.notna(name) else ""
-        clean_state = str(state).strip().upper() if pd.notna(state) else ""
-        clean_office = str(office).strip().upper() if pd.notna(office) else ""
-        clean_election = str(election_year).strip() if pd.notna(election_year) else ""
-        
-        # Only include county if it's not None and not empty
-        county_part = f"_{str(county).strip().upper()}" if county and pd.notna(county) and str(county).strip() else ""
-        
-        # Create stable ID string
-        stable_id_string = f"{clean_name}_{clean_state}_{clean_office}_{clean_election}{county_part}"
-        
-        # Generate MD5 hash
-        stable_id = hashlib.md5(stable_id_string.encode('utf-8')).hexdigest()
+        # Use EXACTLY the same format as Main Pipeline for consistency
+        key = f"{name}|{state}|{office}|{election_year}"
+        stable_id = hashlib.md5(key.encode()).hexdigest()[:12]
         
         return stable_id

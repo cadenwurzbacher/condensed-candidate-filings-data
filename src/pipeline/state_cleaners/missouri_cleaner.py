@@ -342,18 +342,12 @@ class MissouriCleaner:
                     middle_name = parts[1]
                     last_name = parts[2]
                 else:
-            
-            
-            
-            
+
                     # Middle part is not an initial, treat as middle name
                     middle_name = parts[1]
                     last_name = parts[2]
             else:
-            
-            
-            
-            
+
                 # More than 3 parts
                 first_name = parts[0]
                 # Check if second part is an initial
@@ -361,10 +355,7 @@ class MissouriCleaner:
                     middle_name = parts[1]
                     last_name = ' '.join(parts[2:])
                 else:
-            
-            
-            
-            
+
                     # Second part is not an initial, treat as middle name
                     middle_name = parts[1]
                     last_name = ' '.join(parts[2:])
@@ -570,8 +561,7 @@ class MissouriCleaner:
             elif len(digits) > 0:
                 return digits
             else:
-            
-            
+
                 return ""
         
         def clean_email(email_str: str) -> str:
@@ -747,22 +737,7 @@ class MissouriCleaner:
         
         return df
     
-    def _generate_stable_ids(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Generate stable IDs for candidates."""
-        logger.info("Generating stable IDs...")
-        
-        def generate_stable_id(row):
-            """Generate a stable ID based on candidate information."""
-            # Create a unique identifier based on name, office, and year
-            name_part = str(row.get('last_name', '')).lower().replace(' ', '')
-            office_part = str(row.get('office', '')).lower().replace(' ', '')
-            year_part = str(row.get('election_year', ''))
-            
-            stable_id = f"{name_part}_{office_part}_{year_part}"
-            return stable_id
-        
-        df['stable_id'] = df.apply(generate_stable_id, axis=1)
-        return df
+    return df
     
     def _is_initial_or_suffix(self, part: str) -> bool:
         """Check if a part is an initial or suffix."""

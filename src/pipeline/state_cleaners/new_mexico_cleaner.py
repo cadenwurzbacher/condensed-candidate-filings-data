@@ -177,10 +177,7 @@ class NewMexicoCleaner:
             if year_match:
                 year = int(year_match.group())
             else:
-            
-            
-            
-            
+
                 # Default to 2024 for New Mexico data
                 year = 2024
             
@@ -193,10 +190,7 @@ class NewMexicoCleaner:
             elif 'special' in contest_lower:
                 election_type = "Special"
             else:
-            
-            
-            
-            
+
                 # Default to General for most contests
                 election_type = "General"
             
@@ -229,8 +223,7 @@ class NewMexicoCleaner:
                 if pd.notna(district_str) and district_str:
                     return "US Representative", str(district_str)
                 else:
-            
-            
+
                     return "US Representative", "At Large"
             
             # Handle State Senate
@@ -238,8 +231,7 @@ class NewMexicoCleaner:
                 if pd.notna(district_str) and district_str:
                     return "State Senate", str(district_str)
                 else:
-            
-            
+
                     return "State Senate", None
             
             # Handle State House/Representative
@@ -247,8 +239,7 @@ class NewMexicoCleaner:
                 if pd.notna(district_str) and district_str:
                     return "State House", str(district_str)
                 else:
-            
-            
+
                     return "State House", None
             
             # Handle other offices (keep as is)
@@ -472,39 +463,7 @@ class NewMexicoCleaner:
         
         return df
     
-    def _generate_stable_ids(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Generate stable IDs from original data."""
-        logger.info("Generating stable IDs...")
-        
-        import hashlib
-        
-        def generate_stable_id(row):
-            # Create a comprehensive string from key fields
-            id_parts = []
-            
-            # Key fields for stable ID generation
-            key_fields = [
-                'original_name', 'original_state', 'original_election_year',
-                'original_office', 'party', 'address', 'email', 'phone'
-            ]
-            
-            for field in key_fields:
-                if field in row and pd.notna(row[field]):
-                    value = str(row[field]).strip().lower()
-                    id_parts.append(f"{field}:{value}")
-                else:
-                    id_parts.append(f"{field}:NULL_VALUE")
-            
-            # Sort for consistency
-            id_parts.sort()
-            id_string = "||".join(id_parts)
-            
-            # Generate SHA-256 hash
-            return hashlib.sha256(id_string.encode('utf-8')).hexdigest()[:16]
-        
-        df['stable_id'] = df.apply(generate_stable_id, axis=1)
-        
-        return df
+    return df
 
 def clean_new_mexico_candidates(input_file: str, output_file: str = None, output_dir: str = DEFAULT_OUTPUT_DIR) -> pd.DataFrame:
     """

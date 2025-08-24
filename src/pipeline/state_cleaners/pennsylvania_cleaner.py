@@ -149,8 +149,7 @@ class PennsylvaniaCleaner:
             if year_match:
                 year = int(year_match.group())
             else:
-            
-            
+
                 return None, None
             
             # Determine election type
@@ -285,21 +284,16 @@ class PennsylvaniaCleaner:
                         last_name, first_name = first_part.split(',', 1)
                         return first_name.strip()
                     else:
-            
-            
+
                         return first_part
                 else:
-            
-            
-            
-            
+
                     # Handle single names
                     if ',' in name_str:
                         last_name, first_name = name_str.split(',', 1)
                         return first_name.strip()
                     else:
-            
-            
+
                         return name_str
             
             # For non-president cases, clean the name
@@ -317,19 +311,13 @@ class PennsylvaniaCleaner:
         elif 'Candidate Name' in df.columns:
             name_col = 'Candidate Name'
         else:
-            
-            
-            
-            
+
             # Fallback - try to find any column that might contain names
             name_cols = [col for col in df.columns if 'name' in col.lower() or 'candidate' in col.lower()]
             if name_cols:
                 name_col = name_cols[0]
             else:
-            
-            
-            
-            
+
                 # Last resort - use the first non-empty column that looks like it has text
                 for col in df.columns:
                     if df[col].dtype == 'object' and df[col].notna().any():
@@ -371,19 +359,13 @@ class PennsylvaniaCleaner:
             elif 'Candidate Name' in df.columns:
                 original_name = row['Candidate Name']
             else:
-            
-            
-            
-            
+
                 # Fallback - try to find any column that might contain names
                 name_cols = [col for col in df.columns if 'name' in col.lower() or 'candidate' in col.lower()]
                 if name_cols:
                     original_name = row[name_cols[0]]
                 else:
-            
-            
-            
-            
+
                     # Last resort - use the first non-empty column that looks like it has text
                     for col in df.columns:
                         if df[col].dtype == 'object' and df[col].notna().any():
@@ -405,17 +387,11 @@ class PennsylvaniaCleaner:
                     first_part = original_str.split('/')[0].strip()
                     parsed = self._parse_standard_name(first_part, original_name)
                 else:
-            
-            
-            
-            
+
                     # Fallback for president candidates without running mates
                     parsed = self._parse_standard_name(original_name, original_name)
             else:
-            
-            
-            
-            
+
                 # For all other cases, use the original name for parsing
                 parsed = self._parse_standard_name(original_name, original_name)
             
@@ -489,10 +465,7 @@ class PennsylvaniaCleaner:
                         first_name = first_middle[0]
                         middle_name = second_part
                 else:
-            
-            
-            
-            
+
                     # Handle multiple parts
                     first_name = first_middle[0]
                     middle_parts = []
@@ -515,22 +488,17 @@ class PennsylvaniaCleaner:
             if self._is_initial_or_suffix(parts[1]):
                 return parts[0], None, None, None, suffix, nickname, parts[0]
             else:
-            
-            
+
                 return parts[0], None, parts[1], None, suffix, nickname, f"{parts[0]} {parts[1]}"
         elif len(parts) == 3:
             # Check if second part is an initial
             if self._is_initial(parts[1]):
                 return parts[0], parts[1], parts[2], None, suffix, nickname, f"{parts[0]} {parts[1]} {parts[2]}"
             else:
-            
-            
+
                 return parts[0], parts[1], parts[2], None, suffix, nickname, f"{parts[0]} {parts[1]} {parts[2]}"
         else:
-            
-            
-            
-            
+
             # For names with more than 3 parts, treat first as first, last as last, rest as middle
             first = parts[0]
             last = parts[-1]
@@ -639,10 +607,7 @@ class PennsylvaniaCleaner:
         if 'Name' in df.columns:
             df['original_name'] = df['Name'].copy()
         else:
-            
-            
-            
-            
+
             # Fallback - create a placeholder name
             df['original_name'] = 'Unknown Candidate'
         df['original_state'] = df['state'].copy()
@@ -665,39 +630,7 @@ class PennsylvaniaCleaner:
         
         return df
     
-    def _generate_stable_ids(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Generate stable IDs from original data."""
-        logger.info("Generating stable IDs...")
-        
-        import hashlib
-        
-        def generate_stable_id(row):
-            # Create a comprehensive string from key fields
-            id_parts = []
-            
-            # Key fields for stable ID generation
-            key_fields = [
-                'original_name', 'original_state', 'original_election_year',
-                'original_office', 'party', 'address', 'email', 'phone'
-            ]
-            
-            for field in key_fields:
-                if field in row and pd.notna(row[field]):
-                    value = str(row[field]).strip().lower()
-                    id_parts.append(f"{field}:{value}")
-                else:
-                    id_parts.append(f"{field}:NULL_VALUE")
-            
-            # Sort for consistency
-            id_parts.sort()
-            id_string = "||".join(id_parts)
-            
-            # Generate SHA-256 hash
-            return hashlib.sha256(id_string.encode('utf-8')).hexdigest()[:16]
-        
-        df['stable_id'] = df.apply(generate_stable_id, axis=1)
-        
-        return df
+    return df
 
     def _is_initial_or_suffix(self, part: str) -> bool:
         """Check if a name part is an initial, suffix, or nickname."""
@@ -821,10 +754,7 @@ def clean_pennsylvania_candidates(input_file: str, output_file: str = None, outp
         logger.info("Detected merged cell header scenario - using header=1")
         df = pd.read_excel(input_file, header=1)
     else:
-            
-            
-            
-            
+
         # This has real column headers - use first row
         logger.info("Detected real column headers - using header=0")
         df = df_test

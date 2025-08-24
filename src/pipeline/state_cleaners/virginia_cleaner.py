@@ -236,16 +236,14 @@ class VirginiaCleaner:
                         last_name, first_name = first_part.split(',', 1)
                         return first_name.strip()
                     else:
-            
-            
+
                         return first_part
                 else:
                     if ',' in name_str:
                         last_name, first_name = name_str.split(',', 1)
                         return first_name.strip()
                     else:
-            
-            
+
                         return name_str
             
             cleaned = re.sub(r'\s+', ' ', name_str).strip().strip('"\'')
@@ -370,15 +368,13 @@ class VirginiaCleaner:
             if self._is_initial_or_suffix(parts[1]):
                 return parts[0], None, None, None, suffix, nickname, parts[0]
             else:
-            
-            
+
                 return parts[0], None, parts[1], None, suffix, nickname, f"{parts[0]} {parts[1]}"
         elif len(parts) == 3:
             if self._is_initial(parts[1]):
                 return parts[0], parts[1], parts[2], None, suffix, nickname, f"{parts[0]} {parts[1]} {parts[2]}"
             else:
-            
-            
+
                 return parts[0], parts[1], parts[2], None, suffix, nickname, f"{parts[0]} {parts[1]} {parts[2]}"
         else:
             first = parts[0]
@@ -584,39 +580,7 @@ class VirginiaCleaner:
         
         return df
     
-    def _generate_stable_ids(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Generate stable IDs from original data."""
-        logger.info("Generating stable IDs...")
-        
-        import hashlib
-        
-        def generate_stable_id(row):
-            # Create a comprehensive string from key fields
-            id_parts = []
-            
-            # Key fields for stable ID generation
-            key_fields = [
-                'original_name', 'original_state', 'original_election_year',
-                'original_office', 'party', 'address', 'email', 'phone'
-            ]
-            
-            for field in key_fields:
-                if field in row and pd.notna(row[field]):
-                    value = str(row[field]).strip().lower()
-                    id_parts.append(f"{field}:{value}")
-                else:
-                    id_parts.append(f"{field}:NULL_VALUE")
-            
-            # Sort for consistency
-            id_parts.sort()
-            id_string = "||".join(id_parts)
-            
-            # Generate SHA-256 hash
-            return hashlib.sha256(id_string.encode('utf-8')).hexdigest()[:16]
-        
-        df['stable_id'] = df.apply(generate_stable_id, axis=1)
-        
-        return df
+    return df
 
     def _map_geographic_data(self, df: pd.DataFrame) -> pd.DataFrame:
         """Map geographic data from Virginia raw data columns."""
