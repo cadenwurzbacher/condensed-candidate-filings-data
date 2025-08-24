@@ -545,11 +545,10 @@ class MontanaCleaner:
         if party_column in df.columns:
             df['party'] = df[party_column].apply(standardize_party)
         else:
-            
-            
-            
-            
-            df['party'] = None
+            # Preserve existing party data if available, don't overwrite with None
+            if 'party' not in df.columns:
+                df['party'] = None
+            # If party column already exists, keep existing data
         
         return df
     

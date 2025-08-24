@@ -363,7 +363,9 @@ class IncrementalProductionUploader:
                 
                 -- System Fields
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                first_added_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                last_updated_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
             """
             

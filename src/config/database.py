@@ -350,7 +350,9 @@ class DatabaseManager:
                 data_source VARCHAR(255),              -- Source file/state
                 
                 -- System Fields
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                first_added_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                last_updated_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
             """
             

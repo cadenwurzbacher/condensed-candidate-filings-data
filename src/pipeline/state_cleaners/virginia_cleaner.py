@@ -447,8 +447,11 @@ class VirginiaCleaner:
         elif 'Political Party Descr' in df.columns:
             df['party'] = df['Political Party Descr'].apply(standardize_party)
         else:
-            logger.warning("No party column found in Virginia data, setting to None")
-            df['party'] = None
+            # Preserve existing party data if available, don't overwrite with None
+            if 'party' not in df.columns:
+                logger.warning("No party column found in Virginia data, setting to None")
+                df['party'] = None
+            # If party column already exists, keep existing data
         
         return df
     

@@ -556,7 +556,13 @@ class MarylandCleaner:
             if candidate in df.columns:
                 party_col = candidate
                 break
-        df['party'] = df[party_col].apply(standardize_party) if party_col else None
+        if party_col:
+            df['party'] = df[party_col].apply(standardize_party)
+        else:
+            # Preserve existing party data if available, don't overwrite with None
+            if 'party' not in df.columns:
+                df['party'] = None
+            # If party column already exists, keep existing data
         
         return df
     

@@ -10,7 +10,7 @@ import pandas as pd
 import os
 import logging
 from datetime import datetime
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Any
 import concurrent.futures
 import glob
 import time
@@ -62,9 +62,34 @@ from .structural_cleaners.arkansas_structural_cleaner import ArkansasStructuralC
 from .structural_cleaners.colorado_structural_cleaner import ColoradoStructuralCleaner
 from .structural_cleaners.delaware_structural_cleaner import DelawareStructuralCleaner
 from .structural_cleaners.georgia_structural_cleaner import GeorgiaStructuralCleaner
+from .structural_cleaners.idaho_structural_cleaner import IdahoStructuralCleaner
+from .structural_cleaners.illinois_structural_cleaner import IllinoisStructuralCleaner
+from .structural_cleaners.indiana_structural_cleaner import IndianaStructuralCleaner
+from .structural_cleaners.iowa_structural_cleaner import IowaStructuralCleaner
+from .structural_cleaners.kansas_structural_cleaner import KansasStructuralCleaner
+from .structural_cleaners.kentucky_structural_cleaner import KentuckyStructuralCleaner
+from .structural_cleaners.louisiana_structural_cleaner import LouisianaStructuralCleaner
+from .structural_cleaners.maryland_structural_cleaner import MarylandStructuralCleaner
+from .structural_cleaners.missouri_structural_cleaner import MissouriStructuralCleaner
+from .structural_cleaners.montana_structural_cleaner import MontanaStructuralCleaner
+from .structural_cleaners.nebraska_structural_cleaner import NebraskaStructuralCleaner
+from .structural_cleaners.new_mexico_structural_cleaner import NewMexicoStructuralCleaner
+from .structural_cleaners.new_york_structural_cleaner import NewYorkStructuralCleaner
+from .structural_cleaners.north_carolina_structural_cleaner import NorthCarolinaStructuralCleaner
+from .structural_cleaners.oklahoma_structural_cleaner import OklahomaStructuralCleaner
+from .structural_cleaners.oregon_structural_cleaner import OregonStructuralCleaner
+from .structural_cleaners.pennsylvania_structural_cleaner import PennsylvaniaStructuralCleaner
+from .structural_cleaners.south_carolina_structural_cleaner import SouthCarolinaStructuralCleaner
+from .structural_cleaners.vermont_structural_cleaner import VermontStructuralCleaner
+from .structural_cleaners.virginia_structural_cleaner import VirginiaStructuralCleaner
+from .structural_cleaners.washington_structural_cleaner import WashingtonStructuralCleaner
+from .structural_cleaners.west_virginia_structural_cleaner import WestVirginiaStructuralCleaner
+from .structural_cleaners.wyoming_structural_cleaner import WyomingStructuralCleaner
+from .structural_cleaners.south_dakota_structural_cleaner import SouthDakotaStructuralCleaner
 
 # Import processors
 from .office_standardizer import OfficeStandardizer
+from .smart_staging_manager import SmartStagingManager
 
 # Import database utilities
 from ..config.database import get_db_connection
@@ -130,6 +155,30 @@ class MainPipeline:
             'colorado': ColoradoStructuralCleaner(),
             'delaware': DelawareStructuralCleaner(),
             'georgia': GeorgiaStructuralCleaner(),
+            'idaho': IdahoStructuralCleaner(),
+            'illinois': IllinoisStructuralCleaner(),
+            'indiana': IndianaStructuralCleaner(),
+            'iowa': IowaStructuralCleaner(),
+            'kansas': KansasStructuralCleaner(),
+            'kentucky': KentuckyStructuralCleaner(),
+            'louisiana': LouisianaStructuralCleaner(),
+            'maryland': MarylandStructuralCleaner(),
+            'missouri': MissouriStructuralCleaner(),
+            'montana': MontanaStructuralCleaner(),
+            'nebraska': NebraskaStructuralCleaner(),
+            'new_mexico': NewMexicoStructuralCleaner(),
+            'new_york': NewYorkStructuralCleaner(),
+            'north_carolina': NorthCarolinaStructuralCleaner(),
+            'oklahoma': OklahomaStructuralCleaner(),
+            'oregon': OregonStructuralCleaner(),
+            'pennsylvania': PennsylvaniaStructuralCleaner(),
+            'south_carolina': SouthCarolinaStructuralCleaner(),
+            'vermont': VermontStructuralCleaner(),
+            'virginia': VirginiaStructuralCleaner(),
+            'washington': WashingtonStructuralCleaner(),
+            'west_virginia': WestVirginiaStructuralCleaner(),
+            'wyoming': WyomingStructuralCleaner(),
+            'south_dakota': SouthDakotaStructuralCleaner(),
             # Add other structural cleaners as we implement them
         }
         
@@ -172,6 +221,7 @@ class MainPipeline:
         
         # Initialize processors
         self.office_standardizer = OfficeStandardizer()
+        self.smart_staging_manager = SmartStagingManager()
         self.db_manager = get_db_connection()
         
         # Create directories if they don't exist
@@ -208,25 +258,24 @@ class MainPipeline:
         logger.info("Phase 3: Running state data cleaners")
         cleaned_data = self._run_state_cleaners(all_data)
         
-        # Phase 4: National standards (simplified)
-        logger.info("Phase 4: Applying national standards (simplified)")
-        # For now, just combine the data without applying standards
-        all_records = []
-        for state, df in cleaned_data.items():
-            df = df.copy()
-            df['state'] = state.title()
-            all_records.append(df)
+        # Phase 4: National standards
+        logger.info("Phase 4: Applying national standards")
+        combined_data = self._apply_national_standards(cleaned_data)
         
-        if all_records:
-            final_data = pd.concat(all_records, ignore_index=True)
+        if combined_data:
+            final_data = pd.concat(combined_data, ignore_index=True)
             logger.info(f"Combined data: {len(final_data)} records")
         else:
             final_data = pd.DataFrame()
             logger.warning("No data to combine")
         
-        # Phase 5: Final processing
+        # Phase 5: Final processing and output
         logger.info("Phase 5: Final processing and output")
         final_data = self._final_processing(final_data)
+        
+        # Smart staging decision
+        logger.info("Phase 5.5: Smart staging analysis and decision")
+        staging_decision = self._make_smart_staging_decision(final_data)
         
         # Save final output to final directory
         if not final_data.empty:
@@ -240,6 +289,7 @@ class MainPipeline:
             logger.info(f"✅ Final output saved to: {output_file}")
         
         logger.info(f"Pipeline complete. Final dataset: {len(final_data)} records")
+        logger.info(f"Staging decision: {staging_decision.get('recommendation', 'unknown')}")
         return final_data
     
     def _run_structural_cleaners(self) -> Dict[str, pd.DataFrame]:
@@ -290,6 +340,11 @@ class MainPipeline:
         # Generate stable IDs based on core candidate data
         stable_ids = []
         first_ingestion_dates = []
+        first_added_dates = []
+        last_updated_dates = []
+        
+        # Get current timestamp for new candidates
+        current_timestamp = datetime.now()
         
         for idx, row in df.iterrows():
             try:
@@ -297,14 +352,33 @@ class MainPipeline:
                 stable_id, first_ingestion_date = self._generate_stable_id(row, state)
                 stable_ids.append(stable_id)
                 first_ingestion_dates.append(first_ingestion_date)
+                
+                # Check if this candidate already exists in the database
+                existing_candidate = self._check_existing_candidate(stable_id)
+                
+                if existing_candidate:
+                    # Candidate exists - use existing first_added_date, set last_updated_date to now
+                    first_added_dates.append(existing_candidate.get('first_added_date', current_timestamp))
+                    last_updated_dates.append(current_timestamp)
+                    logger.debug(f"Existing candidate {stable_id} - preserving first_added_date")
+                else:
+                    # New candidate - set both dates to now
+                    first_added_dates.append(current_timestamp)
+                    last_updated_dates.append(current_timestamp)
+                    logger.debug(f"New candidate {stable_id} - setting first_added_date to now")
+                    
             except Exception as e:
                 logger.warning(f"Failed to generate ID for row {idx} in {state}: {e}")
                 stable_ids.append(None)
                 first_ingestion_dates.append(None)
+                first_added_dates.append(None)
+                last_updated_dates.append(None)
         
         # Add ID columns
         df['stable_id'] = stable_ids
         df['first_ingestion_date'] = first_ingestion_dates
+        df['first_added_date'] = first_added_dates
+        df['last_updated_date'] = last_updated_dates
         
         return df
     
@@ -400,8 +474,8 @@ class MainPipeline:
             logger.info(f"Combined data: {len(combined_df)} records")
             
             # Apply national standards
-            logger.info("Skipping party standardization for now...")
-            # combined_df = self._standardize_parties(combined_df)
+            logger.info("Applying party standardization...")
+            combined_df = self._standardize_parties(combined_df)
             
             logger.info("Skipping office standardization for now...")
             # combined_df = self._standardize_offices(combined_df)
@@ -944,6 +1018,10 @@ class MainPipeline:
         """Comprehensive party name standardization."""
         logger.info("Standardizing party names...")
         
+        # Log initial party coverage
+        initial_coverage = df['party'].notna().sum() if 'party' in df.columns else 0
+        logger.info(f"Initial party coverage: {initial_coverage:,} records")
+        
         # Comprehensive party mappings
         party_mappings = {
             # Democratic variations
@@ -1039,10 +1117,18 @@ class MainPipeline:
                 
                 logger.info("Comprehensive party standardization completed")
                 
+                # Replace the original party column with the standardized version
+                df['party'] = df['party_standardized']
+                
                 # Log improvement statistics
                 original_coverage = df['party'].notna().sum()
                 improved_coverage = df['party_standardized'].notna().sum()
                 logger.info(f"Party coverage improved from {original_coverage:,} to {improved_coverage:,} records")
+                logger.info(f"Replaced original party column with standardized version")
+                
+                # Log final party coverage
+                final_coverage = df['party'].notna().sum()
+                logger.info(f"Final party coverage after standardization: {final_coverage:,} records")
                 
             except Exception as e:
                 logger.error(f"Party standardization failed: {e}")
@@ -1845,6 +1931,162 @@ class MainPipeline:
             'log_files': len(list(Path("data/logs").glob("*.log")))
         }
         return status
+
+    def _check_existing_candidate(self, stable_id: str) -> Optional[Dict]:
+        """
+        Check if a candidate already exists in the database
+        
+        Args:
+            stable_id: The stable ID to check
+            
+        Returns:
+            Dict with candidate info if exists, None if not found
+        """
+        if not stable_id or not self.db_manager:
+            return None
+            
+        try:
+            # Check only the filings table (production data)
+            query = """
+            SELECT stable_id, first_added_date, last_updated_date, created_at
+            FROM filings 
+            WHERE stable_id = %s 
+            LIMIT 1
+            """
+            
+            result = self.db_manager.execute_query(query, (stable_id,))
+            
+            if not result.empty:
+                row = result.iloc[0]
+                return {
+                    'stable_id': row['stable_id'],
+                    'first_added_date': row.get('first_added_date', row.get('created_at')),
+                    'last_updated_date': row.get('last_updated_date', row.get('updated_at')),
+                    'created_at': row.get('created_at')
+                }
+                
+            return None
+            
+        except Exception as e:
+            logger.warning(f"Failed to check existing candidate {stable_id}: {e}")
+            return None
+
+    def _make_smart_staging_decision(self, final_data: pd.DataFrame) -> Dict[str, Any]:
+        """
+        Make intelligent staging decisions based on data quality and changes
+        
+        Args:
+            final_data: Processed data ready for staging
+            
+        Returns:
+            Staging decision and results
+        """
+        logger.info("Making smart staging decision...")
+        
+        if final_data.empty:
+            logger.warning("No data to stage")
+            return {'recommendation': 'no_data'}
+        
+        try:
+            # Get existing production data for comparison
+            production_data = pd.DataFrame()
+            if self.db_manager and self.db_manager.table_exists('filings'):
+                production_data = self.db_manager.execute_query("SELECT * FROM filings")
+                logger.info(f"Found {len(production_data)} existing production records")
+            else:
+                logger.info("No existing production data found (first run)")
+            
+            # Analyze staging data
+            analysis = self.smart_staging_manager.analyze_staging_data(final_data, production_data)
+            
+            logger.info(f"Quality Score: {analysis['quality_score']:.3f} ({analysis['quality_level'].value})")
+            logger.info(f"Changes: {analysis['change_summary']}")
+            logger.info(f"Recommendation: {analysis['recommendation']}")
+            
+            # Execute the recommended strategy
+            if analysis['auto_promote']:
+                logger.info("🚀 Auto-promoting data to production...")
+                results = self.smart_staging_manager.execute_promotion_strategy(final_data, analysis)
+                logger.info(f"Auto-promotion results: {results}")
+                
+                # Update staging table with results metadata
+                final_data['promotion_status'] = 'auto_promoted'
+                final_data['promotion_timestamp'] = datetime.now()
+                final_data['promotion_strategy'] = analysis['recommendation']
+                
+                # Save to staging for audit trail
+                self._save_to_staging(final_data, 'auto_promoted')
+                
+                return {
+                    'recommendation': analysis['recommendation'],
+                    'auto_promoted': True,
+                    'results': results,
+                    'quality_score': analysis['quality_score'],
+                    'changes': analysis['change_summary']
+                }
+            else:
+                logger.info("📋 Manual review required - saving to staging...")
+                
+                # Prepare for manual review
+                results = self.smart_staging_manager.execute_promotion_strategy(final_data, analysis)
+                
+                # Save to staging with review metadata
+                final_data['promotion_status'] = 'pending_review'
+                final_data['review_timestamp'] = datetime.now()
+                final_data['review_reason'] = analysis['reason']
+                final_data['quality_score'] = analysis['quality_score']
+                
+                self._save_to_staging(final_data, 'pending_review')
+                
+                return {
+                    'recommendation': analysis['recommendation'],
+                    'auto_promoted': False,
+                    'manual_review_needed': True,
+                    'reason': analysis['reason'],
+                    'quality_score': analysis['quality_score'],
+                    'changes': analysis['change_summary']
+                }
+                
+        except Exception as e:
+            logger.error(f"Failed to make smart staging decision: {e}")
+            # Fallback: save to staging for manual review
+            final_data['promotion_status'] = 'error_fallback'
+            final_data['error_timestamp'] = datetime.now()
+            final_data['error_message'] = str(e)
+            
+            self._save_to_staging(final_data, 'error_fallback')
+            
+            return {
+                'recommendation': 'manual_review_error',
+                'auto_promoted': False,
+                'manual_review_needed': True,
+                'error': str(e)
+            }
+    
+    def _save_to_staging(self, data: pd.DataFrame, status: str):
+        """Save data to staging table with metadata"""
+        try:
+            if not self.db_manager:
+                logger.warning("No database connection for staging")
+                return
+            
+            # Add staging metadata
+            data['staging_timestamp'] = datetime.now()
+            data['staging_status'] = status
+            data['pipeline_run_id'] = datetime.now().strftime("%Y%m%d_%H%M%S")
+            
+            # Save to staging table
+            success = self.db_manager.upload_dataframe(
+                data, 'staging_candidates', if_exists='replace', index=False
+            )
+            
+            if success:
+                logger.info(f"✅ Data saved to staging with status: {status}")
+            else:
+                logger.error("❌ Failed to save data to staging")
+                
+        except Exception as e:
+            logger.error(f"Failed to save to staging: {e}")
 
 def main():
     """Main function to run the pipeline."""
