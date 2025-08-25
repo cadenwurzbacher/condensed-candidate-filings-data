@@ -606,28 +606,15 @@ class GeorgiaCleaner:
         
         # Derive address_state from explicit State column if present; else parse from address
         def extract_state_from_row(row) -> Optional[str]:
-            # First priority: Check explicit State column
             state_val = row.get('State') if 'State' in row.index else None
             if pd.notna(state_val) and str(state_val).strip():
                 s = str(state_val).strip().upper()
                 if re.fullmatch(r"[A-Z]{2}", s):
                     return s
-                # Handle full state names
-                if s == "GEORGIA":
-                    return "GA"
-            
-            # Second priority: Parse from combined address field
             addr = row.get('address')
             if addr is None or pd.isna(addr):
                 return None
-            
             text = str(addr)
-            
-            # Look for "Georgia" in the address (primary Georgia format)
-            if "Georgia" in text:
-                return "GA"
-            
-            # Fallback: Look for any 2-letter state abbreviation followed by ZIP
             m = re.search(r"\b([A-Z]{2})\s+\d{5}(?:-\d{4})?\b", text)
             return m.group(1) if m else None
         
@@ -656,19 +643,28 @@ class GeorgiaCleaner:
         if 'City' in df.columns:
             df['city'] = df['City'].apply(lambda x: str(x).strip() if pd.notna(x) else None)
         else:
-
+            
+            
+            
+            
             df['city'] = pd.NA
             
         if 'Zip' in df.columns:
             df['zip_code'] = df['Zip'].apply(lambda x: str(x).strip() if pd.notna(x) else None)
         else:
-
+            
+            
+            
+            
             df['zip_code'] = pd.NA
             
         if 'County (If Local Contest)' in df.columns:
             df['county'] = df['County (If Local Contest)'].apply(lambda x: str(x).strip() if pd.notna(x) else None)
         else:
-
+            
+            
+            
+            
             df['county'] = pd.NA
             
         # Other required but often absent columns

@@ -236,14 +236,16 @@ class VirginiaCleaner:
                         last_name, first_name = first_part.split(',', 1)
                         return first_name.strip()
                     else:
-
+            
+            
                         return first_part
                 else:
                     if ',' in name_str:
                         last_name, first_name = name_str.split(',', 1)
                         return first_name.strip()
                     else:
-
+            
+            
                         return name_str
             
             cleaned = re.sub(r'\s+', ' ', name_str).strip().strip('"\'')
@@ -368,13 +370,15 @@ class VirginiaCleaner:
             if self._is_initial_or_suffix(parts[1]):
                 return parts[0], None, None, None, suffix, nickname, parts[0]
             else:
-
+            
+            
                 return parts[0], None, parts[1], None, suffix, nickname, f"{parts[0]} {parts[1]}"
         elif len(parts) == 3:
             if self._is_initial(parts[1]):
                 return parts[0], parts[1], parts[2], None, suffix, nickname, f"{parts[0]} {parts[1]} {parts[2]}"
             else:
-
+            
+            
                 return parts[0], parts[1], parts[2], None, suffix, nickname, f"{parts[0]} {parts[1]} {parts[2]}"
         else:
             first = parts[0]
@@ -443,11 +447,8 @@ class VirginiaCleaner:
         elif 'Political Party Descr' in df.columns:
             df['party'] = df['Political Party Descr'].apply(standardize_party)
         else:
-            # Preserve existing party data if available, don't overwrite with None
-            if 'party' not in df.columns:
-                logger.warning("No party column found in Virginia data, setting to None")
-                df['party'] = None
-            # If party column already exists, keep existing data
+            logger.warning("No party column found in Virginia data, setting to None")
+            df['party'] = None
         
         return df
     
@@ -545,8 +546,18 @@ class VirginiaCleaner:
             logger.warning("No website column found in Virginia data, setting to None")
             df['website'] = None
         
-        # Note: address_state extraction moved to _map_geographic_data method
-        # where the address field is fully processed
+        # Map address_state from State column (Virginia has 100% coverage)
+        if 'State' in df.columns:
+            df['address_state'] = df['State'].apply(lambda x: str(x).strip() if pd.notna(x) else None)
+        else:
+            # Fallback: derive address_state from address when possible
+            def extract_state(addr: Optional[str]) -> Optional[str]:
+                if addr is None or pd.isna(addr):
+                    return None
+                s = str(addr)
+                m = re.search(r"\b([A-Z]{2})\s+\d{5}(?:-\d{4})?\b", s)
+                return m.group(1) if m else None
+            df['address_state'] = df['address'].apply(extract_state)
         
         return df
     
@@ -580,7 +591,7 @@ class VirginiaCleaner:
         
         return df
     
-    return df
+    
 
     def _map_geographic_data(self, df: pd.DataFrame) -> pd.DataFrame:
         """Map geographic data from Virginia raw data columns."""
@@ -616,123 +627,6 @@ class VirginiaCleaner:
         # Map district data - preserve original District column data
         if 'District' in df.columns:
             df['district'] = df['District'].apply(lambda x: str(x).strip() if pd.notna(x) else None)
-        
-        # Enhanced address parsing: extract city and zip from address field when raw columns are missing
-        def parse_virginia_address(address_str: str) -> tuple:
-            """Parse Virginia address to extract city and zip code."""
-            if pd.isna(address_str) or not address_str:
-                return None, None
-            
-            address = str(address_str).strip()
-            
-            # Handle PO Box addresses
-            if re.match(r'^P\.?\s*O\.?\s*Box\s+\d+', address, re.IGNORECASE):
-                # Extract city and zip from PO Box format: "P.O. Box 123 City, State ZIP"
-                city_zip_match = re.search(r'P\.?\s*O\.?\s*Box\s+\d+\s+(.+?),\s*([A-Z]{2})\s+(\d{5}(?:-\d{4})?)$', address, re.IGNORECASE)
-                if city_zip_match:
-                    city = city_zip_match.group(1).strip()
-                    zip_code = city_zip_match.group(3)
-                    return city, zip_code
-                
-                # Fallback for PO Box without state: "P.O. Box 123 City ZIP"
-                city_zip_match = re.search(r'P\.?\s*O\.?\s*Box\s+\d+\s+(.+?)\s+(\d{5}(?:-\d{4})?)$', address, re.IGNORECASE)
-                if city_zip_match:
-                    city = city_zip_match.group(1).strip()
-                    zip_code = city_zip_match.group(2)
-                    return city, zip_code
-            
-            # Handle regular addresses: "Street Address City, State ZIP" or "Street Address City State ZIP"
-            # Look for ZIP code at the end
-            zip_match = re.search(r'(\d{5}(?:-\d{4})?)$', address)
-            if zip_match:
-                zip_code = zip_match.group(1)
-                # Remove ZIP from address to find city
-                address_without_zip = address[:zip_match.start()].strip()
-                
-                # Look for city before ZIP (after last comma or space)
-                if ',' in address_without_zip:
-                    # Format: "Street Address City, State"
-                    parts = address_without_zip.split(',')
-                    if len(parts) >= 2:
-                        # City is second to last part, but we need to clean it
-                        city_part = parts[-2].strip()
-                        # Remove street address parts from city
-                        city_words = city_part.split()
-                        # Look for the last word that's not a street type
-                        for i in range(len(city_words) - 1, -1, -1):
-                            word = city_words[i].lower()
-                            if (word not in ['street', 'avenue', 'road', 'drive', 'lane', 'court', 'way', 'place', 'circle', 'boulevard'] and
-                                word not in ['st', 'ave', 'rd', 'dr', 'ln', 'ct', 'blvd'] and
-                                not word.endswith('st') and not word.endswith('rd') and not word.endswith('ave')):
-                                # Found the city name
-                                city = city_words[i]
-                                return city, zip_code
-                        # Fallback: use the whole city part
-                        city = city_part
-                        return city, zip_code
-                else:
-                    # Format: "Street Address City State"
-                    parts = address_without_zip.split()
-                    if len(parts) >= 2:
-                        # City is likely the second to last word (before state)
-                        # But we need to be more careful about street addresses
-                        if len(parts) >= 3:
-                            # Look for the last word that's not a street address part
-                            for i in range(len(parts) - 2, 0, -1):
-                                potential_city = parts[i]
-                                # Skip if it looks like a street address part
-                                if (potential_city.lower() in ['street', 'avenue', 'road', 'drive', 'lane', 'court', 'way', 'place', 'circle', 'boulevard'] or
-                                    potential_city.lower() in ['st', 'ave', 'rd', 'dr', 'ln', 'ct', 'blvd'] or
-                                    potential_city.lower().endswith('st') or
-                                    potential_city.lower().endswith('rd') or
-                                    potential_city.lower().endswith('ave')):
-                                    continue
-                                # Check if next word is a state abbreviation
-                                if i + 1 < len(parts) and len(parts[i + 1]) == 2 and parts[i + 1].isupper():
-                                    return potential_city, zip_code
-                        
-                        # Fallback: use second to last word
-                        city = parts[-2]
-                        return city, zip_code
-            
-            return None, None
-        
-        # Apply enhanced address parsing to fill missing city and zip_code
-        for idx, row in df.iterrows():
-            if pd.isna(row['city']) or pd.isna(row['zip_code']):
-                address = row['address']
-                if pd.notna(address):
-                    parsed_city, parsed_zip = parse_virginia_address(address)
-                    if parsed_city and pd.isna(row['city']):
-                        df.at[idx, 'city'] = parsed_city
-                    if parsed_zip and pd.isna(row['zip_code']):
-                        df.at[idx, 'zip_code'] = parsed_zip
-        
-        # Extract address_state from the fully processed address field
-        def extract_address_state(addr: Optional[str]) -> Optional[str]:
-            if addr is None or pd.isna(addr):
-                return None
-            s = str(addr)
-            
-            # Look for state abbreviation patterns
-            # Pattern 1: "City, State ZIP" format
-            state_zip_match = re.search(r',\s*([A-Z]{2})\s+\d{5}(?:-\d{4})?$', s)
-            if state_zip_match:
-                return state_zip_match.group(1)
-            
-            # Pattern 2: "City State ZIP" format (no comma)
-            state_zip_match = re.search(r'\s+([A-Z]{2})\s+\d{5}(?:-\d{4})?$', s)
-            if state_zip_match:
-                return state_zip_match.group(1)
-            
-            # Pattern 3: Any two-letter state abbreviation
-            state_match = re.search(r'\b([A-Z]{2})\b', s)
-            if state_match:
-                return state_match.group(1)
-            
-            return None
-        
-        df['address_state'] = df['address'].apply(extract_address_state)
         
         return df
 

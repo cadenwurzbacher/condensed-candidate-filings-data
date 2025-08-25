@@ -166,7 +166,9 @@ class VirginiaStructuralCleaner:
                 'zip_code': self._extract_zip_code(row),
                 'phone': self._extract_phone(row),
                 'email': self._extract_email(row),
-                'filing_date': None,  # Virginia doesn't have filing date
+                'facebook': self._extract_facebook(row),
+            'twitter': self._extract_twitter(row),
+            'filing_date': None,  # Virginia doesn't have filing date
                 'election_year': self._extract_election_year(row),
                 'election_type': 'Primary',  # Default to Primary
                 'address_state': self._extract_state(row),
@@ -281,7 +283,29 @@ class VirginiaStructuralCleaner:
         
         return None
     
-    def _extract_election_year(self, row: pd.Series) -> str:
+    
+    def _extract_facebook(self, row: pd.Series) -> str:
+        """Extract Facebook from row"""
+        facebook_columns = [col for col in row.index if 'facebook' in str(col).lower()]
+        
+        for col in facebook_columns:
+            value = row[col]
+            if pd.notna(value) and str(value).strip():
+                return str(value).strip()
+        
+        return None
+    
+    def _extract_twitter(self, row: pd.Series) -> str:
+        """Extract Twitter from row"""
+        twitter_columns = [col for col in row.index if 'twitter' in str(col).lower()]
+        
+        for col in twitter_columns:
+            value = row[col]
+            if pd.notna(value) and str(value).strip():
+                return str(value).strip()
+        
+        return None
+def _extract_election_year(self, row: pd.Series) -> str:
         """Extract election year from row"""
         # Try to extract from filename or default based on current context
         # For now, default to 2024 as most Virginia files are recent

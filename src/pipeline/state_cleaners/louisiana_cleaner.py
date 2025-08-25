@@ -108,9 +108,7 @@ class LouisianaCleaner:
         cleaned_df = self._add_required_columns(cleaned_df)
         
         # Step 7: Generate stable IDs (skipped - will be done later in process)
-        # cleaned_df = self._generate_stable_ids(cleaned_df)
-        
-        # Step 8: Remove duplicate columns
+        ## Step 8: Remove duplicate columns
         cleaned_df = self._remove_duplicate_columns(cleaned_df)
         
         # Final step: Ensure column order matches Alaska's exact structure
@@ -177,7 +175,8 @@ class LouisianaCleaner:
             if year_match:
                 year = int(year_match.group(1))
             else:
-
+            
+            
                 return None, None
             
             # Determine election type based on Louisiana patterns
@@ -189,7 +188,10 @@ class LouisianaCleaner:
             elif 'special' in election_str_lower or 'runoff' in election_str_lower:
                 election_type = "Special"
             else:
-
+            
+            
+            
+            
                 # Louisiana typically has General elections in odd years
                 election_type = "General"  # Default
             
@@ -483,7 +485,7 @@ class LouisianaCleaner:
         
         return df
     
-    return df
+    
 
 def clean_louisiana_candidates(input_file: str, output_file: str = None, output_dir: str = DEFAULT_OUTPUT_DIR) -> pd.DataFrame:
     """

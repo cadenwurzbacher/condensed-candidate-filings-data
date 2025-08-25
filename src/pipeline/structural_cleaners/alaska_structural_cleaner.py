@@ -248,6 +248,8 @@ class AlaskaStructuralCleaner:
             'zip_code': self._extract_zip_code(row),
             'phone': self._extract_phone(row),
             'email': self._extract_email(row),
+            'facebook': self._extract_facebook(row),
+            'twitter': self._extract_twitter(row),
             'filing_date': self._extract_filing_date(row),
             'election_year': self._extract_election_year(row, file_path),
             'election_type': self._extract_election_type(row),
@@ -413,6 +415,28 @@ class AlaskaStructuralCleaner:
         
         return None
     
+    def _extract_facebook(self, row: pd.Series) -> str:
+        """Extract Facebook from row"""
+        facebook_columns = [col for col in row.index if 'facebook' in str(col).lower()]
+        
+        for col in facebook_columns:
+            value = row[col]
+            if pd.notna(value) and str(value).strip():
+                return str(value).strip()
+        
+        return None
+    
+    def _extract_twitter(self, row: pd.Series) -> str:
+        """Extract Twitter from row"""
+        twitter_columns = [col for col in row.index if 'twitter' in str(col).lower()]
+        
+        for col in twitter_columns:
+            value = row[col]
+            if pd.notna(value) and str(value).strip():
+                return str(value).strip()
+        
+        return None
+    
     def _extract_filing_date(self, row: pd.Series) -> str:
         """Extract filing date from row"""
         date_columns = [col for col in row.index if 'date' in str(col).lower() or 'filing' in str(col).lower()]
@@ -475,7 +499,7 @@ class AlaskaStructuralCleaner:
         expected_columns = [
             'candidate_name', 'office', 'party', 'county', 'district',
             'address', 'city', 'state', 'zip_code', 'phone', 'email',
-            'filing_date', 'election_year', 'election_type', 'address_state',
+            'facebook', 'twitter', 'filing_date', 'election_year', 'election_type', 'address_state',
             'raw_data'
         ]
         

@@ -102,16 +102,11 @@ class NebraskaCleaner:
         # Step 5: Clean contact information
         cleaned_df = self._clean_contact_info(cleaned_df)
         
-        # Step 6: Map geographic data from addresses
-        cleaned_df = self._map_geographic_data(cleaned_df)
-        
-        # Step 7: Add required columns for final schema
+        # Step 6: Add required columns for final schema
         cleaned_df = self._add_required_columns(cleaned_df)
         
-        # Step 8: Generate stable IDs (skipped - will be done later in process)
-        # cleaned_df = self._generate_stable_ids(cleaned_df)
-        
-        # Step 9: Remove duplicate columns
+        # Step 7: Generate stable IDs (skipped - will be done later in process)
+        ## Step 8: Remove duplicate columns
         cleaned_df = self._remove_duplicate_columns(cleaned_df)
         
         # Final step: Ensure column order matches Alaska's exact structure
@@ -227,7 +222,10 @@ class NebraskaCleaner:
         if 'District' in df.columns:
             office_results = df.apply(lambda row: process_office_district(row['Office'], row['District']), axis=1)
         else:
-
+            
+            
+            
+            
             # If no District column,  None for district
             office_results = df.apply(lambda row: process_office_district(row['Office'], None), axis=1)
         
@@ -360,7 +358,10 @@ class NebraskaCleaner:
                         first_name = first_middle[0]
                         middle_name = second_part
                 else:
-
+            
+            
+            
+            
                     # Handle multiple parts
                     first_name = first_middle[0]
                     middle_parts = []
@@ -383,17 +384,22 @@ class NebraskaCleaner:
             if self._is_initial_or_suffix(parts[1]):
                 return parts[0], None, None, None, suffix, nickname, parts[0]
             else:
-
+            
+            
                 return parts[0], None, parts[1], None, suffix, nickname, f"{parts[0]} {parts[1]}"
         elif len(parts) == 3:
             # Check if second part is an initial
             if self._is_initial(parts[1]):
                 return parts[0], parts[1], parts[2], None, suffix, nickname, f"{parts[0]} {parts[1]} {parts[2]}"
             else:
-
+            
+            
                 return parts[0], parts[1], parts[2], None, suffix, nickname, f"{parts[0]} {parts[1]} {parts[2]}"
         else:
-
+            
+            
+            
+            
             # For names with more than 3 parts, treat first as first, last as last, rest as middle
             first = parts[0]
             last = parts[-1]
@@ -535,118 +541,6 @@ class NebraskaCleaner:
         
         return df
     
-    def _map_geographic_data(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Map geographic data from Nebraska address fields using smart inference."""
-        logger.info("Mapping geographic data for Nebraska addresses...")
-        
-        def parse_nebraska_address(address_str: str) -> tuple:
-            """Parse Nebraska address to extract city and zip code using smart inference."""
-            if pd.isna(address_str) or not address_str:
-                return None, None
-            
-            address = str(address_str).strip()
-            
-            # Handle edge case: just a number like "56"
-            if address.isdigit():
-                return None, None
-            
-            # Nebraska ZIP codes by city/region
-            nebraska_zip_ranges = {
-                'omaha': ['68102', '68103', '68104', '68105', '68106', '68107', '68108', '68109', '68110', '68111', '68112', '68113', '68114', '68116', '68117', '68118', '68122', '68123', '68124', '68127', '68128', '68130', '68131', '68132', '68133', '68134', '68135', '68136', '68137', '68138', '68139', '68142', '68144', '68147', '68152', '68154', '68155', '68157', '68164', '68178', '68179', '68180', '68182', '68183', '68197', '68198'],
-                'lincoln': ['68502', '68503', '68504', '68505', '68506', '68507', '68508', '68509', '68510', '68512', '68514', '68516', '68517', '68520', '68521', '68522', '68523', '68524', '68526', '68527', '68528', '68529', '68531', '68532', '68542', '68583', '68588'],
-                'bellevue': ['68005', '68123', '68147'],
-                'grand island': ['68801', '68802', '68803'],
-                'kearney': ['68845', '68847', '68848', '68849'],
-                'fremont': ['68025', '68026'],
-                'norfolk': ['68701', '68702'],
-                'columbus': ['68601', '68602'],
-                'hastings': ['68901', '68902'],
-                'north platte': ['69101', '69103'],
-                'scottsbluff': ['69361', '69363'],
-                'south sioux city': ['68776'],
-                'blair': ['68008'],
-                'beatrice': ['68310'],
-                'lexington': ['68850'],
-                'york': ['68467'],
-                'aurora': ['68818'],
-                'holdrege': ['68949'],
-                'mccook': ['69001'],
-                'alliance': ['69301'],
-                'sidney': ['69162'],
-                'chadron': ['69337'],
-                'wayne': ['68787'],
-                'creighton': ['68729'],
-                'o\'neill': ['68763'],
-                'west point': ['68788'],
-                'tekamah': ['68061'],
-                'washington': ['68068'],
-                'arlington': ['68002'],
-                'fort calhoun': ['68023'],
-                'valley': ['68064'],
-                'elkhorn': ['68022'],
-                'bennington': ['68007'],
-                'gretna': ['68028'],
-                'papillion': ['68046'],
-                'la vista': ['68128', '68157'],
-                'ralston': ['68127'],
-                'millard': ['68135'],
-                'westside': ['68779'],
-                'schuyler': ['68661'],
-                'central city': ['68826'],
-                'broken bow': ['68822'],
-                'gothenburg': ['69138'],
-                'cozad': ['69130'],
-                'imperial': ['69033'],
-                'ogallala': ['69153'],
-                'kimball': ['69145'],
-                'gering': ['69341'],
-                'mitchell': ['69357']
-            }
-            
-            # Look for city indicators in the address
-            address_lower = address.lower()
-            
-            # Check for common Nebraska city patterns
-            for city_name, zip_codes in nebraska_zip_ranges.items():
-                if city_name in address_lower:
-                    # Found a city match - use the first ZIP code as default
-                    city = city_name.title()  # Proper case
-                    zip_code = zip_codes[0]
-                    return city, zip_code
-            
-            # Check for street patterns that suggest Omaha or Lincoln
-            if any(pattern in address_lower for pattern in ['ave.', 'ave', 'dr.', 'dr', 'st.', 'st', 'blvd.', 'blvd', 'plz.', 'plz', 'ct.', 'ct']):
-                # This looks like a city street address
-                # Check for Omaha indicators
-                if any(pattern in address_lower for pattern in ['prairie', 'viburnum', 'ville de sante', '160th', 'pinnacle', 'jack pine', 'caniglia', '12th']):
-                    # These street names are characteristic of Omaha
-                    return 'Omaha', '68102'  # Default Omaha ZIP
-                elif any(pattern in address_lower for pattern in ['south', 'north', 'east', 'west']):
-                    # Directional streets often indicate larger cities
-                    return 'Omaha', '68102'  # Default Omaha ZIP
-            
-            # If no specific city found, try to infer from street patterns
-            if 'ave.' in address_lower or 'ave' in address_lower:
-                return 'Omaha', '68102'  # Most likely Omaha
-            elif 'dr.' in address_lower or 'dr' in address_lower:
-                return 'Omaha', '68102'  # Most likely Omaha
-            elif 'st.' in address_lower or 'st' in address_lower:
-                return 'Omaha', '68102'  # Most likely Omaha
-            
-            return None, None
-        
-        # Apply enhanced address parsing to extract city and zip_code
-        for idx, row in df.iterrows():
-            address = row['address']
-            if pd.notna(address):
-                parsed_city, parsed_zip = parse_nebraska_address(address)
-                if parsed_city:
-                    df.at[idx, 'city'] = parsed_city
-                if parsed_zip:
-                    df.at[idx, 'zip_code'] = parsed_zip
-        
-        return df
-    
     def _add_required_columns(self, df: pd.DataFrame) -> pd.DataFrame:
         """Add all required columns for the final schema."""
         logger.info("Adding required columns...")
@@ -676,7 +570,7 @@ class NebraskaCleaner:
         
         return df
     
-    return df
+    
 
     def _is_initial_or_suffix(self, part: str) -> bool:
         """Check if a name part is an initial, suffix, or nickname."""

@@ -286,7 +286,8 @@ class KentuckyCleaner:
             elif 'special' in election_type_str:
                 return "Special"
             else:
-
+            
+            
                 return "General"  # Default
         
         # Apply election processing
@@ -529,12 +530,13 @@ class KentuckyCleaner:
             df['party'] = df[party_col].apply(standardize_party)
             logger.info(f"Found and processed party data from column: {party_col}")
         else:
-            # Preserve existing party data if available, don't overwrite with None
-            if 'party' not in df.columns:
-                # No party data available
-                df['party'] = pd.NA
-                logger.info("No party data found in raw data")
-            # If party column already exists, keep existing data
+            
+            
+            
+            
+            # No party data available
+            df['party'] = pd.NA
+            logger.info("No party data found in raw data")
         
         return df
     
@@ -660,7 +662,7 @@ class KentuckyCleaner:
         
         return df
     
-    return df
+    
 
 def clean_kentucky_candidates(input_file: str, output_file: str = None, output_dir: str = DEFAULT_OUTPUT_DIR) -> pd.DataFrame:
     """

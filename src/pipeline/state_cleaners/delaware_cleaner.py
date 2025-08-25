@@ -106,9 +106,7 @@ class DelawareCleaner:
         cleaned_df = self._add_required_columns(cleaned_df)
         
         # Step 7: Generate stable IDs (skipped - will be done later in process)
-        # cleaned_df = self._generate_stable_ids(cleaned_df)
-        
-        # Step 8: Remove duplicate columns
+        ## Step 8: Remove duplicate columns
         cleaned_df = self._remove_duplicate_columns(cleaned_df)
         
         # Step 9: Reorder columns to match Alaska's schema
@@ -241,7 +239,10 @@ class DelawareCleaner:
                 if district_match:
                     district = district_match.group(1)
                 else:
-
+            
+            
+            
+            
                     # Try abbreviated format
                     district_match = re.search(r'DIS (\d+)', office_str, re.IGNORECASE)
                     if district_match:
@@ -257,7 +258,10 @@ class DelawareCleaner:
                 if district_match:
                     district = district_match.group(1)
                 else:
-
+            
+            
+            
+            
                     # Try abbreviated format
                     district_match = re.search(r'DIS (\d+)', office_str, re.IGNORECASE)
                     if district_match:
@@ -275,7 +279,10 @@ class DelawareCleaner:
                 if "At-Large" in office_str or "AT LRG" in office_str:
                     return "City Council Member", "At-Large"
                 else:
-
+            
+            
+            
+            
                     # Extract district number from office string
                     district_match = re.search(r'District (\d+)', office_str, re.IGNORECASE)
                     if district_match:
@@ -375,7 +382,10 @@ class DelawareCleaner:
                     elif "Levy Court" in office_str or "LEVY COURT" in office_str:
                         return "County Levy Court Member", district
                     else:
-
+            
+            
+            
+            
                         # For any other office with district, keep the office name but extract district
                         # Remove "District X" from the office name
                         office_clean = re.sub(r'\s+District\s+\d+', '', office_str, flags=re.IGNORECASE)
@@ -521,7 +531,9 @@ class DelawareCleaner:
             return city_str
         
         df['city'] = df['city'].apply(standardize_city_name)
+        
 
+        
         # Clean up problematic county values
         def clean_county_value(county_val):
             if pd.isna(county_val):
@@ -789,7 +801,10 @@ class DelawareCleaner:
                         first_name = first_middle[0]
                         middle_name = second_part
                 else:
-
+            
+            
+            
+            
                     # Handle multiple parts
                     first_name = first_middle[0]
                     middle_parts = []
@@ -812,17 +827,22 @@ class DelawareCleaner:
             if self._is_initial_or_suffix(parts[1]):
                 return parts[0], None, None, None, suffix, nickname, parts[0]
             else:
-
+            
+            
                 return parts[0], None, parts[1], None, suffix, nickname, f"{parts[0]} {parts[1]}"
         elif len(parts) == 3:
             # Check if second part is an initial
             if self._is_initial(parts[1]):
                 return parts[0], parts[1], parts[2], None, suffix, nickname, f"{parts[0]} {parts[1]} {parts[2]}"
             else:
-
+            
+            
                 return parts[0], parts[1], parts[2], None, suffix, nickname, f"{parts[0]} {parts[1]} {parts[2]}"
         else:
-
+            
+            
+            
+            
             # For names with more than 3 parts, treat first as first, last as last, rest as middle
             first = parts[0]
             last = parts[-1]
@@ -937,7 +957,8 @@ class DelawareCleaner:
         
         # Set ID columns to None (will be generated later, like Alaska)
         df['id'] = pd.NA
-                
+        df['stable_id'] = pd.NA
+        
         # County information is now extracted from office names in _process_office_and_district
         # No need to set county to None since it's already populated during office processing
         
@@ -947,7 +968,7 @@ class DelawareCleaner:
         
         return df
     
-    return df
+    
 
     def _is_initial_or_suffix(self, part: str) -> bool:
         """Check if a name part is an initial, suffix, or nickname."""
@@ -1253,7 +1274,8 @@ def clean_delaware_candidates(input_file: str, output_file: str = None, output_d
     typed_df['original_election_year'] = typed_df['original_election_year'].astype('Int64')
     typed_df['party'] = typed_df['party'].astype('object')
     typed_df['id'] = typed_df['id'].astype('object')
-    typed_    
+    typed_df['stable_id'] = typed_df['stable_id'].astype('object')
+    
     # Save the properly typed version
     typed_df.to_csv(csv_output, index=False)
     logger.info(f"Data saved with proper types to CSV!")

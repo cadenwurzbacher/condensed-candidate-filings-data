@@ -106,9 +106,7 @@ class WyomingCleaner:
         cleaned_df = self._add_required_columns(cleaned_df)
         
         # Step 7: Generate stable IDs (skipped - will be done later in process)
-        # cleaned_df = self._generate_stable_ids(cleaned_df)
-        
-        # Step 8: Remove duplicate columns
+        ## Step 8: Remove duplicate columns
         cleaned_df = self._remove_duplicate_columns(cleaned_df)
         
         # Final step: Ensure column order matches Alaska's exact structure
@@ -237,16 +235,21 @@ class WyomingCleaner:
                         last_name, first_name = first_part.split(',', 1)
                         return first_name.strip()
                     else:
-
+            
+            
                         return first_part
                 else:
-
+            
+            
+            
+            
                     # Handle single names
                     if ',' in name_str:
                         last_name, first_name = name_str.split(',', 1)
                         return first_name.strip()
                     else:
-
+            
+            
                         return name_str
             
             # For non-president cases, clean the name
@@ -290,11 +293,17 @@ class WyomingCleaner:
                     first_part = original_str.split('/')[0].strip()
                     parsed = self._parse_standard_name(first_part, original_name)
                 else:
-
+            
+            
+            
+            
                     # Fallback for president candidates without running mates
                     parsed = self._parse_standard_name(original_name, original_name)
             else:
-
+            
+            
+            
+            
                 # For all other cases, use the original name for parsing
                 parsed = self._parse_standard_name(original_name, original_name)
             
@@ -368,7 +377,10 @@ class WyomingCleaner:
                         first_name = first_middle[0]
                         middle_name = second_part
                 else:
-
+            
+            
+            
+            
                     # Handle multiple parts
                     first_name = first_middle[0]
                     middle_parts = []
@@ -391,17 +403,22 @@ class WyomingCleaner:
             if self._is_initial_or_suffix(parts[1]):
                 return parts[0], None, None, None, suffix, nickname, parts[0]
             else:
-
+            
+            
                 return parts[0], None, parts[1], None, suffix, nickname, f"{parts[0]} {parts[1]}"
         elif len(parts) == 3:
             # Check if second part is an initial
             if self._is_initial(parts[1]):
                 return parts[0], parts[1], parts[2], None, suffix, nickname, f"{parts[0]} {parts[1]} {parts[2]}"
             else:
-
+            
+            
                 return parts[0], parts[1], parts[2], None, suffix, nickname, f"{parts[0]} {parts[1]} {parts[2]}"
         else:
-
+            
+            
+            
+            
             # For names with more than 3 parts, treat first as first, last as last, rest as middle
             first = parts[0]
             last = parts[-1]
@@ -592,7 +609,7 @@ class WyomingCleaner:
         
         return df
     
-    return df
+    
 
     def _is_initial_or_suffix(self, part: str) -> bool:
         """Check if a name part is an initial, suffix, or nickname."""

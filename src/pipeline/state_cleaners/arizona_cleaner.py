@@ -106,9 +106,7 @@ class ArizonaCleaner:
         cleaned_df = self._add_required_columns(cleaned_df)
         
         # Step 7: Generate stable IDs (skipped - will be done later in process)
-        # cleaned_df = self._generate_stable_ids(cleaned_df)
-        
-        # Step 8: Remove duplicate columns
+        ## Step 8: Remove duplicate columns
         cleaned_df = self._remove_duplicate_columns(cleaned_df)
         
         # Step 9: Ensure column order matches Alaska's exact structure
@@ -190,7 +188,8 @@ class ArizonaCleaner:
                     district = district_match.group(1)
                     return "US Representative", district
                 else:
-
+            
+            
                     return "US Representative", None
             
             # Handle State Senate
@@ -200,7 +199,8 @@ class ArizonaCleaner:
                     district = district_match.group(1)
                     return "State Senate", district
                 else:
-
+            
+            
                     return "State Senate", None
             
             # Handle State Representative
@@ -210,7 +210,8 @@ class ArizonaCleaner:
                     district = district_match.group(1)
                     return "State House", district
                 else:
-
+            
+            
                     return "State House", None
             
             # Handle Corporation Commissioner
@@ -342,7 +343,10 @@ class ArizonaCleaner:
                         first_name = first_middle[0]
                         middle_name = second_part
                 else:
-
+            
+            
+            
+            
                     # Handle multiple parts
                     first_name = first_middle[0]
                     middle_parts = []
@@ -365,17 +369,22 @@ class ArizonaCleaner:
             if self._is_initial_or_suffix(parts[1]):
                 return parts[0], None, None, None, suffix, nickname, parts[0]
             else:
-
+            
+            
                 return parts[0], None, parts[1], None, suffix, nickname, f"{parts[0]} {parts[1]}"
         elif len(parts) == 3:
             # Check if second part is an initial
             if self._is_initial(parts[1]):
                 return parts[0], parts[1], parts[2], None, suffix, nickname, f"{parts[0]} {parts[1]} {parts[2]}"
             else:
-
+            
+            
                 return parts[0], parts[1], parts[2], None, suffix, nickname, f"{parts[0]} {parts[1]} {parts[2]}"
         else:
-
+            
+            
+            
+            
             # For names with more than 3 parts, treat first as first, last as last, rest as middle
             first = parts[0]
             last = parts[-1]
@@ -496,7 +505,7 @@ class ArizonaCleaner:
         
         return df
     
-    return df
+    
 
     def _is_initial_or_suffix(self, part: str) -> bool:
         """Check if a name part is an initial, suffix, or nickname."""

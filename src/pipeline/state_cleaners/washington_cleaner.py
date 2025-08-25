@@ -108,9 +108,7 @@ class WashingtonCleaner:
         cleaned_df = self._add_required_columns(cleaned_df)
         
         # Step 7: Generate stable IDs (skipped - will be done later in process)
-        # cleaned_df = self._generate_stable_ids(cleaned_df)
-        
-        # Step 8: Remove duplicate columns
+        ## Step 8: Remove duplicate columns
         cleaned_df = self._remove_duplicate_columns(cleaned_df)
         
         # Final step: Ensure column order matches Alaska's exact structure
@@ -177,7 +175,8 @@ class WashingtonCleaner:
             if year_match:
                 year = int(year_match.group())
             else:
-
+            
+            
                 return None, None
             
             # Determine election type
@@ -381,7 +380,10 @@ class WashingtonCleaner:
                         first_name = first_middle[0]
                         middle_name = second_part
                 else:
-
+            
+            
+            
+            
                     # Handle multiple parts
                     first_name = first_middle[0]
                     middle_parts = []
@@ -404,17 +406,22 @@ class WashingtonCleaner:
             if self._is_initial_or_suffix(parts[1]):
                 return parts[0], None, None, None, suffix, nickname, parts[0]
             else:
-
+            
+            
                 return parts[0], None, parts[1], None, suffix, nickname, f"{parts[0]} {parts[1]}"
         elif len(parts) == 3:
             # Check if second part is an initial
             if self._is_initial(parts[1]):
                 return parts[0], parts[1], parts[2], None, suffix, nickname, f"{parts[0]} {parts[1]} {parts[2]}"
             else:
-
+            
+            
                 return parts[0], parts[1], parts[2], None, suffix, nickname, f"{parts[0]} {parts[1]} {parts[2]}"
         else:
-
+            
+            
+            
+            
             # For names with more than 3 parts, treat first as first, last as last, rest as middle
             first = parts[0]
             last = parts[-1]
@@ -635,7 +642,7 @@ class WashingtonCleaner:
         
         return df
     
-    return df
+    
 
     def _is_initial_or_suffix(self, part: str) -> bool:
         """Check if a name part is an initial, suffix, or nickname."""

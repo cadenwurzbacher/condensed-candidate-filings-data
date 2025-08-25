@@ -106,9 +106,7 @@ class IndianaCleaner:
         cleaned_df = self._add_required_columns(cleaned_df)
         
         # Step 7: Generate stable IDs (skipped - will be done later in process)
-        # cleaned_df = self._generate_stable_ids(cleaned_df)
-        
-        # Step 8: Remove duplicate columns
+        ## Step 8: Remove duplicate columns
         cleaned_df = self._remove_duplicate_columns(cleaned_df)
         
         # Final step: Ensure column order matches Alaska's exact structure
@@ -168,13 +166,19 @@ class IndianaCleaner:
         if 'Year' in df.columns:
             df['election_year'] = df['Year'].astype(int)
         else:
-
+            
+            
+            
+            
             df['election_year'] = 2024
         
         if 'Election' in df.columns:
             df['election_type'] = df['Election'].str.capitalize()
         else:
-
+            
+            
+            
+            
             df['election_type'] = "General"
         
         return df
@@ -223,7 +227,10 @@ class IndianaCleaner:
             df['district'] = [result[1] for result in office_results]
             df['district'] = df['district'].astype('object')
         else:
-
+            
+            
+            
+            
             df['office'] = pd.NA
             df['district'] = pd.NA
         
@@ -368,7 +375,10 @@ class IndianaCleaner:
                         first_name = first_middle[0]
                         middle_name = second_part
                 else:
-
+            
+            
+            
+            
                     # Handle multiple parts
                     first_name = first_middle[0]
                     middle_parts = []
@@ -391,17 +401,22 @@ class IndianaCleaner:
             if self._is_initial_or_suffix(parts[1]):
                 return parts[0], None, None, None, suffix, nickname, parts[0]
             else:
-
+            
+            
                 return parts[0], None, parts[1], None, suffix, nickname, f"{parts[0]} {parts[1]}"
         elif len(parts) == 3:
             # Check if second part is an initial
             if self._is_initial(parts[1]):
                 return parts[0], parts[1], parts[2], None, suffix, nickname, f"{parts[0]} {parts[1]} {parts[2]}"
             else:
-
+            
+            
                 return parts[0], parts[1], parts[2], None, suffix, nickname, f"{parts[0]} {parts[1]} {parts[2]}"
         else:
-
+            
+            
+            
+            
             # For names with more than 3 parts, treat first as first, last as last, rest as middle
             first = parts[0]
             last = parts[-1]
@@ -467,7 +482,10 @@ class IndianaCleaner:
         if 'Party' in df.columns:
             df['party'] = df['Party'].apply(standardize_party)
         else:
-
+            
+            
+            
+            
             df['party'] = pd.NA
         
         return df
@@ -561,7 +579,7 @@ class IndianaCleaner:
         
         return df
     
-    return df
+    
 
     def _is_initial_or_suffix(self, part: str) -> bool:
         """Check if a name part is an initial, suffix, or nickname."""

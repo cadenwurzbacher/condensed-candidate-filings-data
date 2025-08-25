@@ -107,9 +107,7 @@ class KansasCleaner:
         cleaned_df = self._add_required_columns(cleaned_df)
         
         # Step 7: Generate stable IDs (skipped - will be done later in process)
-        # cleaned_df = self._generate_stable_ids(cleaned_df)
-        
-        # Step 8: Remove duplicate columns
+        ## Step 8: Remove duplicate columns
         cleaned_df = self._remove_duplicate_columns(cleaned_df)
         
         # Final step: Ensure column order matches Alaska's exact structure
@@ -176,7 +174,8 @@ class KansasCleaner:
             if year_match:
                 year = int(year_match.group())
             else:
-
+            
+            
                 return None, None
             
             # Determine election type
@@ -198,7 +197,10 @@ class KansasCleaner:
             df['election_year'] = [result[0] for result in election_results]
             df['election_type'] = [result[1] for result in election_results]
         else:
-
+            
+            
+            
+            
             # Default values if Election column doesn't exist
                     df['election_year'] = pd.NA
         df['election_type'] = pd.NA
@@ -465,7 +467,10 @@ class KansasCleaner:
         if 'Party' in df.columns:
             df['party'] = df['Party'].apply(standardize_party)
         else:
-
+            
+            
+            
+            
             df['party'] = pd.NA
         
         return df
@@ -522,25 +527,37 @@ class KansasCleaner:
         if 'Home Phone' in df.columns and 'Cell Phone' in df.columns:
             df['phone'] = df.apply(lambda row: clean_phone(row['Home Phone'], row['Cell Phone']), axis=1)
         else:
-
+            
+            
+            
+            
             df['phone'] = pd.NA
             
         if 'Email' in df.columns:
             df['email'] = df['Email'].apply(clean_email)
         else:
-
+            
+            
+            
+            
             df['email'] = pd.NA
             
         if 'Home Address' in df.columns and 'Home City' in df.columns and 'Home Zip' in df.columns:
             df['address'] = df.apply(lambda row: clean_address(row['Home Address'], row['Home City'], row['Home Zip']), axis=1)
         else:
-
+            
+            
+            
+            
             df['address'] = pd.NA
             
         if 'Web Address' in df.columns:
             df['website'] = df['Web Address'].apply(lambda x: str(x).strip() if pd.notna(x) else None)
         else:
-
+            
+            
+            
+            
             df['website'] = pd.NA
         
         # Set address_state to "KS" for all Kansas records
@@ -550,13 +567,19 @@ class KansasCleaner:
         if 'Home City' in df.columns:
             df['city'] = df['Home City'].apply(lambda x: str(x).strip() if pd.notna(x) else None)
         else:
-
+            
+            
+            
+            
             df['city'] = pd.NA
             
         if 'Home Zip' in df.columns:
             df['zip_code'] = df['Home Zip'].apply(lambda x: str(x).strip() if pd.notna(x) else None)
         else:
-
+            
+            
+            
+            
             df['zip_code'] = pd.NA
         
         # Kansas doesn't have county data, so set to null
@@ -575,7 +598,10 @@ class KansasCleaner:
         if 'Candidate' in df.columns:
             df['original_name'] = df['Candidate'].copy()
         else:
-
+            
+            
+            
+            
             df['original_name'] = pd.NA
             
         df['original_state'] = df['state'].copy()
@@ -584,13 +610,19 @@ class KansasCleaner:
         if 'Office' in df.columns:
             df['original_office'] = df['Office'].copy()
         else:
-
+            
+            
+            
+            
             df['original_office'] = pd.NA
             
         if 'Date Filed' in df.columns:
             df['original_filing_date'] = df['Date Filed'].copy()
         else:
-
+            
+            
+            
+            
             df['original_filing_date'] = pd.NA
         
         # Add missing columns with None values
@@ -620,12 +652,15 @@ class KansasCleaner:
             
             df['filing_date'] = df['Date Filed'].apply(parse_filing_date)
         else:
-
+            
+            
+            
+            
             df['filing_date'] = pd.NA
         
         return df
     
-    return df
+    
 
     def _is_initial_or_suffix(self, part: str) -> bool:
         """Check if a name part is an initial, suffix, or nickname."""

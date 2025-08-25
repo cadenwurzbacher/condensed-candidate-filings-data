@@ -137,9 +137,7 @@ class NorthCarolinaCleaner:
         cleaned_df = self._add_required_columns(cleaned_df)
         
         # Step 7: Generate stable IDs (skipped - will be done later in process)
-        # cleaned_df = self._generate_stable_ids(cleaned_df)
-        
-        # Step 8: Remove duplicate columns
+        ## Step 8: Remove duplicate columns
         cleaned_df = self._remove_duplicate_columns(cleaned_df)
         
         # Final step: Ensure column order matches Alaska's exact structure
@@ -163,7 +161,8 @@ class NorthCarolinaCleaner:
             if year_match:
                 year = int(year_match.group())
             else:
-
+            
+            
                 return None, None
             
             # Determine election type
@@ -288,16 +287,21 @@ class NorthCarolinaCleaner:
                         last_name, first_name = first_part.split(',', 1)
                         return first_name.strip()
                     else:
-
+            
+            
                         return first_part
                 else:
-
+            
+            
+            
+            
                     # Handle single names
                     if ',' in name_str:
                         last_name, first_name = name_str.split(',', 1)
                         return first_name.strip()
                     else:
-
+            
+            
                         return name_str
             
             # For non-president cases, clean the name
@@ -711,7 +715,7 @@ class NorthCarolinaCleaner:
         
         return df
     
-    return df
+    
 
     def _is_initial_or_suffix(self, part: str) -> bool:
         """Check if a name part is an initial, suffix, or nickname."""

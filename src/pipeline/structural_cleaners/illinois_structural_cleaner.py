@@ -212,7 +212,9 @@ class IllinoisStructuralCleaner:
                 'zip_code': None,  # Illinois doesn't have zip info
                 'phone': None,  # Illinois doesn't have phone info
                 'email': self._extract_email(row),
-                'filing_date': self._extract_filing_date(row),
+                'facebook': self._extract_facebook(row),
+            'twitter': self._extract_twitter(row),
+            'filing_date': self._extract_filing_date(row),
                 'election_year': self._extract_election_year(row),
                 'election_type': self._extract_election_type(row),
                 'address_state': 'Illinois',
@@ -253,7 +255,29 @@ class IllinoisStructuralCleaner:
             return email
         return None
     
-    def _extract_filing_date(self, row: pd.Series) -> str:
+    
+    def _extract_facebook(self, row: pd.Series) -> str:
+        """Extract Facebook from row"""
+        facebook_columns = [col for col in row.index if 'facebook' in str(col).lower()]
+        
+        for col in facebook_columns:
+            value = row[col]
+            if pd.notna(value) and str(value).strip():
+                return str(value).strip()
+        
+        return None
+    
+    def _extract_twitter(self, row: pd.Series) -> str:
+        """Extract Twitter from row"""
+        twitter_columns = [col for col in row.index if 'twitter' in str(col).lower()]
+        
+        for col in twitter_columns:
+            value = row[col]
+            if pd.notna(value) and str(value).strip():
+                return str(value).strip()
+        
+        return None
+def _extract_filing_date(self, row: pd.Series) -> str:
         """Extract filing date from row"""
         filing_date = row.get('Date Filed')
         if pd.notna(filing_date):

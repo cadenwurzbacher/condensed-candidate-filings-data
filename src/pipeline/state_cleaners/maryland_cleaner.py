@@ -110,9 +110,7 @@ class MarylandCleaner:
         cleaned_df = self._add_required_columns(cleaned_df)
         
         # Step 7: Generate stable IDs (skipped - will be done later in process)
-        # cleaned_df = self._generate_stable_ids(cleaned_df)
-        
-        # Step 8: Remove duplicate columns
+        ## Step 8: Remove duplicate columns
         cleaned_df = self._remove_duplicate_columns(cleaned_df)
         
         # Final step: Ensure column order matches Alaska's exact structure
@@ -153,7 +151,8 @@ class MarylandCleaner:
             if year_match:
                 year = int(year_match.group())
             else:
-
+            
+            
                 return None, None
             
             # Determine election type
@@ -281,16 +280,21 @@ class MarylandCleaner:
                         last_name, first_name = first_part.split(',', 1)
                         return first_name.strip()
                     else:
-
+            
+            
                         return first_part
                 else:
-
+            
+            
+            
+            
                     # Handle single names
                     if ',' in name_str:
                         last_name, first_name = name_str.split(',', 1)
                         return first_name.strip()
                     else:
-
+            
+            
                         return name_str
             
             # For non-president cases, clean the name
@@ -311,7 +315,10 @@ class MarylandCleaner:
                 (row['office'] if 'office' in df.columns else (row['Office Name'] if 'Office Name' in df.columns else (row['Office'] if 'Office' in df.columns else None)))
             ), axis=1)
         else:
-
+            
+            
+            
+            
             # Fallback - create a placeholder name
             df['full_name_display'] = 'Unknown Candidate'
         
@@ -354,11 +361,17 @@ class MarylandCleaner:
                     first_part = original_str.split('/')[0].strip()
                     parsed = self._parse_standard_name(first_part, original_name)
                 else:
-
+            
+            
+            
+            
                     # Fallback for president candidates without running mates
                     parsed = self._parse_standard_name(original_name, original_name)
             else:
-
+            
+            
+            
+            
                 # For all other cases, use the original name for parsing
                 parsed = self._parse_standard_name(original_name, original_name)
             
@@ -458,17 +471,22 @@ class MarylandCleaner:
             if self._is_initial_or_suffix(parts[1]):
                 return parts[0], None, None, None, suffix, nickname, parts[0]
             else:
-
+            
+            
                 return parts[0], None, parts[1], None, suffix, nickname, f"{parts[0]} {parts[1]}"
         elif len(parts) == 3:
             # Check if second part is an initial
             if self._is_initial(parts[1]):
                 return parts[0], parts[1], parts[2], None, suffix, nickname, f"{parts[0]} {parts[1]} {parts[2]}"
             else:
-
+            
+            
                 return parts[0], parts[1], parts[2], None, suffix, nickname, f"{parts[0]} {parts[1]} {parts[2]}"
         else:
-
+            
+            
+            
+            
             # For names with more than 3 parts, treat first as first, last as last, rest as middle
             first = parts[0]
             last = parts[-1]
@@ -536,13 +554,7 @@ class MarylandCleaner:
             if candidate in df.columns:
                 party_col = candidate
                 break
-        if party_col:
-            df['party'] = df[party_col].apply(standardize_party)
-        else:
-            # Preserve existing party data if available, don't overwrite with None
-            if 'party' not in df.columns:
-                df['party'] = None
-            # If party column already exists, keep existing data
+        df['party'] = df[party_col].apply(standardize_party) if party_col else None
         
         return df
     
@@ -694,7 +706,10 @@ class MarylandCleaner:
         elif 'Name' in df.columns:
             df['original_name'] = df['Name'].copy()
         else:
-
+            
+            
+            
+            
             df['original_name'] = 'Unknown'
         df['original_state'] = df['state'].copy()
         df['original_election_year'] = df['election_year'].copy()
@@ -706,7 +721,10 @@ class MarylandCleaner:
         elif 'office' in df.columns:
             df['original_office'] = df['office'].copy()
         else:
-
+            
+            
+            
+            
             df['original_office'] = pd.NA
         # Map filing date from Maryland 2022-2026 format
         if 'Filing Type and Date' in df.columns:
@@ -756,7 +774,7 @@ class MarylandCleaner:
         
         return df
     
-    return df
+    
 
     def _is_initial_or_suffix(self, part: str) -> bool:
         """Check if a name part is an initial, suffix, or nickname."""

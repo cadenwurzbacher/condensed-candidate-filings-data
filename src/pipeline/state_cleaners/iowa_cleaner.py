@@ -110,13 +110,10 @@ class IowaCleaner:
         # Step 5: Clean contact information
         cleaned_df = self._clean_contact_info(cleaned_df)
         
-        # Step 6: Map geographic data from addresses
-        cleaned_df = self._map_geographic_data(cleaned_df)
-        
-        # Step 7: Add required columns for final schema
+        # Step 6: Add required columns for final schema
         cleaned_df = self._add_required_columns(cleaned_df)
         
-        # Step 8: Remove duplicate columns
+        # Step 7: Remove duplicate columns
         cleaned_df = self._remove_duplicate_columns(cleaned_df)
         
         # Final step: Ensure column order matches Alaska's exact structure
@@ -159,7 +156,8 @@ class IowaCleaner:
             if year_match:
                 year = int(year_match.group())
             else:
-
+            
+            
                 return None, None
             
             # Determine election type
@@ -246,14 +244,16 @@ class IowaCleaner:
                         last_name, first_name = first_part.split(',', 1)
                         return first_name.strip()
                     else:
-
+            
+            
                         return first_part
                 else:
                     if ',' in name_str:
                         last_name, first_name = name_str.split(',', 1)
                         return first_name.strip()
                     else:
-
+            
+            
                         return name_str
             
             # For non-president cases, clean the name
@@ -383,13 +383,15 @@ class IowaCleaner:
             if self._is_initial_or_suffix(parts[1]):
                 return parts[0], None, None, None, suffix, nickname, parts[0]
             else:
-
+            
+            
                 return parts[0], None, parts[1], None, suffix, nickname, f"{parts[0]} {parts[1]}"
         elif len(parts) == 3:
             if self._is_initial(parts[1]):
                 return parts[0], parts[1], parts[2], None, suffix, nickname, f"{parts[0]} {parts[1]} {parts[2]}"
             else:
-
+            
+            
                 return parts[0], parts[1], parts[2], None, suffix, nickname, f"{parts[0]} {parts[1]} {parts[2]}"
         else:
             first = parts[0]
@@ -512,121 +514,6 @@ class IowaCleaner:
         
         return df
     
-    def _map_geographic_data(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Map geographic data from Iowa address fields."""
-        logger.info("Mapping geographic data...")
-        
-        # Enhanced address parsing: extract city and zip from address field
-        def parse_iowa_address(address_str: str) -> tuple:
-            """Parse Iowa address to extract city and zip code."""
-            if pd.isna(address_str) or not address_str:
-                return None, None
-            
-            address = str(address_str).strip()
-            
-            # Iowa has multiple addresses separated by "/" - take the first one that's in Iowa
-            if '/' in address:
-                address_parts = address.split('/')
-                # Look for an Iowa address first
-                for part in address_parts:
-                    part = part.strip()
-                    if 'IA ' in part or ', IA' in part:
-                        address = part
-                        break
-                else:
-                    # If no Iowa address found, use the first one
-                    address = address_parts[0].strip()
-            
-            # Look for ZIP code at the end
-            zip_match = re.search(r'(\d{5}(?:-\d{4})?)\s*$', address)
-            if zip_match:
-                zip_code = zip_match.group(1)
-                # Remove ZIP from address to find city
-                address_without_zip = address[:zip_match.start()].strip()
-                
-                # Look for state abbreviation before ZIP
-                state_match = re.search(r'\s+([A-Z]{2})\s*$', address_without_zip)
-                if state_match:
-                    state = state_match.group(1)
-                    # Remove state to find city
-                    address_without_state = address_without_zip[:state_match.start()].strip()
-                    
-                    # Extract city from remaining address
-                    if address_without_state.upper().startswith(('PO BOX', 'P. O. BOX')):
-                        # For PO Box addresses, city is after the PO Box number
-                        parts = address_without_state.split()
-                        if len(parts) >= 3:
-                            # Find where the city starts by looking for the first non-numeric word after PO BOX
-                            city_start_idx = 3  # Start after "PO BOX"
-                            for i in range(3, len(parts)):
-                                if not parts[i].replace('.', '').isdigit():  # Skip numeric parts
-                                    city_start_idx = i
-                                    break
-                            
-                            city_parts = parts[city_start_idx:]
-                            if city_parts:
-                                city = ' '.join(city_parts).rstrip(',')  # Remove trailing comma
-                                return city, zip_code
-                    else:
-                        # For street addresses, use the Iowa city database approach
-                        address_lower = address_without_state.lower()
-                        
-                        # Known Iowa cities to look for
-                        iowa_cities = [
-                            'des moines', 'cedar rapids', 'davenport', 'sioux city', 'iowa city', 'waterloo',
-                            'council bluffs', 'ames', 'dubuque', 'west des moines', 'ankeny', 'urbandale',
-                            'cedar falls', 'marion', 'bettendorf', 'mason city', 'marshalltown', 'clinton',
-                            'burlington', 'fort dodge', 'ottumwa', 'muscatine', 'indianola', 'newton',
-                            'altoona', 'fort madison', 'carroll', 'boone', 'spencer', 'fairfield',
-                            'oskaloosa', 'grinnell', 'pella', 'storm lake', 'charles city', 'keokuk',
-                            'washington', 'clear lake', 'creston', 'atlantic', 'red oak', 'centerville',
-                            'mount pleasant', 'decorah', 'manchester', 'jefferson', 'webster city',
-                            'denison', 'algona', 'clarinda', 'cherokee', 'harlan', 'vinton', 'orange city',
-                            'le mars', 'mount vernon', 'waverly', 'eldridge', 'coralville', 'north liberty',
-                            'clive', 'waukee', 'johnston', 'pleasant hill', 'windsor heights', 'norwalk',
-                            'bondurant', 'polk city', 'grimes', 'saylorville', 'adel', 'dallas center',
-                            'de soto', 'van meter', 'cumming', 'carlisle', 'prairie city'
-                        ]
-                        
-                        # Look for exact city matches
-                        for city_name in iowa_cities:
-                            if city_name in address_lower:
-                                # Find the original case version
-                                city_start = address_lower.find(city_name)
-                                city_end = city_start + len(city_name)
-                                city = address_without_state[city_start:city_end]
-                                return city, zip_code
-                        
-                        # Fallback: use last word as city
-                        parts = address_without_state.split()
-                        if parts:
-                            city = parts[-1]
-                            return city, zip_code
-                
-                # Handle Washington DC format (no comma before DC)
-                elif ' DC ' in address or address.endswith(' DC'):
-                    # Washington DC format: "1835 7th St NW #189, Washington DC 20001"
-                    if ' DC ' in address:
-                        city_match = re.search(r',\s*([^,]+)\s+DC\s*$', address_without_zip)
-                        if city_match:
-                            city = city_match.group(1).strip()
-                            return city, zip_code
-                    return "Washington", zip_code
-            
-            return None, None
-        
-        # Apply enhanced address parsing to extract city and zip_code
-        for idx, row in df.iterrows():
-            address = row['address']
-            if pd.notna(address):
-                parsed_city, parsed_zip = parse_iowa_address(address)
-                if parsed_city:
-                    df.at[idx, 'city'] = parsed_city
-                if parsed_zip:
-                    df.at[idx, 'zip_code'] = parsed_zip
-        
-        return df
-    
     def _add_required_columns(self, df: pd.DataFrame) -> pd.DataFrame:
         """Add all required columns for the final schema."""
         logger.info("Adding required columns...")
@@ -641,7 +528,10 @@ class IowaCleaner:
         elif 'Ballot Name(s)' in df.columns:
             df['original_name'] = df['Ballot Name(s)'].copy()
         else:
-
+            
+            
+            
+            
             df['original_name'] = 'Unknown'
         df['original_state'] = df['state'].copy()
         df['original_election_year'] = df['election_year'].copy()

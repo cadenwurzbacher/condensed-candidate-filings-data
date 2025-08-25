@@ -108,9 +108,7 @@ class SouthCarolinaCleaner:
         cleaned_df = self._add_required_columns(cleaned_df)
         
         # Step 7: Generate stable IDs (skipped - will be done later in process)
-        # cleaned_df = self._generate_stable_ids(cleaned_df)
-        
-        # Step 8: Remove duplicate columns
+        ## Step 8: Remove duplicate columns
         cleaned_df = self._remove_duplicate_columns(cleaned_df)
         
         # Final step: Ensure column order matches Alaska's exact structure
@@ -194,7 +192,10 @@ class SouthCarolinaCleaner:
                         else:
                             year = filing_year
                     else:
-
+            
+            
+            
+            
                         # For non-Presidential candidates, use the filing year as election year
                         year = filing_year
                     
@@ -335,7 +336,8 @@ class SouthCarolinaCleaner:
             elif last_suffix:
                 return last_suffix
             else:
-
+            
+            
                 return None
         
         # Apply name cleaning
@@ -611,7 +613,7 @@ class SouthCarolinaCleaner:
         
         return df
     
-    return df
+    
 
 def clean_south_carolina_candidates(input_file: str, output_file: str = None, output_dir: str = DEFAULT_OUTPUT_DIR) -> pd.DataFrame:
     """
