@@ -90,6 +90,7 @@ from .structural_cleaners.south_dakota_structural_cleaner import SouthDakotaStru
 # Import processors
 from .office_standardizer import OfficeStandardizer
 from .smart_staging_manager import SmartStagingManager
+from .national_standards import NationalStandards
 
 # Import database utilities
 from ..config.database import get_db_connection
@@ -146,6 +147,7 @@ class MainPipeline:
         self.structured_dir = os.path.join(data_dir, "structured")
         self.cleaner_dir = os.path.join(data_dir, "cleaner")
         self.final_dir = os.path.join(data_dir, "final")
+        self.processed_dir = os.path.join(data_dir, "processed")
         
         # Structural cleaner mapping (new)
         self.structural_cleaners = {
@@ -182,50 +184,51 @@ class MainPipeline:
             # Add other structural cleaners as we implement them
         }
         
-        # State cleaner mapping (only the ones that exist)
+        # State cleaner mapping (all state cleaners are now implemented)
         self.state_cleaners = {
             'alaska': AlaskaCleaner(),
-            'arizona': None,  # Will be implemented later
-            'arkansas': None,  # Will be implemented later
-            'colorado': None,  # Will be implemented later
-            'delaware': None,  # Will be implemented later
-            'georgia': None,  # Will be implemented later
-            'idaho': None,  # Will be implemented later
-            'illinois': None,  # Will be implemented later
-            'indiana': None,  # Will be implemented later
-            'iowa': None,  # Will be implemented later
-            'kansas': None,  # Will be implemented later
-            'kentucky': None,  # Will be implemented later
-            'louisiana': None,  # Will be implemented later
-            'maryland': None,  # Will be implemented later
-            'missouri': None,  # Will be implemented later
-            'montana': None,  # Will be implemented later
-            'nebraska': None,  # Will be implemented later
-            'new_mexico': None,  # Will be implemented later
-            'new_york': None,  # Will be implemented later
-            'north_carolina': None,  # Will be implemented later
-            'oklahoma': None,  # Will be implemented later
-            'oregon': None,  # Will be implemented later
-            'pennsylvania': None,  # Will be implemented later
-            'south_carolina': None,  # Will be implemented later
-            'south_dakota': None,  # Will be implemented later
-            'vermont': None,  # Will be implemented later
-            'virginia': None,  # Will be implemented later
-            'washington': None,  # Will be implemented later
-            'west_virginia': None,  # Will be implemented later
-            'wyoming': None  # Will be implemented later
+            'arizona': ArizonaCleaner(),
+            'arkansas': ArkansasCleaner(),
+            'colorado': ColoradoCleaner(),
+            'delaware': DelawareCleaner(),
+            'georgia': GeorgiaCleaner(),
+            'idaho': IdahoCleaner(),
+            'illinois': IllinoisCleaner(),
+            'indiana': IndianaCleaner(),
+            'iowa': IowaCleaner(),
+            'kansas': KansasCleaner(),
+            'kentucky': KentuckyCleaner(),
+            'louisiana': LouisianaCleaner(),
+            'maryland': MarylandCleaner(),
+            'missouri': MissouriCleaner(),
+            'montana': MontanaCleaner(),
+            'nebraska': NebraskaCleaner(),
+            'new_mexico': NewMexicoCleaner(),
+            'new_york': NewYorkCleaner(),
+            'north_carolina': NorthCarolinaCleaner(),
+            'oklahoma': OklahomaCleaner(),
+            'oregon': OregonCleaner(),
+            'pennsylvania': PennsylvaniaCleaner(),
+            'south_carolina': SouthCarolinaCleaner(),
+            'south_dakota': SouthDakotaCleaner(),
+            'vermont': VermontCleaner(),
+            'virginia': VirginiaCleaner(),
+            'washington': WashingtonCleaner(),
+            'west_virginia': WestVirginiaCleaner(),
+            'wyoming': WyomingCleaner()
         }
         
         # Track existing IDs for first ingestion date preservation
         self.existing_ids = {}
         
         # Initialize processors
-        self.office_standardizer = OfficeStandardizer()
-        self.smart_staging_manager = SmartStagingManager()
         self.db_manager = get_db_connection()
+        self.office_standardizer = OfficeStandardizer()
+        self.smart_staging_manager = SmartStagingManager(self.db_manager)
+        self.national_standards = NationalStandards()
         
         # Create directories if they don't exist
-        for directory in [self.raw_data_dir, self.structured_dir, self.cleaner_dir, self.final_dir, "data/reports"]:
+        for directory in [self.raw_data_dir, self.structured_dir, self.cleaner_dir, self.final_dir, self.processed_dir, "data/reports"]:
             Path(directory).mkdir(parents=True, exist_ok=True)
         
         # Create OLD folder within final directory
@@ -272,6 +275,9 @@ class MainPipeline:
         # Phase 5: Final processing and output
         logger.info("Phase 5: Final processing and output")
         final_data = self._final_processing(final_data)
+        
+        # Add processing metadata
+        final_data = self._add_processing_metadata(final_data)
         
         # Smart staging decision
         logger.info("Phase 5.5: Smart staging analysis and decision")
@@ -357,10 +363,11 @@ class MainPipeline:
                 existing_candidate = self._check_existing_candidate(stable_id)
                 
                 if existing_candidate:
-                    # Candidate exists - use existing first_added_date, set last_updated_date to now
+                    # Candidate exists - use existing first_added_date, keep existing last_updated_date
+                    # (we'll update this later if data actually changes)
                     first_added_dates.append(existing_candidate.get('first_added_date', current_timestamp))
-                    last_updated_dates.append(current_timestamp)
-                    logger.debug(f"Existing candidate {stable_id} - preserving first_added_date")
+                    last_updated_dates.append(existing_candidate.get('last_updated_date', current_timestamp))
+                    logger.debug(f"Existing candidate {stable_id} - preserving dates")
                 else:
                     # New candidate - set both dates to now
                     first_added_dates.append(current_timestamp)
@@ -380,11 +387,18 @@ class MainPipeline:
         df['first_added_date'] = first_added_dates
         df['last_updated_date'] = last_updated_dates
         
+        # Add action_type column (will be populated later in staging logic)
+        df['action_type'] = 'INSERT'  # Default, will be updated based on data comparison
+        
+        # Now detect data changes and update action_type and last_updated_date accordingly
+        df = self._detect_and_update_changes(df)
+        
         return df
     
     def _generate_stable_id(self, row: pd.Series, state: str) -> Tuple[str, datetime]:
         """Generate a stable ID for a candidate record"""
         # Use core fields for ID generation (before any cleaning/standardization)
+        # Structural cleaners output 'candidate_name' column
         candidate_name = str(row.get('candidate_name', ''))
         office = str(row.get('office', ''))
         election_year = str(row.get('election_year', ''))
@@ -404,6 +418,119 @@ class MainPipeline:
         
         return stable_id, first_ingestion_date
     
+    def _detect_and_update_changes(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Detect data changes and update action_type and last_updated_date accordingly
+        
+        Args:
+            df: DataFrame with stable_ids and existing data
+            
+        Returns:
+            DataFrame with updated action_type and last_updated_date
+        """
+        logger.info("Detecting data changes and setting action types...")
+        
+        if df.empty or 'stable_id' not in df.columns:
+            logger.warning("No stable_id column found, skipping change detection")
+            return df
+        
+        # Get existing production data for comparison
+        existing_data = self._get_existing_production_data()
+        
+        if existing_data.empty:
+            logger.info("No existing production data found - all records will be INSERT")
+            df['action_type'] = 'INSERT'
+            return df
+        
+        # Compare each record with existing data
+        for idx, row in df.iterrows():
+            stable_id = row.get('stable_id')
+            if not stable_id:
+                continue
+                
+            # Check if this ID exists in production
+            existing_record = existing_data[existing_data['stable_id'] == stable_id]
+            
+            if existing_record.empty:
+                # New record - INSERT
+                df.loc[idx, 'action_type'] = 'INSERT'
+                df.loc[idx, 'last_updated_date'] = datetime.now()
+            else:
+                # Existing record - check if data changed
+                if self._has_data_changed(row, existing_record.iloc[0]):
+                    # Data changed - UPDATE
+                    df.loc[idx, 'action_type'] = 'UPDATE'
+                    df.loc[idx, 'last_updated_date'] = datetime.now()
+                else:
+                    # No changes - keep existing last_updated_date
+                    df.loc[idx, 'action_type'] = 'NO_CHANGE'
+        
+        # Log action type summary
+        action_counts = df['action_type'].value_counts()
+        logger.info(f"Action type summary: {action_counts.to_dict()}")
+        
+        return df
+    
+    def _get_existing_production_data(self) -> pd.DataFrame:
+        """Get existing production data for comparison"""
+        try:
+            if not self.db_manager:
+                return pd.DataFrame()
+            
+            # Get minimal columns needed for comparison
+            query = """
+            SELECT stable_id, first_added_date, last_updated_date, 
+                   election_year, election_type, office, district, full_name_display,
+                   first_name, middle_name, last_name, prefix, suffix, nickname,
+                   party, phone, email, address, website, state, county, city,
+                   zip_code, address_state, filing_date, election_date, facebook, twitter
+            FROM filings
+            """
+            
+            result = self.db_manager.execute_query(query)
+            logger.info(f"Retrieved {len(result)} existing production records for comparison")
+            return result
+            
+        except Exception as e:
+            logger.error(f"Failed to get existing production data: {e}")
+            return pd.DataFrame()
+    
+    def _has_data_changed(self, new_record: pd.Series, existing_record: pd.Series) -> bool:
+        """
+        Compare new record with existing record to detect changes
+        
+        Args:
+            new_record: New data from pipeline
+            existing_record: Existing data from production
+            
+        Returns:
+            True if data has changed, False otherwise
+        """
+        # Columns to compare (excluding metadata columns)
+        compare_columns = [
+            'election_year', 'election_type', 'office', 'district', 'full_name_display',
+            'first_name', 'middle_name', 'last_name', 'prefix', 'suffix', 'nickname',
+            'party', 'phone', 'email', 'address', 'website', 'state', 'county', 'city',
+            'zip_code', 'address_state', 'filing_date', 'election_date', 'facebook', 'twitter'
+        ]
+        
+        for col in compare_columns:
+            if col in new_record and col in existing_record:
+                new_val = new_record[col]
+                existing_val = existing_record[col]
+                
+                # Handle NaN values
+                if pd.isna(new_val) and pd.isna(existing_val):
+                    continue
+                if pd.isna(new_val) or pd.isna(existing_val):
+                    return True
+                
+                # Compare values
+                if str(new_val).strip() != str(existing_val).strip():
+                    return True
+        
+        return False
+    
     def _run_state_cleaners(self, all_data: Dict[str, pd.DataFrame]) -> Dict[str, pd.DataFrame]:
         """Phase 3: Clean and standardize data within each state"""
         cleaned_data = {}
@@ -414,7 +541,26 @@ class MainPipeline:
                 try:
                     logger.info(f"Running data cleaner for {state}")
                     cleaner = self.state_cleaners[state]
-                    cleaned_df = cleaner.clean(df)  # Pass the dataframe with IDs
+                    # Call the appropriate method for each state
+                    method_name = f"clean_{state}_data"
+                    if hasattr(cleaner, method_name):
+                        cleaned_df = getattr(cleaner, method_name)(df)
+                    else:
+                        # Try alternative method names
+                        alt_methods = [
+                            f"clean_{state}_candidates",
+                            "clean",
+                            "process"
+                        ]
+                        method_found = False
+                        for alt_method in alt_methods:
+                            if hasattr(cleaner, alt_method):
+                                cleaned_df = getattr(cleaner, alt_method)(df)
+                                method_found = True
+                                break
+                        if not method_found:
+                            logger.warning(f"No cleaning method found for {state}, using original data")
+                            cleaned_df = df
                     logger.info(f"Cleaner returned type: {type(cleaned_df)}")
                     cleaned_data[state] = cleaned_df
                     
@@ -473,22 +619,15 @@ class MainPipeline:
             combined_df = pd.concat(all_records, ignore_index=True)
             logger.info(f"Combined data: {len(combined_df)} records")
             
-            # Apply national standards
-            logger.info("Applying party standardization...")
-            combined_df = self._standardize_parties(combined_df)
-            
-            logger.info("Skipping office standardization for now...")
-            # combined_df = self._standardize_offices(combined_df)
-            
-            logger.info("Skipping address parsing for now...")
-            # combined_df = self._parse_addresses(combined_df)
-            
-            # Apply deduplication logic
-            logger.info("Skipping state-wide deduplication for now...")
-            # combined_df = self._deduplicate_statewide_records(combined_df)
-            
-            logger.info("Skipping election deduplication for now...")
-            # combined_df = self._deduplicate_election_records(combined_df)
+            # Apply national standards using the dedicated module
+            logger.info("Applying national standards...")
+            try:
+                combined_df = self.national_standards.apply_standards(combined_df)
+                logger.info("National standards applied successfully")
+            except Exception as e:
+                logger.error(f"National standards application failed: {e}")
+                # Fall back to basic standards if the module fails
+                combined_df = self._standardize_parties(combined_df)
             
             logger.info("National standards application completed successfully")
             return combined_df
@@ -688,7 +827,45 @@ class MainPipeline:
                 
                 # Run state cleaner with proper output directory
                 try:
-                    cleaned_df = cleaner_func(raw_file, output_dir=self.cleaner_dir)
+                    # Load the raw data first
+                    if raw_file.endswith('.xlsx'):
+                        raw_df = pd.read_excel(raw_file)
+                    elif raw_file.endswith('.csv'):
+                        # Try different encodings for CSV files
+                        try:
+                            raw_df = pd.read_csv(raw_file, encoding='utf-8')
+                        except UnicodeDecodeError:
+                            try:
+                                raw_df = pd.read_csv(raw_file, encoding='latin-1')
+                            except UnicodeDecodeError:
+                                raw_df = pd.read_csv(raw_file, encoding='cp1252')
+                    elif raw_file.endswith('.xls'):
+                        # Handle old Excel format
+                        raw_df = pd.read_excel(raw_file, engine='xlrd')
+                    else:
+                        logger.warning(f"Unsupported file format for {raw_file}")
+                        continue
+                    
+                    # Call the appropriate method for each state
+                    method_name = f"clean_{state}_data"
+                    if hasattr(cleaner_func, method_name):
+                        cleaned_df = getattr(cleaner_func, method_name)(raw_df)
+                    else:
+                        # Try alternative method names
+                        alt_methods = [
+                            f"clean_{state}_candidates",
+                            "clean",
+                            "process"
+                        ]
+                        method_found = False
+                        for alt_method in alt_methods:
+                            if hasattr(cleaner_func, alt_method):
+                                cleaned_df = getattr(cleaner_func, alt_method)(raw_df)
+                                method_found = True
+                                break
+                        if not method_found:
+                            logger.warning(f"No cleaning method found for {state}, using original data")
+                            cleaned_df = raw_df
                 except Exception as cleaner_error:
                     logger.error(f"State cleaner function failed for {state}: {cleaner_error}")
                     continue
@@ -1278,9 +1455,9 @@ class MainPipeline:
         
         return df
 
-    def _apply_national_standards(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Apply other national-level standardizations."""
-        logger.info("Applying national standards...")
+    def _add_processing_metadata(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Add processing metadata to the dataframe."""
+        logger.info("Adding processing metadata...")
         
         try:
             # Add processing metadata
@@ -1288,13 +1465,10 @@ class MainPipeline:
             df['pipeline_version'] = '1.0'
             df['data_source'] = 'state_filings'
             
-            # Ensure consistent column names
-            df.columns = df.columns.astype(str).str.lower().str.replace(' ', '_')
-            
-            logger.info("National standards applied")
+            logger.info("Processing metadata added")
         except Exception as e:
-            logger.error(f"National standards application failed: {e}")
-            # Add basic metadata even if column processing fails
+            logger.error(f"Processing metadata addition failed: {e}")
+            # Add basic metadata even if processing fails
             df['processing_timestamp'] = datetime.now()
             df['pipeline_version'] = '1.0'
             df['data_source'] = 'state_filings'

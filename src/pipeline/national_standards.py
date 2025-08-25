@@ -319,7 +319,10 @@ class NationalStandards:
     
     def _generate_stable_id(self, name: str, state: str, office: str, election_year: str, county: str = None) -> str:
         """
-        Generate stable ID for a candidate (DEPRECATED - use Main Pipeline stable IDs)
+        DEPRECATED: Stable IDs are now generated only by Main Pipeline in Phase 2
+        
+        This method is kept for backward compatibility but should not be used.
+        Stable IDs are generated once in the Main Pipeline and maintained throughout.
         
         Args:
             name: Candidate name
@@ -329,10 +332,7 @@ class NationalStandards:
             county: County (ignored)
             
         Returns:
-            Stable ID string (should match Main Pipeline format)
+            None - stable IDs should come from Main Pipeline
         """
-        # Use EXACTLY the same format as Main Pipeline for consistency
-        key = f"{name}|{state}|{office}|{election_year}"
-        stable_id = hashlib.md5(key.encode()).hexdigest()[:12]
-        
-        return stable_id
+        logger.warning("_generate_stable_id called - stable IDs should come from Main Pipeline")
+        return None
