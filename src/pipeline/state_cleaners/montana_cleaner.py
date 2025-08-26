@@ -59,19 +59,7 @@ class MontanaCleaner:
         logger.info("Removing duplicate columns...")
         
         # Columns to remove (original versions) - Montana 2020-2024
-        columns_to_remove = [
-            'Election', 'Office', 'Name', 'Party', 'Address', 'Email', 'Website', 'Phone Number',
-            'Filing Status', 'Mailing Address', 'City', 'State', 'Zip', 'Phone', 'Web Address',
-            'Filing Date', 'Status', 'District Type', 'District', 'Race', 'Term Type', 'Term Length',
-            'Email/Web Address', 'Party Preference', 'Ballot Order'
-        ]
         
-        # Only remove if they exist and we have cleaned versions
-        columns_to_remove = [col for col in columns_to_remove if col in df.columns]
-        
-        if columns_to_remove:
-            df = df.drop(columns=columns_to_remove)
-            logger.info(f"Removed {len(columns_to_remove)} duplicate columns: {columns_to_remove}")
         
         return df
 
@@ -139,11 +127,7 @@ class MontanaCleaner:
             'website',
             'state',
             'address_state',
-            'original_name',
-            'original_state',
-            'original_election_year',
-            'original_office',
-            'original_filing_date',
+
             'id',
             'stable_id',
             'county',
@@ -194,7 +178,7 @@ class MontanaCleaner:
             return year, election_type
         
         # Apply election processing - adjust column name based on Montana data structure
-        election_column = 'Election' if 'Election' in df.columns else 'election'
+        election_column = 'election_type' if 'election_type' in df.columns else 'election_type'
         if election_column in df.columns:
             election_results = df[election_column].apply(extract_election_info)
             df['election_year'] = [result[0] for result in election_results]
@@ -248,7 +232,7 @@ class MontanaCleaner:
             return office_str, None
         
         # Apply office and district processing - adjust column name based on Montana data structure
-        office_column = 'Office' if 'Office' in df.columns else 'office'
+        office_column = 'office' if 'office' in df.columns else 'office'
         if office_column in df.columns:
             office_results = df[office_column].apply(process_office_district)
             df['office'] = [result[0] for result in office_results]
@@ -308,7 +292,7 @@ class MontanaCleaner:
             return cleaned
         
         # Apply name cleaning with office context - adjust column name based on Montana data structure
-        name_column = 'Name' if 'Name' in df.columns else 'name'
+        name_column = 'candidate_name' if 'candidate_name' in df.columns else 'candidate_name'
         if name_column in df.columns:
             df['full_name_display'] = df.apply(lambda row: clean_name(row[name_column], row.get('office', '')), axis=1)
         else:
@@ -338,7 +322,7 @@ class MontanaCleaner:
         for idx, row in df.iterrows():
             name = row['full_name_display']
             office = row.get('office', '')
-            original_name = row.get('Name', row.get('name', ''))
+            original_name = row.get('candidate_name', row.get('candidate_name', ''))
             
             if pd.isna(name) or not name:
                 continue
@@ -539,7 +523,7 @@ class MontanaCleaner:
             return party_mapping.get(party_lower, party_str)
         
         # Apply party standardization - adjust column name based on Montana data structure
-        party_column = 'Party' if 'Party' in df.columns else 'party'
+        party_column = 'party' if 'party' in df.columns else 'party'
         if party_column in df.columns:
             df['party'] = df[party_column].apply(standardize_party)
         else:
@@ -584,7 +568,7 @@ class MontanaCleaner:
             
             return None
         
-        # Clean addresses
+        # Enhanced address parsing and cleaning for Montana
         def clean_address(address_str: str) -> str:
             if pd.isna(address_str):
                 return None
@@ -593,24 +577,74 @@ class MontanaCleaner:
             cleaned = str(address_str).strip().strip('"\'')
             # Remove multiple spaces
             cleaned = re.sub(r'\s+', ' ', cleaned)
-            return cleaned
+            
+            # Extract and remove ZIP codes from address
+            zip_pattern = re.compile(r'\b\d{5}(?:-\d{4})?\b')
+            zip_match = zip_pattern.search(cleaned)
+            if zip_match:
+                zip_code = zip_match.group(0)
+                # Don't extract PO Box numbers as ZIP codes
+                if not re.search(r'\bPO\s+BOX\s*' + re.escape(zip_code), cleaned, re.IGNORECASE):
+                    # Remove ZIP from address
+                    cleaned = zip_pattern.sub('', cleaned).strip().rstrip(',')
+            
+            # Extract and remove state abbreviations
+            state_patterns = [
+                r',\s*([A-Z]{2})\s*,?\s*$',  # State at end with optional comma
+                r',\s*([A-Z]{2})\s*$',       # State at end
+                r'\s+([A-Z]{2})\s+\d{5}',   # State before ZIP
+                r'\b([A-Z]{2})\b'            # Any 2-letter code (more aggressive)
+            ]
+            
+            for pattern in state_patterns:
+                state_match = re.search(pattern, cleaned)
+                if state_match:
+                    state_code = state_match.group(1)
+                    # Filter out common non-state abbreviations
+                    non_state_abbrevs = {'ST', 'RD', 'DR', 'LN', 'CT', 'BL', 'APT', 'STE', 'UNIT', 'PO', 'BOX', 'AVE', 'WAY', 'PL', 'CR', 'CRT', 'CIR', 'HWY', 'US', 'SR', 'CO', 'INC', 'LLC', 'LTD', 'CORP'}
+                    if state_code not in non_state_abbrevs:
+                        # Remove state from address
+                        cleaned = re.sub(pattern, '', cleaned).strip().rstrip(',')
+                        break
+            
+            # Extract city (everything between street and state/ZIP)
+            if ',' in cleaned:
+                parts = [p.strip() for p in cleaned.split(',') if p.strip()]
+                if len(parts) >= 2:
+                    if len(parts) == 2:
+                        # "Street, City" format
+                        cleaned = parts[0]
+                    elif len(parts) >= 3:
+                        # "Street, City, State" format - city is middle part
+                        last_part = parts[-1].strip()
+                        if re.match(r'^[A-Z]{2}$', last_part):
+                            # Last part is state, second-to-last is city
+                            cleaned = ','.join(parts[:-2])
+                        else:
+                            # Last part is not state, so city is last part
+                            cleaned = ','.join(parts[:-1])
+                    else:
+                        # Only 2 parts, treat as "Street, City"
+                        cleaned = parts[0]
+            
+            return cleaned.strip().rstrip(',')
         
         # Apply cleaning with Montana column mapping
         # Phone
-        if 'Phone' in df.columns:
-            df['phone'] = df['Phone'].apply(clean_phone)
+        if 'phone' in df.columns:
+            df['phone'] = df['phone'].apply(clean_phone)
         else:
             df['phone'] = pd.NA
             
         # Email
-        if 'Email' in df.columns:
-            df['email'] = df['Email'].apply(clean_email)
+        if 'email' in df.columns:
+            df['email'] = df['email'].apply(clean_email)
         else:
             df['email'] = pd.NA
             
         # Address
-        if 'Mailing Address' in df.columns:
-            df['address'] = df['Mailing Address'].apply(clean_address)
+        if 'address' in df.columns:
+            df['address'] = df['address'].apply(clean_address)
         else:
             df['address'] = pd.NA
             
@@ -620,21 +654,97 @@ class MontanaCleaner:
         else:
             df['website'] = pd.NA
         
-        # Map city, zip_code, and address_state from Montana's separate fields
+        # Enhanced ZIP code and city extraction from address
+        def extract_zip_from_address(addr):
+            if pd.isna(addr) or not isinstance(addr, str):
+                return None
+            
+            zip_pattern = re.compile(r'\b\d{5}(?:-\d{4})?\b')
+            zip_match = zip_pattern.search(addr)
+            if zip_match:
+                zip_code = zip_match.group(0)
+                # Don't extract PO Box numbers as ZIP codes
+                if not re.search(r'\bPO\s+BOX\s*' + re.escape(zip_code), addr, re.IGNORECASE):
+                    return zip_code
+            return None
+        
+        # Extract ZIP codes from address if not already present
+        if 'zip_code' in df.columns:
+            df['zip_code'] = df['zip_code'].apply(lambda x: str(x).strip() if pd.notna(x) else None)
+        else:
+            df['zip_code'] = pd.NA
+        
+        # Update existing zip_code with extracted values if empty
+        df['zip_code'] = df.apply(lambda row: extract_zip_from_address(row.get('address')) if pd.isna(row.get('zip_code')) or str(row.get('zip_code')).strip() == '' else row.get('zip_code'), axis=1)
+        
+        # Extract cities from address
+        def extract_city_from_address(addr, existing_city):
+            if pd.notna(existing_city) and str(existing_city).strip() != "":
+                return existing_city
+            
+            if pd.isna(addr) or not isinstance(addr, str):
+                return None
+            
+            # Look for city in comma-separated format
+            if ',' in addr:
+                parts = [p.strip() for p in addr.split(',') if p.strip()]
+                if len(parts) >= 2:
+                    if len(parts) == 2:
+                        # "Street, City" format
+                        return parts[1]
+                    elif len(parts) >= 3:
+                        # "Street, City, State" format - city is middle part
+                        last_part = parts[-1].strip()
+                        if re.match(r'^[A-Z]{2}$', last_part):
+                            # Last part is state, second-to-last is city
+                            return parts[-2]
+                        else:
+                            # Last part is not state, so city is last part
+                            return parts[-1]
+            return None
+        
+        # Map city from Montana's separate fields, then extract from address if needed
         if 'City' in df.columns:
             df['city'] = df['City'].apply(lambda x: str(x).strip() if pd.notna(x) else None)
         else:
             df['city'] = pd.NA
+        
+        # Extract cities from address if city column is empty
+        df['city'] = df.apply(lambda row: extract_city_from_address(row.get('address'), row.get('city')), axis=1)
+        
+        # Enhanced address_state extraction from address
+        def extract_state_from_address(addr, existing_state):
+            if pd.notna(existing_state) and str(existing_state).strip() != "":
+                return existing_state
             
-        if 'Zip' in df.columns:
-            df['zip_code'] = df['Zip'].apply(lambda x: str(x).strip() if pd.notna(x) else None)
-        else:
-            df['zip_code'] = pd.NA
+            if pd.isna(addr) or not isinstance(addr, str):
+                return None
             
+            # Look for state codes in address
+            state_patterns = [
+                r',\s*([A-Z]{2})\s*,?\s*$',  # State at end with optional comma
+                r',\s*([A-Z]{2})\s*$',       # State at end
+                r'\s+([A-Z]{2})\s+\d{5}',   # State before ZIP
+                r'\b([A-Z]{2})\b'            # Any 2-letter code (more aggressive)
+            ]
+            
+            for pattern in state_patterns:
+                state_match = re.search(pattern, addr)
+                if state_match:
+                    state_code = state_match.group(1)
+                    # Filter out common non-state abbreviations
+                    non_state_abbrevs = {'ST', 'RD', 'DR', 'LN', 'CT', 'BL', 'APT', 'STE', 'UNIT', 'PO', 'BOX', 'AVE', 'WAY', 'PL', 'CR', 'CRT', 'CIR', 'HWY', 'US', 'SR', 'CO', 'INC', 'LLC', 'LTD', 'CORP'}
+                    if state_code not in non_state_abbrevs:
+                        return state_code
+            return None
+        
         if 'State' in df.columns:
             df['address_state'] = df['State'].apply(lambda x: str(x).strip() if pd.notna(x) else None)
         else:
             df['address_state'] = pd.NA
+        
+        # Extract address_state from address if not already present
+        df['address_state'] = df.apply(lambda row: extract_state_from_address(row.get('address'), row.get('address_state')), axis=1)
         
         return df
     
@@ -645,16 +755,9 @@ class MontanaCleaner:
         # Add state column
         df['state'] = self.state_name
         
-        # Add original data preservation columns
-        name_column = 'Name' if 'Name' in df.columns else 'name'
-        office_column = 'Office' if 'Office' in df.columns else 'office'
-        
-        df['original_name'] = df[name_column].copy() if name_column in df.columns else None
-        df['original_state'] = df['state'].copy()
-        df['original_election_year'] = df['election_year'].copy()
-        df['original_office'] = df[office_column].copy() if office_column in df.columns else None
+        # Note: original_ columns removed - not needed for final output
         # Map filing date from Montana data
-        if 'Filing Date' in df.columns:
+        if 'filing_date' in df.columns:
             def parse_filing_date(filing_str: str) -> str:
                 """Parse filing date from Montana format MM/DD/YYYY."""
                 if pd.isna(filing_str):
@@ -669,11 +772,9 @@ class MontanaCleaner:
                 except:
                     return filing_str
             
-            df['filing_date'] = df['Filing Date'].apply(parse_filing_date)
-            df['original_filing_date'] = df['Filing Date'].copy()
+            df['filing_date'] = df['filing_date'].apply(parse_filing_date)
         else:
             df['filing_date'] = pd.NA
-            df['original_filing_date'] = pd.NA
         
         # Add missing columns with None values
         required_columns = [

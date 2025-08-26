@@ -59,18 +59,7 @@ class SouthCarolinaCleaner:
         logger.info("Removing duplicate columns...")
         
         # Columns to remove (original versions)
-        columns_to_remove = [
-            'Election Name', 'Office', 'District', 'Ballot Name (first - middle)', 
-            'Ballot Name (last - suffix)', 'Party', 'Contact Address', 'Contact Email', 
-            'Contact Phone Number', 'Date Filed'
-        ]
         
-        # Only remove if they exist and we have cleaned versions
-        columns_to_remove = [col for col in columns_to_remove if col in df.columns]
-        
-        if columns_to_remove:
-            df = df.drop(columns=columns_to_remove)
-            logger.info(f"Removed {len(columns_to_remove)} duplicate columns: {columns_to_remove}")
         
         return df
 
@@ -236,10 +225,8 @@ class SouthCarolinaCleaner:
             
             return year, election_type
         
-        # Apply election processing with both election name and filing date
-        election_results = df.apply(lambda row: extract_election_info(row['Election Name'], row['Date Filed'], row['Office']), axis=1)
-        df['election_year'] = [result[0] for result in election_results]
-        df['election_type'] = [result[1] for result in election_results]
+        # Election year and type are already processed by structural cleaner
+        # No need to reprocess them here
         
         return df
     
@@ -310,7 +297,7 @@ class SouthCarolinaCleaner:
             return office_str, district_str if district_str else None
         
         # Apply office and district processing
-        office_results = df.apply(lambda row: process_office_district(row['Office'], row['District']), axis=1)
+        office_results = df.apply(lambda row: process_office_district(row['office'], row['district']), axis=1)
         df['office'] = [result[0] for result in office_results]
         df['district'] = [result[1] for result in office_results]
         df['district'] = df['district'].astype('object')
@@ -341,7 +328,11 @@ class SouthCarolinaCleaner:
                 return None
         
         # Apply name cleaning
-        df['full_name_display'] = df.apply(lambda row: clean_name(row['Ballot Name (first - middle)'], row['Ballot Name (last - suffix)']), axis=1)
+        def safe_name(row):
+            first_mid = row.get('Ballot Name (first - middle)') if 'Ballot Name (first - middle)' in row else None
+            last_suf = row.get('Ballot Name (last - suffix)') if 'Ballot Name (last - suffix)' in row else None
+            return clean_name(first_mid, last_suf)
+        df['full_name_display'] = df.apply(safe_name, axis=1)
         
         # Parse names into components
         df = self._parse_names(df)
@@ -362,9 +353,9 @@ class SouthCarolinaCleaner:
         df['full_name_display'] = None
         
         for idx, row in df.iterrows():
-            first_middle = row['Ballot Name (first - middle)']
-            last_suffix = row['Ballot Name (last - suffix)']
-            candidate_suffix = row['Candidate Suffix']
+            first_middle = row.get('Ballot Name (first - middle)') if 'Ballot Name (first - middle)' in row else None
+            last_suffix = row.get('Ballot Name (last - suffix)') if 'Ballot Name (last - suffix)' in row else None
+            candidate_suffix = row.get('Candidate Suffix') if 'Candidate Suffix' in row else None
             
             # Parse first and middle names
             if pd.notna(first_middle):
@@ -380,7 +371,7 @@ class SouthCarolinaCleaner:
                 if len(last_suffix_parts) >= 1:
                     df.at[idx, 'last_name'] = last_suffix_parts[0]
             
-            # Parse suffix from candidate suffix column
+            # Parse suffix from candidate suffix column if it exists
             if pd.notna(candidate_suffix):
                 df.at[idx, 'suffix'] = str(candidate_suffix).strip()
             
@@ -439,7 +430,7 @@ class SouthCarolinaCleaner:
             party_lower = str(party_str).strip().lower()
             return party_mapping.get(party_lower, party_str)
         
-        df['party'] = df['Party'].apply(standardize_party)
+        df['party'] = df['party'].apply(standardize_party)
         
         return df
     
@@ -576,11 +567,15 @@ class SouthCarolinaCleaner:
         df['state'] = self.state_name
         
         # Add original data preservation columns
-        df['original_name'] = df.apply(lambda row: f"{row['Ballot Name (first - middle)']} {row['Ballot Name (last - suffix)']}".strip(), axis=1)
+        def orig_name(row):
+            fm = row.get('Ballot Name (first - middle)') if 'Ballot Name (first - middle)' in row else ''
+            ls = row.get('Ballot Name (last - suffix)') if 'Ballot Name (last - suffix)' in row else ''
+            return f"{(fm or '').strip()} {(ls or '').strip()}".strip() or None
+        df['original_name'] = df.apply(orig_name, axis=1)
         df['original_state'] = df['state'].copy()
         df['original_election_year'] = df['election_year'].copy()
-        df['original_office'] = df['Office'].copy()
-        df['original_filing_date'] = df['Date Filed'].copy()
+        df['original_office'] = df['office'].copy()
+        df['original_filing_date'] = df['filing_date'].copy()
         
         # Add missing columns with None values
         required_columns = [
@@ -596,7 +591,7 @@ class SouthCarolinaCleaner:
         df['id'] = ""
         
         # Set filing_date from Date Filed
-        df['filing_date'] = df['Date Filed']
+        df['filing_date'] = df['filing_date']
         
         # Extract county from Associated Counties if available
         def extract_county(counties_str: str) -> str:

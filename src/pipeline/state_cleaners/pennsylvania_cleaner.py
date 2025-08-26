@@ -59,16 +59,7 @@ class PennsylvaniaCleaner:
         logger.info("Removing duplicate columns...")
         
         # Columns to remove (original versions)
-        columns_to_remove = [
-            'Election', 'Office', 'Name', 'Party', 'Address', 'Email', 'Website', 'Phone Number'
-        ]
         
-        # Only remove if they exist and we have cleaned versions
-        columns_to_remove = [col for col in columns_to_remove if col in df.columns]
-        
-        if columns_to_remove:
-            df = df.drop(columns=columns_to_remove)
-            logger.info(f"Removed {len(columns_to_remove)} duplicate columns: {columns_to_remove}")
         
         return df
 
@@ -165,14 +156,14 @@ class PennsylvaniaCleaner:
             return year, election_type
         
         # Check if Election column exists, if not set defaults
-        if 'Election' not in df.columns:
+        if 'election_type' not in df.columns:
             logger.warning("Election column not found in Pennsylvania data, setting defaults")
             df['election_year'] = None
             df['election_type'] = None
             return df
         
         # Apply election processing
-        election_results = df['Election'].apply(extract_election_info)
+        election_results = df['election_type'].apply(extract_election_info)
         df['election_year'] = [result[0] for result in election_results]
         df['election_type'] = [result[1] for result in election_results]
         
@@ -243,7 +234,7 @@ class PennsylvaniaCleaner:
             return office_str, None
         
         # Apply office and district processing
-        office_col = 'Office' if 'Office' in df.columns else None
+        office_col = 'office' if 'office' in df.columns else None
         district_col = 'District Name' if 'District Name' in df.columns else None
         
         if office_col and district_col:
@@ -307,20 +298,20 @@ class PennsylvaniaCleaner:
         
         # Apply name cleaning with office context - handle different column names
         # Pennsylvania data can have different structures depending on the file
-        if 'Name' in df.columns:
-            name_col = 'Name'
+        if 'candidate_name' in df.columns:
+            name_col = 'candidate_name'
         elif 'Unnamed: 1' in df.columns:
             # The merged data structure has names in Unnamed: 1
             name_col = 'Unnamed: 1'
-        elif 'Candidate Name' in df.columns:
-            name_col = 'Candidate Name'
+        elif 'candidate_name' in df.columns:
+            name_col = 'candidate_name'
         else:
             
             
             
             
             # Fallback - try to find any column that might contain names
-            name_cols = [col for col in df.columns if 'name' in col.lower() or 'candidate' in col.lower()]
+            name_cols = [col for col in df.columns if 'candidate_name' in col.lower() or 'candidate' in col.lower()]
             if name_cols:
                 name_col = name_cols[0]
             else:
@@ -336,9 +327,9 @@ class PennsylvaniaCleaner:
                             name_col = col
                             break
                 else:
-                    name_col = 'Name'  # Default fallback
+                    name_col = 'candidate_name'  # Default fallback
         
-        df['full_name_display'] = df.apply(lambda row: clean_name(row[name_col], row['Office']), axis=1)
+        df['full_name_display'] = df.apply(lambda row: clean_name(row[name_col], row['office']), axis=1)
         
         # Parse names into components
         df = self._parse_names(df)
@@ -361,20 +352,20 @@ class PennsylvaniaCleaner:
             name = row['full_name_display']
             office = row['office']
             # Pennsylvania data can have different structures depending on the file
-            if 'Name' in df.columns:
-                original_name = row['Name']
+            if 'candidate_name' in df.columns:
+                original_name = row['candidate_name']
             elif 'Unnamed: 1' in df.columns:
                 # The merged data structure has names in Unnamed: 1
                 original_name = row['Unnamed: 1']
-            elif 'Candidate Name' in df.columns:
-                original_name = row['Candidate Name']
+            elif 'candidate_name' in df.columns:
+                original_name = row['candidate_name']
             else:
             
             
             
             
                 # Fallback - try to find any column that might contain names
-                name_cols = [col for col in df.columns if 'name' in col.lower() or 'candidate' in col.lower()]
+                name_cols = [col for col in df.columns if 'candidate_name' in col.lower() or 'candidate' in col.lower()]
                 if name_cols:
                     original_name = row[name_cols[0]]
                 else:
@@ -590,7 +581,7 @@ class PennsylvaniaCleaner:
             party_lower = str(party_str).strip().lower()
             return party_mapping.get(party_lower, party_str)
         
-        df['party'] = df['Party'].apply(standardize_party)
+        df['party'] = df['party'].apply(standardize_party)
         
         return df
     
@@ -634,8 +625,8 @@ class PennsylvaniaCleaner:
         
         # Add original data preservation columns - handle different column names
         # Pennsylvania has complex structure, try to find name column
-        if 'Name' in df.columns:
-            df['original_name'] = df['Name'].copy()
+        if 'candidate_name' in df.columns:
+            df['original_name'] = df['candidate_name'].copy()
         else:
             
             
@@ -645,7 +636,7 @@ class PennsylvaniaCleaner:
             df['original_name'] = 'Unknown Candidate'
         df['original_state'] = df['state'].copy()
         df['original_election_year'] = df['election_year'].copy()
-        df['original_office'] = df['Office'].copy()
+        df['original_office'] = df['office'].copy()
         df['original_filing_date'] = pd.NA  # Not available in Pennsylvania data
         
         # Add missing columns with None values

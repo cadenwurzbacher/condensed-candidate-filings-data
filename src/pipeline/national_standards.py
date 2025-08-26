@@ -9,7 +9,7 @@ from .office_standardizer import OfficeStandardizer
 from .election_type_standardizer import ElectionTypeStandardizer
 
 # Import database utilities
-from ..config.database import get_db_connection
+from config.database import get_db_connection
 
 logger = logging.getLogger(__name__)
 
@@ -219,8 +219,8 @@ class NationalStandards:
         if df.empty:
             return df
         
-        # Get all columns except county and stable_id (since stable_id includes county)
-        dedupe_columns = [col for col in df.columns if col not in ['county', 'stable_id']]
+        # Get all columns except county, stable_id, and raw_data (since stable_id includes county and raw_data may contain dicts)
+        dedupe_columns = [col for col in df.columns if col not in ['county', 'stable_id', 'raw_data']]
         
         # Find records that are duplicates except for county
         county_duplicates = df.duplicated(subset=dedupe_columns, keep=False)
@@ -251,7 +251,10 @@ class NationalStandards:
                 
                 removed_count += len(group_df) - 1
                 
-                logger.debug(f"Deduped {len(group_df)} records for {group_df.iloc[0].get('full_name_display', 'Unknown')} - {group_df.iloc[0].get('office', 'Unknown')}")
+                # Get candidate name and office safely
+                candidate_name = group_df.iloc[0].get('full_name_display', group_df.iloc[0].get('candidate_name', 'Unknown'))
+                office = group_df.iloc[0].get('office', 'Unknown')
+                logger.debug(f"Deduped {len(group_df)} records for {candidate_name} - {office}")
         
         logger.info(f"Removed {removed_count} county-based duplicate records")
         logger.info(f"Records reduced from {len(df)} to {len(result_df)}")

@@ -59,20 +59,7 @@ class MarylandCleaner:
         logger.info("Removing duplicate columns...")
         
         # Columns to remove (original versions) - Maryland 2022-2026
-        columns_to_remove = [
-            'Election', 'Office', 'Name', 'Party', 'Address', 'Email', 'Website', 'Phone Number',
-            'Office Name', 'Contest Run By District Name and Number', 'Candidate Ballot Last Name and Suffix',
-            'Candidate First Name and Middle Name', 'Office Political Party', 'Candidate Residential Jurisdiction',
-            'Filing Type and Date', 'Campaign Mailing Address', 'Campaign Mailing City State and Zip',
-            'Public Phone', 'Facebook', 'Twitter', 'X', 'Other', 'Committee Name'
-        ]
         
-        # Only remove if they exist and we have cleaned versions
-        columns_to_remove = [col for col in columns_to_remove if col in df.columns]
-        
-        if columns_to_remove:
-            df = df.drop(columns=columns_to_remove)
-            logger.info(f"Removed {len(columns_to_remove)} duplicate columns: {columns_to_remove}")
         
         return df
 
@@ -125,8 +112,7 @@ class MarylandCleaner:
             'election_year', 'election_type', 'office', 'district', 'full_name_display',
             'first_name', 'middle_name', 'last_name', 'prefix', 'suffix', 'nickname',
             'party', 'phone', 'email', 'address', 'website',
-            'state', 'address_state', 'original_name', 'original_state', 'original_election_year',
-            'original_office', 'original_filing_date', 'id', 'stable_id', 'county',
+            'state', 'address_state', 'id', 'stable_id', 'county',
             'city', 'zip_code', 'filing_date', 'election_date', 'facebook', 'twitter'
         ]
         
@@ -169,7 +155,7 @@ class MarylandCleaner:
             return year, election_type
         
         # Check if Election column exists, if not try to extract from filename
-        if 'Election' not in df.columns:
+        if 'election_type' not in df.columns:
             if filename:
                 # Extract year from filename (e.g., "maryland_candidates_2024.xlsx" -> 2024)
                 year_match = re.search(r'(\d{4})', filename)
@@ -188,7 +174,7 @@ class MarylandCleaner:
             return df
         
         # Apply election processing
-        election_results = df['Election'].apply(extract_election_info)
+        election_results = df['election_type'].apply(extract_election_info)
         df['election_year'] = [result[0] for result in election_results]
         df['election_type'] = [result[1] for result in election_results]
         
@@ -246,7 +232,7 @@ class MarylandCleaner:
                 df['district'] = [result[1] for result in office_results]
         else:
             # Fallback to old method
-            office_col = 'Office' if 'Office' in df.columns else None
+            office_col = 'office' if 'office' in df.columns else None
             if office_col:
                 office_results = df[office_col].apply(process_office_district)
                 df['office'] = [result[0] for result in office_results]
@@ -307,12 +293,12 @@ class MarylandCleaner:
         if 'Candidate First Name and Middle Name' in df.columns and 'Candidate Ballot Last Name and Suffix' in df.columns:
             df['full_name_display'] = df.apply(lambda row: clean_name(
                 str(row['Candidate First Name and Middle Name']) + ' ' + str(row['Candidate Ballot Last Name and Suffix']), 
-                (row['office'] if 'office' in df.columns else (row['Office Name'] if 'Office Name' in df.columns else (row['Office'] if 'Office' in df.columns else None)))
+                (row['office'] if 'office' in df.columns else (row['Office Name'] if 'Office Name' in df.columns else (row['office'] if 'office' in df.columns else None)))
             ), axis=1)
-        elif 'Name' in df.columns:
+        elif 'candidate_name' in df.columns:
             df['full_name_display'] = df.apply(lambda row: clean_name(
-                row['Name'],
-                (row['office'] if 'office' in df.columns else (row['Office Name'] if 'Office Name' in df.columns else (row['Office'] if 'Office' in df.columns else None)))
+                row['candidate_name'],
+                (row['office'] if 'office' in df.columns else (row['Office Name'] if 'Office Name' in df.columns else (row['office'] if 'office' in df.columns else None)))
             ), axis=1)
         else:
             
@@ -345,8 +331,8 @@ class MarylandCleaner:
             # Get original name from the appropriate columns
             if 'Candidate First Name and Middle Name' in df.columns and 'Candidate Ballot Last Name and Suffix' in df.columns:
                 original_name = str(row['Candidate First Name and Middle Name']) + ' ' + str(row['Candidate Ballot Last Name and Suffix'])
-            elif 'Name' in df.columns:
-                original_name = row['Name']
+            elif 'candidate_name' in df.columns:
+                original_name = row['candidate_name']
             else:
                 original_name = 'Unknown'
             
@@ -550,7 +536,7 @@ class MarylandCleaner:
         
         # Maryland 2024 uses 'Office Political Party'
         party_col = None
-        for candidate in ['Party', 'Office Political Party']:
+        for candidate in ['party', 'Office Political Party']:
             if candidate in df.columns:
                 party_col = candidate
                 break
@@ -610,8 +596,8 @@ class MarylandCleaner:
             df['phone'] = pd.NA
 
         # Email
-        if 'Email' in df.columns:
-            df['email'] = df['Email'].apply(clean_email)
+        if 'email' in df.columns:
+            df['email'] = df['email'].apply(clean_email)
         else:
             df['email'] = pd.NA
 
@@ -622,8 +608,8 @@ class MarylandCleaner:
             df['address'] = pd.NA
 
         # Website
-        if 'Website' in df.columns:
-            df['website'] = df['Website'].apply(lambda x: str(x).strip() if pd.notna(x) else None)
+        if 'website' in df.columns:
+            df['website'] = df['website'].apply(lambda x: str(x).strip() if pd.notna(x) else None)
         else:
             df['website'] = pd.NA
 
@@ -701,31 +687,14 @@ class MarylandCleaner:
         
         # Add original data preservation columns - handle different column names
         # Maryland has separate first and last name columns, combine them
-        if 'Candidate First Name and Middle Name' in df.columns and 'Candidate Ballot Last Name and Suffix' in df.columns:
-            df['original_name'] = df['Candidate First Name and Middle Name'].astype(str) + ' ' + df['Candidate Ballot Last Name and Suffix'].astype(str)
-        elif 'Name' in df.columns:
-            df['original_name'] = df['Name'].copy()
-        else:
-            
-            
-            
-            
-            df['original_name'] = 'Unknown'
-        df['original_state'] = df['state'].copy()
-        df['original_election_year'] = df['election_year'].copy()
+        # Note: original_ columns removed - not needed for final output
         # Preserve original office using best available source
         if 'Office Name' in df.columns:
-            df['original_office'] = df['Office Name'].copy()
-        elif 'Office' in df.columns:
-            df['original_office'] = df['Office'].copy()
+            df['office'] = df['Office Name'].copy()
         elif 'office' in df.columns:
-            df['original_office'] = df['office'].copy()
+            df['office'] = df['office'].copy()
         else:
-            
-            
-            
-            
-            df['original_office'] = pd.NA
+            df['office'] = pd.NA
         # Map filing date from Maryland 2022-2026 format
         if 'Filing Type and Date' in df.columns:
             def parse_filing_date(filing_str: str) -> str:
@@ -749,10 +718,8 @@ class MarylandCleaner:
                 return filing_str
             
             df['filing_date'] = df['Filing Type and Date'].apply(parse_filing_date)
-            df['original_filing_date'] = df['Filing Type and Date'].copy()
         else:
             df['filing_date'] = pd.NA
-            df['original_filing_date'] = pd.NA
         
         # Map county from Maryland 2022-2026 format
         if 'Candidate Residential Jurisdiction' in df.columns:

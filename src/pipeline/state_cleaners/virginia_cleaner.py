@@ -120,15 +120,7 @@ class VirginiaCleaner:
         """Remove original columns that have been replaced by cleaned versions."""
         logger.info("Removing duplicate columns...")
         
-        columns_to_remove = [
-            'Election', 'Office', 'Name', 'Party', 'Address', 'Email', 'Website', 'Phone Number'
-        ]
         
-        columns_to_remove = [col for col in columns_to_remove if col in df.columns]
-        
-        if columns_to_remove:
-            df = df.drop(columns=columns_to_remove)
-            logger.info(f"Removed {len(columns_to_remove)} duplicate columns: {columns_to_remove}")
         
         return df
 
@@ -169,13 +161,13 @@ class VirginiaCleaner:
             return year, election_type
         
         # Check if Election column exists, if not set defaults
-        if 'Election' not in df.columns:
+        if 'election_type' not in df.columns:
             logger.warning("Election column not found in Virginia data, setting defaults")
             df['election_year'] = None
             df['election_type'] = 'General'  # Default for Virginia
             return df
         
-        election_results = df['Election'].apply(extract_election_info)
+        election_results = df['election_type'].apply(extract_election_info)
         df['election_year'] = [result[0] for result in election_results]
         df['election_type'] = [result[1] for result in election_results]
         
@@ -210,7 +202,7 @@ class VirginiaCleaner:
             return office_str, None
         
         # Apply office and district processing - handle different column names
-        office_col = 'Office Title' if 'Office Title' in df.columns else 'Office'
+        office_col = 'Office Title' if 'Office Title' in df.columns else 'office'
         office_results = df[office_col].apply(process_office_district)
         df['office'] = [result[0] for result in office_results]
         df['district'] = [result[1] for result in office_results]
@@ -252,8 +244,8 @@ class VirginiaCleaner:
             return cleaned
         
         # Handle different column names
-        office_col = 'Office Title' if 'Office Title' in df.columns else 'Office'
-        name_col = 'Candidate Name' if 'Candidate Name' in df.columns else 'Name'
+        office_col = 'Office Title' if 'Office Title' in df.columns else 'office'
+        name_col = 'candidate_name' if 'candidate_name' in df.columns else 'candidate_name'
         df['full_name_display'] = df.apply(lambda row: clean_name(row[name_col], row[office_col]), axis=1)
         df = self._parse_names(df)
         
@@ -271,7 +263,7 @@ class VirginiaCleaner:
         df['nickname'] = pd.NA
         
         # Get the correct name column
-        name_col = 'Candidate Name' if 'Candidate Name' in df.columns else 'Name'
+        name_col = 'candidate_name' if 'candidate_name' in df.columns else 'candidate_name'
         
         for idx, row in df.iterrows():
             name = row['full_name_display']
@@ -440,10 +432,10 @@ class VirginiaCleaner:
             return party_mapping.get(party_lower, party_str)
         
         # Check if Party column exists, if not try alternative names
-        if 'Party' in df.columns:
-            df['party'] = df['Party'].apply(standardize_party)
-        elif 'Political Party' in df.columns:
-            df['party'] = df['Political Party'].apply(standardize_party)
+        if 'party' in df.columns:
+            df['party'] = df['party'].apply(standardize_party)
+        elif 'party' in df.columns:
+            df['party'] = df['party'].apply(standardize_party)
         elif 'Political Party Descr' in df.columns:
             df['party'] = df['Political Party Descr'].apply(standardize_party)
         else:
@@ -486,17 +478,67 @@ class VirginiaCleaner:
             
             cleaned = str(address_str).strip().strip('"\'')
             cleaned = re.sub(r'\s+', ' ', cleaned)
-            return cleaned
+            
+            # Extract and remove ZIP codes from address
+            zip_pattern = re.compile(r'\b\d{5}(?:-\d{4})?\b')
+            zip_match = zip_pattern.search(cleaned)
+            if zip_match:
+                zip_code = zip_match.group(0)
+                # Don't extract PO Box numbers as ZIP codes
+                if not re.search(r'\bPO\s+BOX\s*' + re.escape(zip_code), cleaned, re.IGNORECASE):
+                    # Remove ZIP from address
+                    cleaned = zip_pattern.sub('', cleaned).strip().rstrip(',')
+            
+            # Extract and remove state abbreviations
+            state_patterns = [
+                r',\s*([A-Z]{2})\s*,?\s*$',  # State at end with optional comma
+                r',\s*([A-Z]{2})\s*$',       # State at end
+                r'\s+([A-Z]{2})\s+\d{5}',   # State before ZIP
+                r'\b([A-Z]{2})\b'            # Any 2-letter code (more aggressive)
+            ]
+            
+            for pattern in state_patterns:
+                state_match = re.search(pattern, cleaned)
+                if state_match:
+                    state_code = state_match.group(1)
+                    # Filter out common non-state abbreviations
+                    non_state_abbrevs = {'ST', 'RD', 'DR', 'LN', 'CT', 'BL', 'APT', 'STE', 'UNIT', 'PO', 'BOX', 'AVE', 'WAY', 'PL', 'CR', 'CRT', 'CIR', 'HWY', 'US', 'SR', 'CO', 'INC', 'LLC', 'LTD', 'CORP'}
+                    if state_code not in non_state_abbrevs:
+                        # Remove state from address
+                        cleaned = re.sub(pattern, '', cleaned).strip().rstrip(',')
+                        break
+            
+            # Extract city (everything between street and state/ZIP)
+            if ',' in cleaned:
+                parts = [p.strip() for p in cleaned.split(',') if p.strip()]
+                if len(parts) >= 2:
+                    if len(parts) == 2:
+                        # "Street, City" format
+                        cleaned = parts[0]
+                    elif len(parts) >= 3:
+                        # "Street, City, State" format - city is middle part
+                        last_part = parts[-1].strip()
+                        if re.match(r'^[A-Z]{2}$', last_part):
+                            # Last part is state, second-to-last is city
+                            cleaned = ','.join(parts[:-2])
+                        else:
+                            # Last part is not state, so city is last part
+                            cleaned = ','.join(parts[:-1])
+                    else:
+                        # Only 2 parts, treat as "Street, City"
+                        cleaned = parts[0]
+            
+            return cleaned.strip().rstrip(',')
         
         # Handle phone - check multiple possible column names
         if 'Campaign Day Time Phone' in df.columns:
             df['phone'] = df['Campaign Day Time Phone'].apply(clean_phone)
         elif 'Campaign Phone' in df.columns:
             df['phone'] = df['Campaign Phone'].apply(clean_phone)
-        elif 'Phone Number' in df.columns:
-            df['phone'] = df['Phone Number'].apply(clean_phone)
-        elif 'Phone' in df.columns:
-            df['phone'] = df['Phone'].apply(clean_phone)
+        elif 'phone' in df.columns:
+            df['phone'] = df['phone'].apply(clean_phone)
+        elif 'phone' in df.columns:
+            df['phone'] = df['phone'].apply(clean_phone)
         else:
             logger.warning("No phone column found in Virginia data, setting to None")
             df['phone'] = None
@@ -504,8 +546,8 @@ class VirginiaCleaner:
         # Handle email - check multiple possible column names
         if 'Campaign Email' in df.columns:
             df['email'] = df['Campaign Email'].apply(clean_email)
-        elif 'Email' in df.columns:
-            df['email'] = df['Email'].apply(clean_email)
+        elif 'email' in df.columns:
+            df['email'] = df['email'].apply(clean_email)
         else:
             logger.warning("No email column found in Virginia data, setting to None")
             df['email'] = None
@@ -527,8 +569,8 @@ class VirginiaCleaner:
                 address_parts.append(str(row['Address 2']).strip())
             
             # Final fallback
-            if not address_parts and 'Address' in row and pd.notna(row['Address']):
-                address_parts.append(str(row['Address']).strip())
+            if not address_parts and 'address' in row and pd.notna(row['address']):
+                address_parts.append(str(row['address']).strip())
             
             if address_parts:
                 combined = ' '.join(address_parts)
@@ -537,11 +579,62 @@ class VirginiaCleaner:
         
         df['address'] = df.apply(combine_addresses, axis=1)
         
+        # Extract ZIP codes from address
+        def extract_zip_from_address(addr):
+            if pd.isna(addr) or not isinstance(addr, str):
+                return None
+            
+            zip_pattern = re.compile(r'\b\d{5}(?:-\d{4})?\b')
+            zip_match = zip_pattern.search(addr)
+            if zip_match:
+                zip_code = zip_match.group(0)
+                # Don't extract PO Box numbers as ZIP codes
+                if not re.search(r'\bPO\s+BOX\s*' + re.escape(zip_code), addr, re.IGNORECASE):
+                    return zip_code
+            return None
+        
+        # Extract ZIP codes from address if not already present
+        if 'zip_code' not in df.columns:
+            df['zip_code'] = df['address'].apply(extract_zip_from_address)
+        else:
+            # Update existing zip_code with extracted values if empty
+            df['zip_code'] = df.apply(lambda row: extract_zip_from_address(row.get('address')) if pd.isna(row.get('zip_code')) or str(row.get('zip_code')).strip() == '' else row.get('zip_code'), axis=1)
+        
+        # Extract cities from address
+        def extract_city_from_address(addr):
+            if pd.isna(addr) or not isinstance(addr, str):
+                return None
+            
+            # Look for city in comma-separated format
+            if ',' in addr:
+                parts = [p.strip() for p in addr.split(',') if p.strip()]
+                if len(parts) >= 2:
+                    if len(parts) == 2:
+                        # "Street, City" format
+                        return parts[1]
+                    elif len(parts) >= 3:
+                        # "Street, City, State" format - city is middle part
+                        last_part = parts[-1].strip()
+                        if re.match(r'^[A-Z]{2}$', last_part):
+                            # Last part is state, second-to-last is city
+                            return parts[-2]
+                        else:
+                            # Last part is not state, so city is last part
+                            return parts[-1]
+            return None
+        
+        # Extract cities from address if not already present
+        if 'city' not in df.columns:
+            df['city'] = df['address'].apply(extract_city_from_address)
+        else:
+            # Update existing city with extracted values if empty
+            df['city'] = df.apply(lambda row: extract_city_from_address(row.get('address')) if pd.isna(row.get('city')) or str(row.get('city')).strip() == '' else row.get('city'), axis=1)
+        
         # Handle website - check multiple possible column names
         if 'Campaign Website' in df.columns:
             df['website'] = df['Campaign Website'].apply(lambda x: str(x).strip() if pd.notna(x) else None)
-        elif 'Website' in df.columns:
-            df['website'] = df['Website'].apply(lambda x: str(x).strip() if pd.notna(x) else None)
+        elif 'website' in df.columns:
+            df['website'] = df['website'].apply(lambda x: str(x).strip() if pd.notna(x) else None)
         else:
             logger.warning("No website column found in Virginia data, setting to None")
             df['website'] = None
@@ -568,13 +661,13 @@ class VirginiaCleaner:
         df['state'] = self.state_name
         
         # Get the correct name column
-        name_col = 'Candidate Name' if 'Candidate Name' in df.columns else 'Name'
+        name_col = 'candidate_name' if 'candidate_name' in df.columns else 'candidate_name'
         df['original_name'] = df[name_col].copy()
         
         df['original_state'] = df['state'].copy()
         df['original_election_year'] = df['election_year'].copy()
         # Handle different column names
-        office_col = 'Office Title' if 'Office Title' in df.columns else 'Office'
+        office_col = 'Office Title' if 'Office Title' in df.columns else 'office'
         df['original_office'] = df[office_col].copy()
         df['original_filing_date'] = pd.NA
         
@@ -609,8 +702,8 @@ class VirginiaCleaner:
         # Map zip code data
         if 'Campaign Zip' in df.columns:
             df['zip_code'] = df['Campaign Zip'].apply(lambda x: str(x).strip() if pd.notna(x) else None)
-        elif 'Zip' in df.columns:
-            df['zip_code'] = df['Zip'].apply(lambda x: str(x).strip() if pd.notna(x) else None)
+        elif 'zip_code' in df.columns:
+            df['zip_code'] = df['zip_code'].apply(lambda x: str(x).strip() if pd.notna(x) else None)
         else:
             logger.warning("No zip code column found in Virginia data, setting to None")
             df['zip_code'] = None
@@ -625,8 +718,8 @@ class VirginiaCleaner:
             df['county'] = None
         
         # Map district data - preserve original District column data
-        if 'District' in df.columns:
-            df['district'] = df['District'].apply(lambda x: str(x).strip() if pd.notna(x) else None)
+        if 'district' in df.columns:
+            df['district'] = df['district'].apply(lambda x: str(x).strip() if pd.notna(x) else None)
         
         return df
 

@@ -597,8 +597,8 @@ class GeorgiaCleaner:
             if pd.notna(row.get('State')):
                 parts.append(str(row['State']))
             
-            if pd.notna(row.get('Zip')):
-                parts.append(str(row['Zip']))
+            if pd.notna(row.get('zip_code')):
+                parts.append(str(row['zip_code']))
             
             return ', '.join(parts) if parts else None
         
@@ -649,8 +649,8 @@ class GeorgiaCleaner:
             
             df['city'] = pd.NA
             
-        if 'Zip' in df.columns:
-            df['zip_code'] = df['Zip'].apply(lambda x: str(x).strip() if pd.notna(x) else None)
+        if 'zip_code' in df.columns:
+            df['zip_code'] = df['zip_code'].apply(lambda x: str(x).strip() if pd.notna(x) else None)
         else:
             
             
@@ -690,24 +690,7 @@ class GeorgiaCleaner:
 
     def _remove_duplicate_columns(self, df: pd.DataFrame) -> pd.DataFrame:
         logger.info("Removing duplicate/raw columns...")
-        columns_to_remove = [
-            # Raw staging columns
-            "raw_name",
-            "raw_office",
-            "raw_district",
-            "raw_party",
-            "raw_election",
-            "raw_year",
-            "raw_filing_date",
-            "raw_phone",
-            "raw_email",
-            "raw_address",
-            "raw_website",
-        ]
-        to_drop = [c for c in columns_to_remove if c in df.columns]
-        if to_drop:
-            df = df.drop(columns=to_drop)
-            logger.info(f"Dropped {len(to_drop)} normalized staging columns")
+        # No columns to drop - preserving all data
         return df
 
     def _reorder_columns(self, df: pd.DataFrame) -> pd.DataFrame:

@@ -59,24 +59,11 @@ class ColoradoCleaner:
         logger.info("Removing duplicate columns...")
         
         # Columns to remove (original versions) - only remove if we have cleaned versions
-        columns_to_remove = []
         
-        # Check if we have cleaned versions before removing originals
-        if 'full_name_display' in df.columns and 'name' in df.columns:
-            columns_to_remove.append('name')
-        if 'office_cleaned' in df.columns and 'original_office' in df.columns:
-            columns_to_remove.append('office_cleaned')
-        if 'district_cleaned' in df.columns:
-            columns_to_remove.append('district_cleaned')
-        # Don't remove party column - we need to keep it
-        
-        if columns_to_remove:
-            df = df.drop(columns=columns_to_remove)
-            logger.info(f"Removed {len(columns_to_remove)} duplicate columns: {columns_to_remove}")
         
         return df
 
-    def clean_colorado_data(self, df: pd.DataFrame, filename: str) -> pd.DataFrame:
+    def clean_colorado_data(self, df: pd.DataFrame, filename: str = None) -> pd.DataFrame:
         """
         Clean and standardize Colorado candidate data according to final schema.
         
@@ -128,22 +115,23 @@ class ColoradoCleaner:
         logger.info(f"Colorado data cleaning completed. Final shape: {cleaned_df.shape}")
         return cleaned_df
     
-    def _process_election_data(self, df: pd.DataFrame, filename: str) -> pd.DataFrame:
+    def _process_election_data(self, df: pd.DataFrame, filename: str = None) -> pd.DataFrame:
         """Process election year and type from filename."""
         logger.info("Processing election data from filename...")
         
         # Extract year from filename (e.g., "colorado_candidates_2024.csv" -> 2024)
-        year_match = re.search(r'(\d{4})', filename)
-        if year_match:
-            election_year = int(year_match.group(1))
+        if filename:
+            year_match = re.search(r'(\d{4})', filename)
+            if year_match:
+                election_year = int(year_match.group(1))
+            else:
+                # Default to current year if no year found
+                election_year = datetime.now().year
+                logger.warning(f"No election year found in filename {filename}, using {election_year}")
         else:
-            
-            
-            
-            
-            # Default to current year if no year found
+            # Default to current year if no filename provided
             election_year = datetime.now().year
-            logger.warning(f"No election year found in filename {filename}, using {election_year}")
+            logger.warning(f"No filename provided, using current year {election_year}")
         
         # For Colorado, assume it's a Primary election unless specified otherwise
         election_type = "Primary"
@@ -269,7 +257,7 @@ class ColoradoCleaner:
             return cleaned
         
         # Apply name cleaning
-        df['full_name_display'] = df['name'].apply(clean_name)
+        df['full_name_display'] = df['candidate_name'].apply(clean_name)
         
         # Parse names into components
         df = self._parse_names(df)
@@ -290,7 +278,7 @@ class ColoradoCleaner:
         
         for idx, row in df.iterrows():
             name = row['full_name_display']
-            original_name = row['name']
+            original_name = row['candidate_name']
             
             if pd.isna(name) or not name:
                 continue
@@ -495,12 +483,7 @@ class ColoradoCleaner:
         # Add state column
         df['state'] = self.state_name
         
-        # Add original data preservation columns
-        df['original_name'] = df['name'].copy()
-        df['original_state'] = df['state'].copy()
-        df['original_election_year'] = df['election_year'].copy()
-        df['original_office'] = df['office'].copy()
-        df['original_filing_date'] = pd.NA  # Not available in Colorado data
+        # Note: original_ columns removed - not needed for final output
         
         # Add missing columns with None values
         required_columns = [
@@ -566,11 +549,7 @@ class ColoradoCleaner:
             'website',
             'state',
             'address_state',
-            'original_name',
-            'original_state',
-            'original_election_year',
-            'original_office',
-            'original_filing_date',
+
             'id',
             'stable_id',
             'county',

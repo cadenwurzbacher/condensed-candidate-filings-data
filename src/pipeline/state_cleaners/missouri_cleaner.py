@@ -260,7 +260,7 @@ class MissouriCleaner:
             return office, district
         
         # Process office and district
-        office_district_results = df['Office'].apply(process_office_district)
+        office_district_results = df['office'].apply(process_office_district)
         df['office'] = [result[0] for result in office_district_results]
         df['district'] = [result[1] for result in office_district_results]
         df['district'] = df['district'].astype('object')
@@ -290,7 +290,7 @@ class MissouriCleaner:
             return name_str
         
         # Clean names
-        df['full_name_display'] = df.apply(lambda row: clean_name(row['Name'], row['Office']), axis=1)
+        df['full_name_display'] = df.apply(lambda row: clean_name(row['candidate_name'], row['office']), axis=1)
         
         # Parse names into components
         df = self._parse_names(df)
@@ -370,7 +370,7 @@ class MissouriCleaner:
             return prefix, first_name, middle_name, last_name, suffix, nickname, full_name_display
         
         # Parse names
-        name_components = df.apply(lambda row: parse_standard_name(row['full_name_display'], row['Name']), axis=1)
+        name_components = df.apply(lambda row: parse_standard_name(row['full_name_display'], row['candidate_name']), axis=1)
         
         df['prefix'] = [comp[0] for comp in name_components]
         df['first_name'] = [comp[1] for comp in name_components]
@@ -543,7 +543,7 @@ class MissouriCleaner:
             
             return party_str.title()
         
-        df['party'] = df['Party'].apply(standardize_party)
+        df['party'] = df['party'].apply(standardize_party)
         return df
     
     def _clean_contact_info(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -584,7 +584,7 @@ class MissouriCleaner:
             return ""
         
         def clean_address(address_str: str) -> str:
-            """Clean address string."""
+            """Enhanced address parsing and cleaning for Missouri."""
             if pd.isna(address_str) or not address_str:
                 return ""
             
@@ -594,21 +594,141 @@ class MissouriCleaner:
             address_str = re.sub(r'\s+', ' ', address_str)
             address_str = address_str.replace('\n', ' ')
             
-            return address_str
+            # Extract and remove ZIP codes from address
+            zip_pattern = re.compile(r'\b\d{5}(?:-\d{4})?\b')
+            zip_match = zip_pattern.search(address_str)
+            if zip_match:
+                zip_code = zip_match.group(0)
+                # Don't extract PO Box numbers as ZIP codes
+                if not re.search(r'\bPO\s+BOX\s*' + re.escape(zip_code), address_str, re.IGNORECASE):
+                    # Remove ZIP from address
+                    address_str = zip_pattern.sub('', address_str).strip().rstrip(',')
+            
+            # Extract and remove state abbreviations
+            state_patterns = [
+                r',\s*([A-Z]{2})\s*,?\s*$',  # State at end with optional comma
+                r',\s*([A-Z]{2})\s*$',       # State at end
+                r'\s+([A-Z]{2})\s+\d{5}',   # State before ZIP
+                r'\b([A-Z]{2})\b'            # Any 2-letter code (more aggressive)
+            ]
+            
+            for pattern in state_patterns:
+                state_match = re.search(pattern, address_str)
+                if state_match:
+                    state_code = state_match.group(1)
+                    # Filter out common non-state abbreviations
+                    non_state_abbrevs = {'ST', 'RD', 'DR', 'LN', 'CT', 'BL', 'APT', 'STE', 'UNIT', 'PO', 'BOX', 'AVE', 'WAY', 'PL', 'CR', 'CRT', 'CIR', 'HWY', 'US', 'SR', 'CO', 'INC', 'LLC', 'LTD', 'CORP'}
+                    if state_code not in non_state_abbrevs:
+                        # Remove state from address
+                        address_str = re.sub(pattern, '', address_str).strip().rstrip(',')
+                        break
+            
+            # Extract city (everything between street and state/ZIP)
+            if ',' in address_str:
+                parts = [p.strip() for p in address_str.split(',') if p.strip()]
+                if len(parts) >= 2:
+                    if len(parts) == 2:
+                        # "Street, City" format
+                        address_str = parts[0]
+                    elif len(parts) >= 3:
+                        # "Street, City, State" format - city is middle part
+                        last_part = parts[-1].strip()
+                        if re.match(r'^[A-Z]{2}$', last_part):
+                            # Last part is state, second-to-last is city
+                            address_str = ','.join(parts[:-2])
+                        else:
+                            # Last part is not state, so city is last part
+                            address_str = ','.join(parts[:-1])
+                    else:
+                        # Only 2 parts, treat as "Street, City"
+                        address_str = parts[0]
+            
+            return address_str.strip().rstrip(',')
         
         # Clean contact information
         df['phone'] = pd.NA  # Not available in Missouri data
         df['email'] = pd.NA  # Not available in Missouri data
-        df['address'] = df['Mailing Address'].apply(clean_address)
+        df['address'] = df['address'].apply(clean_address)
         df['website'] = pd.NA  # Not available in Missouri data
         
-        # Derive address_state from address when possible
+        # Enhanced ZIP code and city extraction from address
+        def extract_zip_from_address(addr):
+            if pd.isna(addr) or not isinstance(addr, str):
+                return None
+            
+            zip_pattern = re.compile(r'\b\d{5}(?:-\d{4})?\b')
+            zip_match = zip_pattern.search(addr)
+            if zip_match:
+                zip_code = zip_match.group(0)
+                # Don't extract PO Box numbers as ZIP codes
+                if not re.search(r'\bPO\s+BOX\s*' + re.escape(zip_code), addr, re.IGNORECASE):
+                    return zip_code
+            return None
+        
+        # Extract ZIP codes from address if not already present
+        if 'zip_code' not in df.columns:
+            df['zip_code'] = df['address'].apply(extract_zip_from_address)
+        else:
+            # Update existing zip_code with extracted values if empty
+            df['zip_code'] = df.apply(lambda row: extract_zip_from_address(row.get('address')) if pd.isna(row.get('zip_code')) or str(row.get('zip_code')).strip() == '' else row.get('zip_code'), axis=1)
+        
+        # Extract cities from address
+        def extract_city_from_address(addr):
+            if pd.isna(addr) or not isinstance(addr, str):
+                return None
+            
+            # Look for city in comma-separated format
+            if ',' in addr:
+                parts = [p.strip() for p in addr.split(',') if p.strip()]
+                if len(parts) >= 2:
+                    if len(parts) == 2:
+                        # "Street, City" format
+                        return parts[1]
+                    elif len(parts) >= 3:
+                        # "Street, City, State" format - city is middle part
+                        last_part = parts[-1].strip()
+                        if re.match(r'^[A-Z]{2}$', last_part):
+                            # Last part is state, second-to-last is city
+                            return parts[-2]
+                        else:
+                            # Last part is not state, so city is last part
+                            return parts[-1]
+            return None
+        
+        # Extract cities from address if not already present
+        if 'city' not in df.columns:
+            df['city'] = df['address'].apply(extract_city_from_address)
+        else:
+            # Update existing city with extracted values if empty
+            df['city'] = df.apply(lambda row: extract_city_from_address(row.get('address')) if pd.isna(row.get('city')) or str(row.get('city')).strip() == '' else row.get('city'), axis=1)
+        
+        # Enhanced address_state extraction from address
         def extract_state(addr: Optional[str]) -> Optional[str]:
             if addr is None or pd.isna(addr):
                 return None
             s = str(addr)
+            
+            # Look for state codes in address
+            state_patterns = [
+                r',\s*([A-Z]{2})\s*,?\s*$',  # State at end with optional comma
+                r',\s*([A-Z]{2})\s*$',       # State at end
+                r'\s+([A-Z]{2})\s+\d{5}',   # State before ZIP
+                r'\b([A-Z]{2})\b'            # Any 2-letter code (more aggressive)
+            ]
+            
+            for pattern in state_patterns:
+                state_match = re.search(pattern, s)
+                if state_match:
+                    state_code = state_match.group(1)
+                    # Filter out common non-state abbreviations
+                    non_state_abbrevs = {'ST', 'RD', 'DR', 'LN', 'CT', 'BL', 'APT', 'STE', 'UNIT', 'PO', 'BOX', 'AVE', 'WAY', 'PL', 'CR', 'CRT', 'CIR', 'HWY', 'US', 'SR', 'CO', 'INC', 'LLC', 'LTD', 'CORP'}
+                    if state_code not in non_state_abbrevs:
+                        return state_code
+            
+            # Fallback to original pattern
             m = re.search(r"\b([A-Z]{2})\s+\d{5}(?:-\d{4})?\b", s)
             return m.group(1) if m else None
+        
         df['address_state'] = df['address'].apply(extract_state)
         
         return df
@@ -620,12 +740,7 @@ class MissouriCleaner:
         # Add state column
         df['state'] = self.state_name
         
-        # Add original data preservation columns
-        df['original_name'] = df['Name'].copy()
-        df['original_state'] = df['state'].copy()
-        df['original_election_year'] = df['election_year'].copy()
-        df['original_office'] = df['Office'].copy()
-        df['original_filing_date'] = df['Date Filed'].copy()
+        # Note: original_ columns removed - not needed for final output
         
         # Add missing columns with None values
         required_columns = [
@@ -641,7 +756,7 @@ class MissouriCleaner:
         df['id'] = ""
         
         # Process filing date
-        df['filing_date'] = df['Date Filed'].copy()
+        df['filing_date'] = df['filing_date'].copy()
         
         # Set election date to None (not available in Missouri data)
         df['election_date'] = pd.NA
@@ -764,11 +879,7 @@ class MissouriCleaner:
             'website',
             'state',
             'address_state',
-            'original_name',
-            'original_state',
-            'original_election_year',
-            'original_office',
-            'original_filing_date',
+
             'id',
             'stable_id',
             'county',

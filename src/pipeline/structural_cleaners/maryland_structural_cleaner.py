@@ -346,7 +346,8 @@ class MarylandStructuralCleaner:
                 return str(value).strip()
         
         return None
-def _extract_filing_date(self, row: pd.Series) -> str:
+    
+    def _extract_filing_date(self, row: pd.Series) -> str:
         """Extract filing date from row"""
         filing_info = str(row.get('Filing Type and Date', '')).strip()
         if filing_info and filing_info != 'nan':
@@ -388,7 +389,7 @@ def _extract_filing_date(self, row: pd.Series) -> str:
         expected_columns = [
             'candidate_name', 'office', 'party', 'county', 'district',
             'address', 'city', 'state', 'zip_code', 'phone', 'email',
-            'filing_date', 'election_year', 'election_type', 'address_state', 'raw_data'
+            'facebook', 'twitter', 'filing_date', 'election_year', 'election_type', 'address_state', 'raw_data'
         ]
         
         # Add missing columns with None values

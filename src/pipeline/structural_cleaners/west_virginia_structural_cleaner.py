@@ -144,12 +144,16 @@ class WestVirginiaStructuralCleaner:
     
     def _is_valid_candidate_row(self, row: pd.Series) -> bool:
         """Check if a row contains valid candidate data"""
-        # Check if we have at least a candidate name or race
-        name = str(row.get('Name', '')).strip()
+        # Check candidate-like fields
         race = str(row.get('Race', '')).strip()
-        
-        return (bool(name and name != 'nan') or
-                bool(race and race != 'nan'))
+        name_fields = [col for col in row.index if 'name' in str(col).lower()]
+        has_any_name = False
+        for col in name_fields:
+            val = str(row.get(col, '')).strip()
+            if val and val != 'nan':
+                has_any_name = True
+                break
+        return has_any_name or bool(race and race != 'nan')
     
     def _extract_single_record(self, row: pd.Series) -> dict:
         """Extract a single candidate record from a row"""
@@ -183,9 +187,21 @@ class WestVirginiaStructuralCleaner:
     
     def _extract_candidate_name(self, row: pd.Series) -> str:
         """Extract candidate name from row"""
+        # Prefer explicit Name column
         name = str(row.get('Name', '')).strip()
         if name and name != 'nan':
             return name
+        # Try other name-like columns
+        name_cols = [col for col in row.index if 'name' in str(col).lower()]
+        for col in name_cols:
+            val = str(row.get(col, '')).strip()
+            if val and val != 'nan':
+                return val
+        # Try combining first/last if present
+        first = str(row.get('First Name', '')).strip()
+        last = str(row.get('Last Name', '')).strip()
+        if first or last:
+            return f"{first} {last}".strip()
         return None
     
     def _extract_office(self, row: pd.Series) -> str:
@@ -286,7 +302,8 @@ class WestVirginiaStructuralCleaner:
                 return str(value).strip()
         
         return None
-def _extract_filing_date(self, row: pd.Series) -> str:
+    
+    def _extract_filing_date(self, row: pd.Series) -> str:
         """Extract filing date from row"""
         filing_date = row.get('Filing Date')
         if pd.notna(filing_date):
@@ -335,7 +352,7 @@ def _extract_filing_date(self, row: pd.Series) -> str:
         expected_columns = [
             'candidate_name', 'office', 'party', 'county', 'district',
             'address', 'city', 'state', 'zip_code', 'phone', 'email',
-            'filing_date', 'election_year', 'election_type', 'address_state', 'raw_data'
+            'facebook', 'twitter', 'filing_date', 'election_year', 'election_type', 'address_state', 'raw_data'
         ]
         
         # Add missing columns with None values

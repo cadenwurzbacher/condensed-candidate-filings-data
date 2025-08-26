@@ -113,20 +113,41 @@ class VermontStructuralCleaner:
     
     def _extract_structured_data(self, df: pd.DataFrame) -> list:
         """Extract structured records from DataFrame"""
-        # Clean the DataFrame structure
-        df = self._clean_dataframe_structure(df)
-        
-        if df.empty:
+        # Build a normalized DataFrame by detecting header rows (contain 'Contest')
+        normalized_df = self._normalize_multisection_sheet(df)
+        if normalized_df.empty:
             return []
         
-        # Extract records
-        records = []
-        for idx, row in df.iterrows():
-            if self._is_valid_candidate_row(row):
-                record = self._extract_single_record(row)
-                if record:
+        # Map normalized DataFrame columns to expected fields and build records
+        records: list[dict] = []
+        for _, row in normalized_df.iterrows():
+            try:
+                record = {
+                    'candidate_name': self._safe_str(row.get('Name On Ballot')),
+                    'office': self._safe_str(row.get('Contest')),
+                    'party': self._safe_str(row.get('Party')),
+                    'county': self._safe_str(row.get('District Name')),
+                    'district': None,  # VT statewide primary sheet generally not district-numbered; keep None
+                    'address': self._compose_address(row),
+                    'city': self._safe_str(row.get('City')),
+                    'state': self._safe_str(row.get('State')) or 'VT',
+                    'zip_code': self._safe_str(row.get('Zip')),
+                    'phone': self._choose_phone(row.get('Day Time Phone'), row.get('Evening Phone')),
+                    'email': self._safe_str(row.get('Email')),
+                    'facebook': None,
+                    'twitter': None,
+                    'filing_date': None,
+                    'election_year': self._infer_year_from_sheet(df) or '2024',
+                    'election_type': self._infer_election_type_from_context(df, row),
+                    'address_state': 'Vermont',
+                    'raw_data': self._safe_str(dict(row))
+                }
+                # Only append rows that clearly have a candidate and office
+                if record['candidate_name'] and record['office'] and record['office'] != 'Contest':
                     records.append(record)
-        
+            except Exception as e:
+                logger.warning(f"Failed to extract record from normalized row: {e}")
+                continue
         return records
     
     def _clean_dataframe_structure(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -138,6 +159,63 @@ class VermontStructuralCleaner:
         df = df.reset_index(drop=True)
         
         return df
+
+    def _normalize_multisection_sheet(self, raw_df: pd.DataFrame) -> pd.DataFrame:
+        """Detect repeated header rows (contain 'Contest') and stack sections into one DataFrame with proper headers.
+        The VT sheet has introductory rows, then a header row with columns like
+        ['Contest','District Name','Name On Ballot',...]. Later sections may repeat headers.
+        """
+        df = self._clean_dataframe_structure(raw_df)
+        if df.empty:
+            return pd.DataFrame()
+        
+        # Identify header rows by presence of the word 'Contest' in any cell
+        header_row_idxs = df.index[
+            df.apply(lambda r: r.astype(str).str.fullmatch(r"\s*Contest\s*", case=False).any(), axis=1)
+        ].tolist()
+        # Fallback: rows that contain 'Contest' anywhere
+        if not header_row_idxs:
+            header_row_idxs = df.index[
+                df.apply(lambda r: r.astype(str).str.contains('Contest', case=False, na=False).any(), axis=1)
+            ].tolist()
+        
+        if not header_row_idxs:
+            logger.warning("Vermont: No header rows found (no 'Contest' markers).")
+            return pd.DataFrame()
+        
+        # Create sections between header rows
+        sections: list[pd.DataFrame] = []
+        for i, h in enumerate(header_row_idxs):
+            next_h = header_row_idxs[i + 1] if i + 1 < len(header_row_idxs) else len(df)
+            header = df.iloc[h].copy()
+            # Ensure headers are strings and stripped
+            header = header.apply(lambda x: str(x).strip() if pd.notna(x) else x)
+            # Slice data rows after header until next header
+            data = df.iloc[h + 1:next_h].copy()
+            if data.empty:
+                continue
+            # Assign columns from header; pad/trim length to match
+            cols = list(header)
+            # Some trailing columns may be NaN; drop them to keep alignment
+            while cols and (cols[-1] is None or (isinstance(cols[-1], float) and pd.isna(cols[-1])) or str(cols[-1]).strip() == ''):
+                cols.pop()
+            data = data.iloc[:, :len(cols)].copy()
+            data.columns = cols
+            # Drop rows that are entirely NaN after reheader
+            data = data.dropna(how='all')
+            # Filter out rows that look like header repeats or separators
+            if 'Contest' in data.columns:
+                data = data[data['Contest'].astype(str).str.strip().ne('Contest')]
+            sections.append(data)
+        
+        if not sections:
+            return pd.DataFrame()
+        stacked = pd.concat(sections, ignore_index=True)
+        # Final cleanup: remove entirely empty columns and trim whitespace
+        stacked = stacked.dropna(how='all', axis=1)
+        for col in stacked.columns:
+            stacked[col] = stacked[col].apply(lambda v: v.strip() if isinstance(v, str) else v)
+        return stacked
     
     def _is_valid_candidate_row(self, row: pd.Series) -> bool:
         """Check if a row contains valid candidate data"""
@@ -175,6 +253,69 @@ class VermontStructuralCleaner:
         except Exception as e:
             logger.warning(f"Failed to extract record from row: {e}")
             return None
+
+    def _safe_str(self, value) -> str:
+        if value is None or (isinstance(value, float) and pd.isna(value)):
+            return None
+        s = str(value).strip()
+        return s if s and s.lower() != 'nan' else None
+
+    def _choose_phone(self, day: object, eve: object) -> str:
+        day_s = self._safe_str(day)
+        eve_s = self._safe_str(eve)
+        return day_s or eve_s
+
+    def _compose_address(self, row: pd.Series) -> str:
+        # Vermont has address components in separate columns
+        address_parts = []
+        
+        # Check for street address in various possible column names
+        street_address = self._safe_str(row.get('Address')) or self._safe_str(row.get('Street Address')) or self._safe_str(row.get('Mailing Address'))
+        if street_address:
+            address_parts.append(street_address)
+        
+        # Add city if available
+        city = self._safe_str(row.get('City'))
+        if city:
+            address_parts.append(city)
+        
+        # Add state if available
+        state = self._safe_str(row.get('State'))
+        if state:
+            address_parts.append(state)
+        
+        # Add zip if available
+        zip_code = self._safe_str(row.get('Zip'))
+        if zip_code:
+            address_parts.append(zip_code)
+        
+        addr = ', '.join([p for p in address_parts if p]) if address_parts else None
+        return addr or None
+
+    def _infer_year_from_sheet(self, raw_df: pd.DataFrame) -> str:
+        # Try to detect a 4-digit year in the first column header banner
+        try:
+            first_rows = raw_df.iloc[:5, :].astype(str).values.flatten().tolist()
+            for cell in first_rows:
+                m = re.search(r'\b(19|20)\d{2}\b', cell)
+                if m:
+                    return m.group(0)
+        except Exception:
+            pass
+        return None
+
+    def _infer_election_type_from_context(self, raw_df: pd.DataFrame, row: pd.Series) -> str:
+        # Prefer detecting from banners in the sheet; fall back to candidate info
+        try:
+            first_col = raw_df.iloc[:, 0].astype(str).str.lower()
+            if first_col.str.contains('primary', na=False).any():
+                return 'Primary'
+            if first_col.str.contains('general', na=False).any():
+                return 'General'
+        except Exception:
+            pass
+        # Fallback
+        return 'Primary'
     
     def _extract_candidate_name(self, row: pd.Series) -> str:
         """Extract candidate name from row"""
@@ -251,7 +392,7 @@ class VermontStructuralCleaner:
         expected_columns = [
             'candidate_name', 'office', 'party', 'county', 'district',
             'address', 'city', 'state', 'zip_code', 'phone', 'email',
-            'filing_date', 'election_year', 'election_type', 'address_state', 'raw_data'
+            'facebook', 'twitter', 'filing_date', 'election_year', 'election_type', 'address_state', 'raw_data'
         ]
         
         # Add missing columns with None values

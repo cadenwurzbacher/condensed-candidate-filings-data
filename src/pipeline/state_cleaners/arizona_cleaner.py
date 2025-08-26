@@ -59,16 +59,7 @@ class ArizonaCleaner:
         logger.info("Removing duplicate columns...")
         
         # Columns to remove (original versions)
-        columns_to_remove = [
-            'Office', 'Candidate Name', 'Party', 'Website', 'Facebook', 'Twitter'
-        ]
         
-        # Only remove if they exist and we have cleaned versions
-        columns_to_remove = [col for col in columns_to_remove if col in df.columns]
-        
-        if columns_to_remove:
-            df = df.drop(columns=columns_to_remove)
-            logger.info(f"Removed {len(columns_to_remove)} duplicate columns: {columns_to_remove}")
         
         return df
 
@@ -147,7 +138,7 @@ class ArizonaCleaner:
             'city',
             'zip_code',
             'filing_date',
-            'election_date',
+            'election_year',
             'facebook',
             'twitter'
         ]
@@ -222,7 +213,7 @@ class ArizonaCleaner:
             return office_str, None
         
         # Apply office and district processing
-        office_results = df['Office'].apply(process_office_district)
+        office_results = df['office'].apply(process_office_district)
         df['office'] = [result[0] for result in office_results]
         df['district'] = [result[1] for result in office_results]
         df['district'] = df['district'].astype('object')
@@ -244,7 +235,7 @@ class ArizonaCleaner:
             return cleaned
         
         # Apply name cleaning
-        df['full_name_display'] = df['Candidate Name'].apply(clean_name)
+        df['full_name_display'] = df['candidate_name'].apply(clean_name)
         
         # Parse names into components
         df = self._parse_names(df)
@@ -265,7 +256,7 @@ class ArizonaCleaner:
         
         for idx, row in df.iterrows():
             name = row['full_name_display']
-            original_name = row['Candidate Name']
+            original_name = row['candidate_name']
             
             if pd.isna(name) or not name:
                 continue
@@ -446,7 +437,7 @@ class ArizonaCleaner:
             party_lower = str(party_str).strip().lower()
             return party_mapping.get(party_lower, party_str)
         
-        df['party'] = df['Party'].apply(standardize_party)
+        df['party'] = df['party'].apply(standardize_party)
         
         return df
     
@@ -466,13 +457,13 @@ class ArizonaCleaner:
         df['address_state'] = None
         
         # Clean website
-        df['website'] = df['Website'].apply(lambda x: str(x).strip() if pd.notna(x) else None)
+# FIXED:         df.get('website', None) = df.get('website', None).apply(lambda x: str(x).strip() if pd.notna(x) else None)
         
         # Clean Facebook
-        df['facebook'] = df['Facebook'].apply(lambda x: str(x).strip() if pd.notna(x) else None)
+        df['facebook'] = df['facebook'].apply(lambda x: str(x).strip() if pd.notna(x) else None)
         
         # Clean Twitter
-        df['twitter'] = df['Twitter'].apply(lambda x: str(x).strip() if pd.notna(x) else None)
+        df['twitter'] = df['twitter'].apply(lambda x: str(x).strip() if pd.notna(x) else None)
         
         return df
     
@@ -484,16 +475,16 @@ class ArizonaCleaner:
         df['state'] = self.state_name
         
         # Add original data preservation columns
-        df['original_name'] = df['Candidate Name'].copy()
+        df['original_name'] = df['candidate_name'].copy()
         df['original_state'] = df['state'].copy()
         df['original_election_year'] = df['election_year'].copy()
-        df['original_office'] = df['Office'].copy()
+        df['original_office'] = df['office'].copy()
         df['original_filing_date'] = pd.NA  # Not available in Arizona data
         
         # Add missing columns with None values
         required_columns = [
             'id', 'stable_id', 'county', 'city', 'zip_code', 'address_state', 'filing_date', 
-            'election_date', 'prefix', 'suffix', 'nickname'
+            'election_year', 'prefix', 'suffix', 'nickname'
         ]
         
         for col in required_columns:

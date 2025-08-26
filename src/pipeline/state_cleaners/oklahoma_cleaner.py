@@ -59,16 +59,7 @@ class OklahomaCleaner:
         logger.info("Removing duplicate columns...")
         
         # Columns to remove (original versions)
-        columns_to_remove = [
-            'Office', 'Name', 'District', 'Party'
-        ]
         
-        # Only remove if they exist and we have cleaned versions
-        columns_to_remove = [col for col in columns_to_remove if col in df.columns]
-        
-        if columns_to_remove:
-            df = df.drop(columns=columns_to_remove)
-            logger.info(f"Removed {len(columns_to_remove)} duplicate columns: {columns_to_remove}")
         
         return df
 
@@ -136,18 +127,14 @@ class OklahomaCleaner:
             'website',
             'state',
             'address_state',
-            'original_name',
-            'original_state',
-            'original_election_year',
-            'original_office',
-            'original_filing_date',
+
             'id',
             'stable_id',
             'county',
             'city',
             'zip_code',
             'filing_date',
-            'election_date',
+            'election_year',
             'facebook',
             'twitter'
         ]
@@ -180,21 +167,21 @@ class OklahomaCleaner:
             
             # Handle US Representative
             if "United States Representative" in office_str:
-                return "US Representative", str(int(district_val)) if pd.notna(district_val) else None
+                return "US Representative", str(district_val) if pd.notna(district_val) else None
             
             # Handle State Senate
             if "State Senate" in office_str:
-                return "State Senate", str(int(district_val)) if pd.notna(district_val) else None
+                return "State Senate", str(district_val) if pd.notna(district_val) else None
             
             # Handle State House
             if "State House" in office_str or "State Representative" in office_str:
-                return "State House", str(int(district_val)) if pd.notna(district_val) else None
+                return "State House", str(district_val) if pd.notna(district_val) else None
             
             # Handle other offices (keep as is)
-            return office_str, str(int(district_val)) if pd.notna(district_val) else None
+            return office_str, str(district_val) if pd.notna(district_val) else None
         
         # Apply office and district processing
-        office_results = df.apply(lambda row: process_office_district(row['Office'], row['District']), axis=1)
+        office_results = df.apply(lambda row: process_office_district(row['office'], row['district']), axis=1)
         df['office'] = [result[0] for result in office_results]
         df['district'] = [result[1] for result in office_results]
         df['district'] = df['district'].astype('object')
@@ -216,7 +203,7 @@ class OklahomaCleaner:
             return cleaned
         
         # Apply name cleaning
-        df['full_name_display'] = df['Name'].apply(clean_name)
+        df['full_name_display'] = df['candidate_name'].apply(clean_name)
         
         # Parse names into components
         df = self._parse_names(df)
@@ -237,7 +224,7 @@ class OklahomaCleaner:
         
         for idx, row in df.iterrows():
             name = row['full_name_display']
-            original_name = row['Name']
+            original_name = row['candidate_name']
             
             if pd.isna(name) or not name:
                 continue
@@ -418,7 +405,7 @@ class OklahomaCleaner:
             party_lower = str(party_str).strip().lower()
             return party_mapping.get(party_lower, party_str)
         
-        df['party'] = df['Party'].apply(standardize_party)
+        df['party'] = df['party'].apply(standardize_party)
         
         return df
     
@@ -444,17 +431,12 @@ class OklahomaCleaner:
         # Add state column
         df['state'] = self.state_name
         
-        # Add original data preservation columns
-        df['original_name'] = df['Name'].copy()
-        df['original_state'] = df['state'].copy()
-        df['original_election_year'] = df['election_year'].copy()
-        df['original_office'] = df['Office'].copy()
-        df['original_filing_date'] = pd.NA  # Not available in Oklahoma data
+        # Note: original_ columns removed - not needed for final output
         
         # Add missing columns with None values
         required_columns = [
             'id', 'stable_id', 'county', 'city', 'zip_code', 'address_state', 'filing_date', 
-            'election_date', 'facebook', 'twitter', 'prefix', 'suffix', 'nickname'
+            'election_year', 'facebook', 'twitter', 'prefix', 'suffix', 'nickname'
         ]
         
         for col in required_columns:

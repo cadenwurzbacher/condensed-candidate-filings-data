@@ -59,16 +59,7 @@ class IdahoCleaner:
         logger.info("Removing duplicate columns...")
         
         # Columns to remove (original versions)
-        columns_to_remove = [
-            'Position', 'Dist.', 'Seat', 'Name', 'Party', 'District Type', 'Notes'
-        ]
         
-        # Only remove if they exist and we have cleaned versions
-        columns_to_remove = [col for col in columns_to_remove if col in df.columns]
-        
-        if columns_to_remove:
-            df = df.drop(columns=columns_to_remove)
-            logger.info(f"Removed {len(columns_to_remove)} duplicate columns: {columns_to_remove}")
         
         return df
 
@@ -147,7 +138,7 @@ class IdahoCleaner:
             'city',
             'zip_code',
             'filing_date',
-            'election_date',
+            'election_year',
             'facebook',
             'twitter'
         ]
@@ -213,7 +204,7 @@ class IdahoCleaner:
             return position_str, None
         
         # Apply office and district processing
-        office_results = df.apply(lambda row: process_office_district(row['Position'], row['Dist.'], row['Seat']), axis=1)
+        office_results = df.apply(lambda row: process_office_district(row['office'], row['district'], row['office']), axis=1)
         df['office'] = [result[0] for result in office_results]
         df['district'] = [result[1] for result in office_results]
         df['district'] = df['district'].astype('object')
@@ -235,7 +226,7 @@ class IdahoCleaner:
             return cleaned
         
         # Apply name cleaning
-        df['full_name_display'] = df['Name'].apply(clean_name)
+        df['full_name_display'] = df['candidate_name'].apply(clean_name)
         
         # Parse names into components
         df = self._parse_names(df)
@@ -256,7 +247,7 @@ class IdahoCleaner:
         
         for idx, row in df.iterrows():
             name = row['full_name_display']
-            original_name = row['Name']
+            original_name = row['candidate_name']
             
             if pd.isna(name) or not name:
                 continue
@@ -441,7 +432,7 @@ class IdahoCleaner:
             party_lower = str(party_str).strip().lower()
             return party_mapping.get(party_lower, party_str)
         
-        df['party'] = df['Party'].apply(standardize_party)
+        df['party'] = df['party'].apply(standardize_party)
         
         return df
     
@@ -467,16 +458,16 @@ class IdahoCleaner:
         df['state'] = self.state_name
         
         # Add original data preservation columns
-        df['original_name'] = df['Name'].copy()
+        df['original_name'] = df['candidate_name'].copy()
         df['original_state'] = df['state'].copy()
         df['original_election_year'] = df['election_year'].copy()
-        df['original_office'] = df['Position'].copy()
+        df['original_office'] = df['office'].copy()
         df['original_filing_date'] = pd.NA  # Not available in Idaho data
         
         # Add missing columns with None values
         required_columns = [
             'id', 'stable_id', 'county', 'city', 'zip_code', 'address_state', 'filing_date', 
-            'election_date', 'facebook', 'twitter', 'prefix', 'suffix', 'nickname'
+            'election_year', 'facebook', 'twitter', 'prefix', 'suffix', 'nickname'
         ]
         
         for col in required_columns:

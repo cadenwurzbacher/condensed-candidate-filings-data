@@ -59,17 +59,7 @@ class KansasCleaner:
         logger.info("Removing duplicate columns...")
         
         # Columns to remove (original versions)
-        columns_to_remove = [
-            'Candidate', 'Office', 'District', 'Election', 'Party', 'Home Address',
-            'Home City', 'Home Zip', 'Home Phone', 'Cell Phone', 'Email', 'Web Address', 'Date Filed'
-        ]
         
-        # Only remove if they exist and we have cleaned versions
-        columns_to_remove = [col for col in columns_to_remove if col in df.columns]
-        
-        if columns_to_remove:
-            df = df.drop(columns=columns_to_remove)
-            logger.info(f"Removed {len(columns_to_remove)} duplicate columns: {columns_to_remove}")
         
         return df
 
@@ -192,8 +182,8 @@ class KansasCleaner:
             return year, election_type
         
         # Apply election processing
-        if 'Election' in df.columns:
-            election_results = df['Election'].apply(extract_election_info)
+        if 'election_type' in df.columns:
+            election_results = df['election_type'].apply(extract_election_info)
             df['election_year'] = [result[0] for result in election_results]
             df['election_type'] = [result[1] for result in election_results]
         else:
@@ -243,8 +233,8 @@ class KansasCleaner:
         
         # Apply office and district processing
         office_results = df.apply(lambda row: process_office_district(
-            row.get('Office', ''), 
-            row.get('District', '')
+            row.get('office', ''), 
+            row.get('district', '')
         ), axis=1)
         df['office'] = [result[0] for result in office_results]
         df['district'] = [result[1] for result in office_results]
@@ -267,8 +257,8 @@ class KansasCleaner:
             return cleaned
         
         # Apply name cleaning
-        if 'Candidate' in df.columns:
-            df['full_name_display'] = df['Candidate'].apply(clean_name)
+        if 'candidate_name' in df.columns:
+            df['full_name_display'] = df['candidate_name'].apply(clean_name)
         else:
             # Fallback if no Candidate column
             df['full_name_display'] = 'Unknown'
@@ -292,7 +282,7 @@ class KansasCleaner:
         
         for idx, row in df.iterrows():
             name = row['full_name_display']
-            original_name = row.get('Candidate', '') if 'Candidate' in df.columns else ''
+            original_name = row.get('candidate_name', '') if 'candidate_name' in df.columns else ''
             
             if pd.isna(name) or not name:
                 continue
@@ -464,8 +454,8 @@ class KansasCleaner:
             party_lower = str(party_str).strip().lower()
             return party_mapping.get(party_lower, party_str)
         
-        if 'Party' in df.columns:
-            df['party'] = df['Party'].apply(standardize_party)
+        if 'party' in df.columns:
+            df['party'] = df['party'].apply(standardize_party)
         else:
             
             
@@ -524,8 +514,8 @@ class KansasCleaner:
             return None
         
         # Apply cleaning
-        if 'Home Phone' in df.columns and 'Cell Phone' in df.columns:
-            df['phone'] = df.apply(lambda row: clean_phone(row['Home Phone'], row['Cell Phone']), axis=1)
+        if 'Home Phone' in df.columns and 'phone' in df.columns:
+            df['phone'] = df.apply(lambda row: clean_phone(row['Home Phone'], row['phone']), axis=1)
         else:
             
             
@@ -533,8 +523,8 @@ class KansasCleaner:
             
             df['phone'] = pd.NA
             
-        if 'Email' in df.columns:
-            df['email'] = df['Email'].apply(clean_email)
+        if 'email' in df.columns:
+            df['email'] = df['email'].apply(clean_email)
         else:
             
             
@@ -542,8 +532,8 @@ class KansasCleaner:
             
             df['email'] = pd.NA
             
-        if 'Home Address' in df.columns and 'Home City' in df.columns and 'Home Zip' in df.columns:
-            df['address'] = df.apply(lambda row: clean_address(row['Home Address'], row['Home City'], row['Home Zip']), axis=1)
+        if 'address' in df.columns and 'city' in df.columns and 'Home Zip' in df.columns:
+            df['address'] = df.apply(lambda row: clean_address(row['address'], row['city'], row['Home Zip']), axis=1)
         else:
             
             
@@ -564,8 +554,8 @@ class KansasCleaner:
         df['address_state'] = "KS"
         
         # Extract city and zip separately for the required columns
-        if 'Home City' in df.columns:
-            df['city'] = df['Home City'].apply(lambda x: str(x).strip() if pd.notna(x) else None)
+        if 'city' in df.columns:
+            df['city'] = df['city'].apply(lambda x: str(x).strip() if pd.notna(x) else None)
         else:
             
             
@@ -595,8 +585,8 @@ class KansasCleaner:
         df['state'] = self.state_name
         
         # Add original data preservation columns
-        if 'Candidate' in df.columns:
-            df['original_name'] = df['Candidate'].copy()
+        if 'candidate_name' in df.columns:
+            df['original_name'] = df['candidate_name'].copy()
         else:
             
             
@@ -607,8 +597,8 @@ class KansasCleaner:
         df['original_state'] = df['state'].copy()
         df['original_election_year'] = df['election_year'].copy()
         
-        if 'Office' in df.columns:
-            df['original_office'] = df['Office'].copy()
+        if 'office' in df.columns:
+            df['original_office'] = df['office'].copy()
         else:
             
             
@@ -616,8 +606,8 @@ class KansasCleaner:
             
             df['original_office'] = pd.NA
             
-        if 'Date Filed' in df.columns:
-            df['original_filing_date'] = df['Date Filed'].copy()
+        if 'filing_date' in df.columns:
+            df['original_filing_date'] = df['filing_date'].copy()
         else:
             
             
@@ -638,7 +628,7 @@ class KansasCleaner:
         df['id'] = ""
         
         # Convert filing date to standard format
-        if 'Date Filed' in df.columns:
+        if 'filing_date' in df.columns:
             def parse_filing_date(date_str: str) -> str:
                 if pd.isna(date_str):
                     return None
@@ -650,7 +640,7 @@ class KansasCleaner:
                 except:
                     return str(date_str)
             
-            df['filing_date'] = df['Date Filed'].apply(parse_filing_date)
+            df['filing_date'] = df['filing_date'].apply(parse_filing_date)
         else:
             
             

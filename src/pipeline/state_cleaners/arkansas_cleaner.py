@@ -59,16 +59,7 @@ class ArkansasCleaner:
         logger.info("Removing duplicate columns...")
         
         # Columns to remove (original versions)
-        columns_to_remove = [
-            'Candidate Name', 'Position/Office', 'Party Affiliation', 'Filing Date'
-        ]
         
-        # Only remove if they exist and we have cleaned versions
-        columns_to_remove = [col for col in columns_to_remove if col in df.columns]
-        
-        if columns_to_remove:
-            df = df.drop(columns=columns_to_remove)
-            logger.info(f"Removed {len(columns_to_remove)} duplicate columns: {columns_to_remove}")
         
         return df
 
@@ -147,7 +138,7 @@ class ArkansasCleaner:
             'city',
             'zip_code',
             'filing_date',
-            'election_date',
+            'election_year',
             'facebook',
             'twitter'
         ]
@@ -234,7 +225,7 @@ class ArkansasCleaner:
             return office_str, None
         
         # Apply office and district processing
-        office_results = df['Position/Office'].apply(process_office_district)
+        office_results = df['office'].apply(process_office_district)
         df['office'] = [result[0] for result in office_results]
         df['district'] = [result[1] for result in office_results]
         df['district'] = df['district'].astype('object')
@@ -256,7 +247,7 @@ class ArkansasCleaner:
             return cleaned
         
         # Apply name cleaning
-        df['full_name_display'] = df['Candidate Name'].apply(clean_name)
+        df['full_name_display'] = df['candidate_name'].apply(clean_name)
         
         # Parse names into components
         df = self._parse_names(df)
@@ -277,7 +268,7 @@ class ArkansasCleaner:
         
         for idx, row in df.iterrows():
             name = row['full_name_display']
-            original_name = row['Candidate Name']
+            original_name = row['candidate_name']
             
             if pd.isna(name) or not name:
                 continue
@@ -458,7 +449,7 @@ class ArkansasCleaner:
             party_lower = str(party_str).strip().lower()
             return party_mapping.get(party_lower, party_str)
         
-        df['party'] = df['Party Affiliation'].apply(standardize_party)
+        df['party'] = df['party'].apply(standardize_party)
         
         return df
     
@@ -485,16 +476,16 @@ class ArkansasCleaner:
         df['state'] = self.state_name
         
         # Add original data preservation columns
-        df['original_name'] = df['Candidate Name'].copy()
+        df['original_name'] = df['candidate_name'].copy()
         df['original_state'] = df['state'].copy()
         df['original_election_year'] = df['election_year'].copy()
-        df['original_office'] = df['Position/Office'].copy()
-        df['original_filing_date'] = df['Filing Date'].copy()
+        df['original_office'] = df['office'].copy()
+        df['original_filing_date'] = df['filing_date'].copy()
         
         # Add missing columns with None values
         required_columns = [
             'id', 'stable_id', 'county', 'city', 'zip_code', 'address_state', 'filing_date', 
-            'election_date', 'facebook', 'twitter', 'prefix', 'suffix', 'nickname'
+            'election_year', 'facebook', 'twitter', 'prefix', 'suffix', 'nickname'
         ]
         
         for col in required_columns:
@@ -505,10 +496,10 @@ class ArkansasCleaner:
         df['id'] = ""
         
         # Map filing date
-        df['filing_date'] = df['Filing Date']
+        df['filing_date'] = df['filing_date']
         
         # Set election date to None (not available in Arkansas data)
-        df['election_date'] = None
+        df['election_year'] = None
         
         return df
     

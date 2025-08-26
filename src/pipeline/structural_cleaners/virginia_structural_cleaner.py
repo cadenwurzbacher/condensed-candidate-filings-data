@@ -305,7 +305,8 @@ class VirginiaStructuralCleaner:
                 return str(value).strip()
         
         return None
-def _extract_election_year(self, row: pd.Series) -> str:
+    
+    def _extract_election_year(self, row: pd.Series) -> str:
         """Extract election year from row"""
         # Try to extract from filename or default based on current context
         # For now, default to 2024 as most Virginia files are recent
@@ -316,7 +317,7 @@ def _extract_election_year(self, row: pd.Series) -> str:
         expected_columns = [
             'candidate_name', 'office', 'party', 'county', 'district',
             'address', 'city', 'state', 'zip_code', 'phone', 'email',
-            'filing_date', 'election_year', 'election_type', 'address_state', 'raw_data'
+            'facebook', 'twitter', 'filing_date', 'election_year', 'election_type', 'address_state', 'raw_data'
         ]
         
         # Add missing columns with None values

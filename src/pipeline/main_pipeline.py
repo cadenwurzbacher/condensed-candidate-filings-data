@@ -18,6 +18,7 @@ import sys
 import re
 from pathlib import Path
 import hashlib
+import json
 
 # Add current directory to Python path for imports
 current_dir = Path(__file__).parent
@@ -93,7 +94,7 @@ from .smart_staging_manager import SmartStagingManager
 from .national_standards import NationalStandards
 
 # Import database utilities
-from ..config.database import get_db_connection
+from config.database import get_db_connection
 
 # Configure logging
 # Create logs directory if it doesn't exist
@@ -223,6 +224,20 @@ class MainPipeline:
         
         # Initialize processors
         self.db_manager = get_db_connection()
+        
+        # Test database connection
+        if self.db_manager.connect():
+            logger.info("✅ Database connection established successfully")
+            # Test if we can query the database
+            try:
+                test_result = self.db_manager.execute_query("SELECT COUNT(*) FROM information_schema.tables WHERE table_name IN ('filings', 'staging_candidates')")
+                logger.info(f"Database test query successful: {test_result}")
+            except Exception as e:
+                logger.warning(f"Database test query failed: {e}")
+                logger.warning("Pipeline will run without database connectivity")
+        else:
+            logger.warning("❌ Database connection failed - pipeline will run without database connectivity")
+        
         self.office_standardizer = OfficeStandardizer()
         self.smart_staging_manager = SmartStagingManager(self.db_manager)
         self.national_standards = NationalStandards()
@@ -237,6 +252,45 @@ class MainPipeline:
         
         # Clean up old processed files before starting
         self._cleanup_old_files()
+    
+    def test_database_connection(self) -> bool:
+        """Test database connection and basic functionality."""
+        try:
+            if not self.db_manager:
+                logger.error("No database manager available")
+                return False
+            
+            # Test basic connection
+            if not self.db_manager.test_connection():
+                logger.error("Database connection test failed")
+                return False
+            
+            # Test if we can query the tables
+            try:
+                # Check if tables exist
+                tables_query = "SELECT table_name FROM information_schema.tables WHERE table_name IN ('filings', 'staging_candidates')"
+                tables_result = self.db_manager.execute_query(tables_query)
+                logger.info(f"Available tables: {tables_result['table_name'].tolist() if not tables_result.empty else 'None'}")
+                
+                # Try to get a sample of data from each table
+                if not tables_result.empty:
+                    for table_name in tables_result['table_name']:
+                        try:
+                            sample_query = f"SELECT COUNT(*) as count FROM {table_name} LIMIT 1"
+                            sample_result = self.db_manager.execute_query(sample_query)
+                            logger.info(f"Table {table_name}: {sample_result.iloc[0]['count'] if not sample_result.empty else 'No data'}")
+                        except Exception as e:
+                            logger.warning(f"Could not query table {table_name}: {e}")
+                
+                return True
+                
+            except Exception as e:
+                logger.error(f"Database query test failed: {e}")
+                return False
+                
+        except Exception as e:
+            logger.error(f"Database connection test failed: {e}")
+            return False
     
     def run_pipeline(self) -> pd.DataFrame:
         """
@@ -265,8 +319,8 @@ class MainPipeline:
         logger.info("Phase 4: Applying national standards")
         combined_data = self._apply_national_standards(cleaned_data)
         
-        if combined_data:
-            final_data = pd.concat(combined_data, ignore_index=True)
+        if not combined_data.empty:
+            final_data = combined_data  # combined_data is already a DataFrame
             logger.info(f"Combined data: {len(final_data)} records")
         else:
             final_data = pd.DataFrame()
@@ -279,9 +333,8 @@ class MainPipeline:
         # Add processing metadata
         final_data = self._add_processing_metadata(final_data)
         
-        # Smart staging decision
-        logger.info("Phase 5.5: Smart staging analysis and decision")
-        staging_decision = self._make_smart_staging_decision(final_data)
+        # Skip staging - just save final output
+        logger.info("Phase 5.5: Skipping staging - saving final output only")
         
         # Save final output to final directory
         if not final_data.empty:
@@ -290,12 +343,13 @@ class MainPipeline:
             
             # Save new final file
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            output_file = os.path.join(self.final_dir, f"candidate_filings_{timestamp}.xlsx")
+            output_file = os.path.join(self.final_dir, f"candidate_filings_FINAL_{timestamp}.xlsx")
             final_data.to_excel(output_file, index=False)
             logger.info(f"✅ Final output saved to: {output_file}")
+            logger.info(f"📊 Final dataset: {len(final_data)} records")
+            logger.info(f"📋 Final columns: {list(final_data.columns)}")
         
-        logger.info(f"Pipeline complete. Final dataset: {len(final_data)} records")
-        logger.info(f"Staging decision: {staging_decision.get('recommendation', 'unknown')}")
+        logger.info("Pipeline complete! (Staging skipped)")
         return final_data
     
     def _run_structural_cleaners(self) -> Dict[str, pd.DataFrame]:
@@ -340,58 +394,59 @@ class MainPipeline:
         return all_data
     
     def _add_stable_ids_to_dataframe(self, df: pd.DataFrame, state: str) -> pd.DataFrame:
-        """Add stable IDs to a single state's dataframe"""
+        """Add stable IDs to a single state's dataframe (dates will be set in Phase 5)"""
         df = df.copy()
+        
+        # Filter out records with missing critical data BEFORE stable ID generation
+        logger.info(f"Filtering records with missing critical data for {state}...")
+        initial_count = len(df)
+        
+        # Remove records with null/empty candidate_name, office, or election_year
+        df = df.dropna(subset=['candidate_name', 'office', 'election_year'])
+        
+        # Also remove records with empty strings
+        df = df[
+            (df['candidate_name'].str.strip() != '') & 
+            (df['office'].str.strip() != '') & 
+            (df['election_year'].notna())  # election_year is numeric, just check if not null
+        ]
+        
+        filtered_count = len(df)
+        removed_count = initial_count - filtered_count
+        
+        if removed_count > 0:
+            logger.warning(f"Removed {removed_count} records with missing critical data in {state}")
+            logger.info(f"Proceeding with {filtered_count} valid records for stable ID generation")
+        
+        if df.empty:
+            logger.warning(f"No valid records remaining for {state} after filtering")
+            # Return empty DataFrame with required columns
+            df['stable_id'] = []
+            df['first_added_date'] = []
+            df['last_updated_date'] = []
+            df['action_type'] = []
+            return df
         
         # Generate stable IDs based on core candidate data
         stable_ids = []
-        first_ingestion_dates = []
-        first_added_dates = []
-        last_updated_dates = []
-        
-        # Get current timestamp for new candidates
-        current_timestamp = datetime.now()
         
         for idx, row in df.iterrows():
             try:
                 # Create stable ID from core fields (before any cleaning)
-                stable_id, first_ingestion_date = self._generate_stable_id(row, state)
+                stable_id, _ = self._generate_stable_id(row, state)
                 stable_ids.append(stable_id)
-                first_ingestion_dates.append(first_ingestion_date)
-                
-                # Check if this candidate already exists in the database
-                existing_candidate = self._check_existing_candidate(stable_id)
-                
-                if existing_candidate:
-                    # Candidate exists - use existing first_added_date, keep existing last_updated_date
-                    # (we'll update this later if data actually changes)
-                    first_added_dates.append(existing_candidate.get('first_added_date', current_timestamp))
-                    last_updated_dates.append(existing_candidate.get('last_updated_date', current_timestamp))
-                    logger.debug(f"Existing candidate {stable_id} - preserving dates")
-                else:
-                    # New candidate - set both dates to now
-                    first_added_dates.append(current_timestamp)
-                    last_updated_dates.append(current_timestamp)
-                    logger.debug(f"New candidate {stable_id} - setting first_added_date to now")
                     
             except Exception as e:
                 logger.warning(f"Failed to generate ID for row {idx} in {state}: {e}")
                 stable_ids.append(None)
-                first_ingestion_dates.append(None)
-                first_added_dates.append(None)
-                last_updated_dates.append(None)
         
-        # Add ID columns
+        # Add stable_id column
         df['stable_id'] = stable_ids
-        df['first_ingestion_date'] = first_ingestion_dates
-        df['first_added_date'] = first_added_dates
-        df['last_updated_date'] = last_updated_dates
         
-        # Add action_type column (will be populated later in staging logic)
-        df['action_type'] = 'INSERT'  # Default, will be updated based on data comparison
-        
-        # Now detect data changes and update action_type and last_updated_date accordingly
-        df = self._detect_and_update_changes(df)
+        # Add placeholder columns (will be populated in Phase 5)
+        df['first_added_date'] = None
+        df['last_updated_date'] = None
+        df['action_type'] = 'INSERT'  # Default, will be updated in Phase 5
         
         return df
     
@@ -399,9 +454,19 @@ class MainPipeline:
         """Generate a stable ID for a candidate record"""
         # Use core fields for ID generation (before any cleaning/standardization)
         # Structural cleaners output 'candidate_name' column
-        candidate_name = str(row.get('candidate_name', ''))
-        office = str(row.get('office', ''))
-        election_year = str(row.get('election_year', ''))
+        candidate_name = str(row.get('candidate_name', '')).strip()
+        office = str(row.get('office', '')).strip()
+        election_year = str(row.get('election_year', '')).strip()
+        
+        # Validate that we have the minimum required data
+        if not candidate_name or candidate_name.lower() in ['nan', 'none', 'null', '']:
+            raise ValueError(f"Invalid candidate_name: '{candidate_name}'")
+        
+        if not office or office.lower() in ['nan', 'none', 'null', '']:
+            raise ValueError(f"Invalid office: '{office}'")
+            
+        if not election_year or election_year.lower() in ['nan', 'none', 'null', '']:
+            raise ValueError(f"Invalid election_year: '{election_year}'")
         
         # Create deterministic hash
         key = f"{candidate_name}|{state}|{office}|{election_year}"
@@ -420,7 +485,7 @@ class MainPipeline:
     
     def _detect_and_update_changes(self, df: pd.DataFrame) -> pd.DataFrame:
         """
-        Detect data changes and update action_type and last_updated_date accordingly
+        Detect data changes using data_hash for fast comparison
         
         Args:
             df: DataFrame with stable_ids and existing data
@@ -428,48 +493,78 @@ class MainPipeline:
         Returns:
             DataFrame with updated action_type and last_updated_date
         """
-        logger.info("Detecting data changes and setting action types...")
+        logger.info("Detecting data changes using data_hash for fast comparison...")
         
         if df.empty or 'stable_id' not in df.columns:
             logger.warning("No stable_id column found, skipping change detection")
             return df
         
-        # Get existing production data for comparison
-        existing_data = self._get_existing_production_data()
+        # 1. Generate data_hash for current pipeline data (ALL columns automatically)
+        logger.info("Generating data_hash for pipeline records...")
+        df['data_hash'] = df.apply(self._generate_row_hash, axis=1)
+        
+        # 2. Get existing data from DB (with their data_hash)
+        existing_data = self._get_existing_production_data_with_hash()
         
         if existing_data.empty:
             logger.info("No existing production data found - all records will be INSERT")
             df['action_type'] = 'INSERT'
             return df
         
-        # Compare each record with existing data
-        for idx, row in df.iterrows():
-            stable_id = row.get('stable_id')
-            if not stable_id:
-                continue
-                
-            # Check if this ID exists in production
-            existing_record = existing_data[existing_data['stable_id'] == stable_id]
-            
-            if existing_record.empty:
-                # New record - INSERT
-                df.loc[idx, 'action_type'] = 'INSERT'
-                df.loc[idx, 'last_updated_date'] = datetime.now()
-            else:
-                # Existing record - check if data changed
-                if self._has_data_changed(row, existing_record.iloc[0]):
-                    # Data changed - UPDATE
-                    df.loc[idx, 'action_type'] = 'UPDATE'
-                    df.loc[idx, 'last_updated_date'] = datetime.now()
-                else:
-                    # No changes - keep existing last_updated_date
-                    df.loc[idx, 'action_type'] = 'NO_CHANGE'
+        logger.info(f"Found {len(existing_data)} existing production records for comparison")
         
-        # Log action type summary
-        action_counts = df['action_type'].value_counts()
+        # 3. Merge on stable_id to compare hashes efficiently
+        logger.info("Merging pipeline data with existing data for comparison...")
+        merged_df = df.merge(
+            existing_data[['stable_id', 'data_hash']], 
+            on='stable_id', 
+            how='left', 
+            suffixes=('_pipeline', '_db')
+        )
+        
+        # 4. Set action types based on hash comparison
+        logger.info("Setting action types based on hash comparison...")
+        merged_df['action_type'] = 'INSERT'  # Default for new records
+        
+        # For existing records, compare hashes to detect changes
+        existing_mask = merged_df['data_hash_db'].notna()
+        merged_df.loc[existing_mask, 'action_type'] = (
+            merged_df.loc[existing_mask, 'data_hash_pipeline'] != 
+            merged_df.loc[existing_mask, 'data_hash_db']
+        ).map({True: 'UPDATE', False: 'NO_CHANGE'})
+        
+        # 5. Update last_updated_date for changed records
+        current_time = datetime.now()
+        merged_df.loc[merged_df['action_type'] == 'INSERT', 'last_updated_date'] = current_time
+        merged_df.loc[merged_df['action_type'] == 'UPDATE', 'last_updated_date'] = current_time
+        
+        # 6. Log action type summary
+        action_counts = merged_df['action_type'].value_counts()
         logger.info(f"Action type summary: {action_counts.to_dict()}")
         
-        return df
+        return merged_df
+    
+    def _generate_row_hash(self, row):
+        """Generate hash from candidate data columns (excluding system metadata)"""
+        # Exclude system metadata columns that shouldn't affect data comparison
+        exclude_columns = [
+            'data_hash',           # The hash itself
+            'first_added_date',    # System metadata - changes every run
+            'last_updated_date',   # System metadata - changes every run
+            'action_type',         # Pipeline processing flag
+            'processing_timestamp', # Pipeline metadata
+            'pipeline_version',    # Pipeline metadata
+            'data_source'          # Pipeline metadata
+        ]
+        
+        # Get only candidate data columns
+        columns_to_hash = [col for col in row.index if col not in exclude_columns]
+        
+        # Get all values and create hash string
+        all_values = [str(row[col]) for col in columns_to_hash]
+        data_string = '|'.join(all_values)
+        
+        return hashlib.md5(data_string.encode()).hexdigest()[:16]
     
     def _get_existing_production_data(self) -> pd.DataFrame:
         """Get existing production data for comparison"""
@@ -494,6 +589,95 @@ class MainPipeline:
         except Exception as e:
             logger.error(f"Failed to get existing production data: {e}")
             return pd.DataFrame()
+    
+    def _get_existing_production_data_with_hash(self) -> pd.DataFrame:
+        """Get existing production data with data_hash for comparison"""
+        try:
+            if not self.db_manager:
+                return pd.DataFrame()
+            
+            # Check if data_hash column exists in the filings table
+            check_hash_query = """
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name = 'filings' AND column_name = 'data_hash'
+            """
+            hash_check = self.db_manager.execute_query(check_hash_query)
+            
+            if hash_check.empty:
+                logger.info("data_hash column doesn't exist in filings table - creating it...")
+                # Create data_hash column and populate it
+                self._create_and_populate_data_hash_column()
+            
+            # Get minimal columns needed for comparison (including data_hash)
+            query = """
+            SELECT stable_id, data_hash
+            FROM filings
+            WHERE stable_id IS NOT NULL
+            """
+            
+            result = self.db_manager.execute_query(query)
+            logger.info(f"Retrieved {len(result)} existing production records with data_hash for comparison")
+            return result
+            
+        except Exception as e:
+            logger.error(f"Failed to get existing production data with hash: {e}")
+            return pd.DataFrame()
+    
+    def _create_and_populate_data_hash_column(self):
+        """Create data_hash column and populate it for existing records"""
+        try:
+            logger.info("Creating data_hash column in filings table...")
+            
+            # Add data_hash column
+            add_column_query = """
+            ALTER TABLE filings 
+            ADD COLUMN IF NOT EXISTS data_hash VARCHAR(32)
+            """
+            self.db_manager.execute_query(add_column_query)
+            
+            # Update existing records with data_hash
+            logger.info("Populating data_hash for existing records...")
+            update_query = """
+            UPDATE filings 
+            SET data_hash = MD5(
+                CONCAT_WS('|',
+                    COALESCE(election_year::text, ''),
+                    COALESCE(election_type, ''),
+                    COALESCE(office, ''),
+                    COALESCE(district, ''),
+                    COALESCE(full_name_display, ''),
+                    COALESCE(first_name, ''),
+                    COALESCE(middle_name, ''),
+                    COALESCE(last_name, ''),
+                    COALESCE(prefix, ''),
+                    COALESCE(suffix, ''),
+                    COALESCE(nickname, ''),
+                    COALESCE(party, ''),
+                    COALESCE(phone, ''),
+                    COALESCE(email, ''),
+                    COALESCE(address, ''),
+                    COALESCE(website, ''),
+                    COALESCE(state, ''),
+                    COALESCE(county, ''),
+                    COALESCE(city, ''),
+                    COALESCE(zip_code, ''),
+                    COALESCE(address_state, ''),
+                    COALESCE(filing_date::text, ''),
+                    COALESCE(election_date::text, ''),
+                    COALESCE(facebook, ''),
+                    COALESCE(twitter, '')
+                    -- EXCLUDED: first_added_date, last_updated_date (system metadata)
+                )
+            )::text
+            WHERE data_hash IS NULL
+            """
+            self.db_manager.execute_query(update_query)
+            
+            logger.info("✅ data_hash column created and populated successfully")
+            
+        except Exception as e:
+            logger.error(f"Failed to create and populate data_hash column: {e}")
     
     def _has_data_changed(self, new_record: pd.Series, existing_record: pd.Series) -> bool:
         """
@@ -616,7 +800,13 @@ class MainPipeline:
                 logger.warning("No data to process")
                 return pd.DataFrame()
             
-            combined_df = pd.concat(all_records, ignore_index=True)
+            # Ensure unique columns across all frames before concatenation
+            deduped_records = []
+            for df in all_records:
+                if df is not None and hasattr(df, 'columns'):
+                    df = df.loc[:, ~df.columns.duplicated()]
+                    deduped_records.append(df)
+            combined_df = pd.concat(deduped_records, ignore_index=True)
             logger.info(f"Combined data: {len(combined_df)} records")
             
             # Apply national standards using the dedicated module
@@ -729,15 +919,268 @@ class MainPipeline:
         """Phase 5: Final processing and output preparation"""
         logger.info("Running final processing")
         
-        # Ensure required columns exist
-        required_columns = ['stable_id', 'candidate_name', 'state', 'office', 'election_year']
-        for col in required_columns:
+        # Ensure core columns exist
+        core_columns = [
+            'stable_id', 'full_name_display', 'state', 'office', 'election_year',
+            'address', 'city', 'zip_code', 'address_state', 'raw_data'
+        ]
+        for col in core_columns:
             if col not in df.columns:
-                logger.warning(f"Missing required column: {col}")
                 df[col] = None
         
-        # Sort by state, office, candidate name
-        df = df.sort_values(['state', 'office', 'candidate_name']).reset_index(drop=True)
+        # Prefer full_name_display and drop candidate_name in final output
+        if 'full_name_display' not in df.columns or df['full_name_display'].isna().all():
+            if 'candidate_name' in df.columns:
+                df['full_name_display'] = df['candidate_name']
+        else:
+            if 'candidate_name' in df.columns:
+                # If full_name_display is null but candidate_name has value, fill forward
+                df['full_name_display'] = df['full_name_display'].fillna(df['candidate_name'])
+
+        # Normalize raw_data to JSON strings or None
+        try:
+            if 'raw_data' not in df.columns:
+                df['raw_data'] = None
+            else:
+                def _to_json_safe(value):
+                    if value is None or (isinstance(value, float) and pd.isna(value)):
+                        return None
+                    if isinstance(value, str):
+                        return value
+                    try:
+                        return json.dumps(value, default=str)
+                    except Exception:
+                        return None
+                df['raw_data'] = df['raw_data'].apply(_to_json_safe)
+        except Exception as e:
+            logger.warning(f"raw_data normalization failed: {e}")
+
+        # Comprehensive address parsing: extract ZIP, city, state and keep only street address
+        try:
+            import re
+            
+            def _parse_address_comprehensive(addr, existing_zip, existing_city, existing_state):
+                """Parse address to extract ZIP, city, state and return clean street address"""
+                if not isinstance(addr, str) or not addr.strip():
+                    return existing_zip, existing_city, existing_state, addr
+                
+                addr = addr.strip()
+                original_addr = addr
+                
+                # Extract ZIP code first (most reliable pattern)
+                # But avoid PO Box numbers which are not ZIP codes
+                zip_pattern = re.compile(r'\b\d{5}(?:-\d{4})?\b')
+                zip_match = zip_pattern.search(addr)
+                extracted_zip = None
+                if zip_match:
+                    zip_code = zip_match.group(0)
+                    # Check if this is part of a PO Box (don't extract PO Box numbers as ZIP)
+                    if not re.search(r'\bPO\s+BOX\s*' + re.escape(zip_code), addr, re.IGNORECASE):
+                        extracted_zip = zip_code
+                        # Remove ZIP from address
+                        addr = zip_pattern.sub('', addr).strip().rstrip(',')
+                
+                # Extract state (2-letter codes or full names)
+                state_patterns = [
+                    # 2-letter state codes (avoid common abbreviations like ST, RD, DR, etc.)
+                    r',\s*([A-Z]{2})\s*,?\s*$',  # State at end with optional comma
+                    r',\s*([A-Z]{2})\s*$',       # State at end
+                    r'\s+([A-Z]{2})\s+\d{5}',   # State before ZIP
+                    r'\b([A-Z]{2})\b'            # Any 2-letter code (more aggressive)
+                ]
+                
+                extracted_state = None
+                for pattern in state_patterns:
+                    state_match = re.search(pattern, addr)
+                    if state_match:
+                        state_code = state_match.group(1)
+                        # Filter out common non-state abbreviations
+                        non_state_abbrevs = {'ST', 'RD', 'DR', 'LN', 'CT', 'BL', 'APT', 'STE', 'UNIT', 'PO', 'BOX', 'AVE', 'WAY', 'PL', 'CR', 'CRT', 'CIR', 'HWY', 'US', 'SR', 'CO', 'INC', 'LLC', 'LTD', 'CORP'}
+                        if state_code not in non_state_abbrevs:
+                            extracted_state = state_code
+                            # Remove state from address
+                            addr = re.sub(pattern, '', addr).strip().rstrip(',')
+                            break
+                
+                # Extract city and clean up address format
+                extracted_city = None
+                if ',' in addr:
+                    parts = [p.strip() for p in addr.split(',') if p.strip()]
+                    if len(parts) >= 2:
+                        # Handle different address formats
+                        if len(parts) == 2:
+                            # "Street, City" format
+                            extracted_city = parts[1]
+                            # Keep only street address
+                            addr = parts[0]
+                        elif len(parts) >= 3:
+                            # "Street, City, State" format - city is middle part
+                            # But first check if the last part is actually a state code
+                            last_part = parts[-1].strip()
+                            if re.match(r'^[A-Z]{2}$', last_part):
+                                # Last part is state, second-to-last is city
+                                extracted_city = parts[-2]
+                                # Keep street address (everything before city)
+                                addr = ','.join(parts[:-2])
+                            else:
+                                # Last part is not state, so city is last part
+                                extracted_city = parts[-1]
+                                # Keep street address (everything before city)
+                                addr = ','.join(parts[:-1])
+                        else:
+                            # Only 2 parts, treat as "Street, City"
+                            extracted_city = parts[1]
+                            addr = parts[0]
+                
+                # Clean up the street address
+                addr = addr.strip().rstrip(',')
+                
+                # Special handling for Alaska format: "Street City, State"
+                # If we didn't extract a city but the address contains a city name
+                if not extracted_city and extracted_state:
+                    # Look for common Alaska city names in the address
+                    alaska_cities = ['Anchorage', 'Ketchikan', 'Fairbanks', 'Juneau', 'Sitka', 'Kodiak', 'Palmer', 'Wasilla', 'Kenai', 'Soldotna']
+                    for city in alaska_cities:
+                        if city.lower() in addr.lower():
+                            extracted_city = city
+                            # Remove city from street address
+                            addr = addr.replace(city, '').strip().rstrip(',')
+                            break
+                
+                # Use extracted values if existing ones are empty
+                final_zip = extracted_zip if extracted_zip and (not existing_zip or str(existing_zip).strip() == '') else existing_zip
+                final_city = extracted_city if extracted_city and (not existing_city or str(existing_city).strip() == '') else existing_city
+                final_state = extracted_state if extracted_state and (not existing_state or str(existing_state).strip() == '') else existing_state
+                
+                return final_zip, final_city, final_state, addr
+            
+            # Apply comprehensive address parsing
+            address_results = df.apply(
+                lambda r: _parse_address_comprehensive(
+                    r.get('address'), 
+                    r.get('zip_code'), 
+                    r.get('city'), 
+                    r.get('address_state')
+                ), 
+                axis=1, 
+                result_type='expand'
+            )
+            
+            # Update columns with parsed results
+            df['zip_code'] = address_results[0]
+            df['city'] = address_results[1] 
+            df['address_state'] = address_results[2]
+            df['address'] = address_results[3]
+            
+        except Exception as e:
+            logger.warning(f"Comprehensive address parsing failed: {e}")
+            # Fallback to basic ZIP extraction
+            try:
+                zip_pattern = re.compile(r'\b\d{5}(?:-\d{4})?\b')
+                def _extract_zip_fallback(addr, existing_zip):
+                    if pd.notna(existing_zip) and str(existing_zip).strip() != "":
+                        return existing_zip, addr
+                    if isinstance(addr, str):
+                        m = zip_pattern.search(addr)
+                        if m:
+                            zipc = m.group(0)
+                            street = zip_pattern.sub("", addr).strip().rstrip(',')
+                            return zipc, street
+                    return existing_zip, addr
+                zips_streets = df.apply(lambda r: _extract_zip_fallback(r.get('address'), r.get('zip_code')), axis=1, result_type='expand')
+                df['zip_code'] = zips_streets[0]
+                df['address'] = zips_streets[1]
+            except Exception as e2:
+                logger.warning(f"Fallback ZIP extraction also failed: {e2}")
+
+        # Enhanced address_state normalization and backfill
+        try:
+            state_to_usps = {
+                'Alabama':'AL','Alaska':'AK','Arizona':'AZ','Arkansas':'AR','California':'CA','Colorado':'CO','Connecticut':'CT','Delaware':'DE','Florida':'FL','Georgia':'GA','Hawaii':'HI','Idaho':'ID','Illinois':'IL','Indiana':'IN','Iowa':'IA','Kansas':'KS','Kentucky':'KY','Louisiana':'LA','Maine':'ME','Maryland':'MD','Massachusetts':'MA','Michigan':'MI','Minnesota':'MN','Mississippi':'MS','Missouri':'MO','Montana':'MT','Nebraska':'NE','Nevada':'NV','New Hampshire':'NH','New Jersey':'NJ','New Mexico':'NM','New York':'NY','North Carolina':'NC','North Dakota':'ND','Ohio':'OH','Oklahoma':'OK','Oregon':'OR','Pennsylvania':'PA','Rhode Island':'RI','South Carolina':'SC','South Dakota':'SD','Tennessee':'TN','Texas':'TX','Utah':'UT','Vermont':'VT','Virginia':'VA','Washington':'WA','West Virginia':'WV','Wisconsin':'WI','Wyoming':'WY',
+                'District of Columbia':'DC'
+            }
+            
+            def _normalize_address_state(addr_state_val):
+                """Normalize address_state to 2-letter USPS codes"""
+                if pd.isna(addr_state_val) or not str(addr_state_val).strip():
+                    return None
+                
+                addr_state_str = str(addr_state_val).strip().upper()
+                
+                # If it's already a 2-letter code, validate it
+                if len(addr_state_str) == 2:
+                    # Check if it's a valid USPS code
+                    if addr_state_str in state_to_usps.values():
+                        return addr_state_str
+                    # Check if it's a valid state code in reverse mapping
+                    if addr_state_str in [v for v in state_to_usps.values()]:
+                        return addr_state_str
+                
+                # Try to map full state names to USPS codes
+                if addr_state_str in state_to_usps:
+                    return state_to_usps[addr_state_str]
+                
+                # Try case-insensitive matching
+                for state_name, usps_code in state_to_usps.items():
+                    if addr_state_str.upper() == state_name.upper():
+                        return usps_code
+                
+                # If we can't normalize it, return None
+                return None
+            
+            # Normalize existing address_state values
+            df['address_state'] = df['address_state'].apply(_normalize_address_state)
+            
+            # Backfill missing address_state from state column
+            def _fill_addr_state(row):
+                current = row.get('address_state')
+                if current is not None:
+                    return current
+                
+                # Try to get from state column
+                s = row.get('state')
+                if isinstance(s, str) and s.strip():
+                    s_clean = s.strip()
+                    if s_clean in state_to_usps:
+                        return state_to_usps[s_clean]
+                    # Try case-insensitive matching
+                    for state_name, usps_code in state_to_usps.items():
+                        if s_clean.upper() == state_name.upper():
+                            return usps_code
+                
+                return None
+            
+            df['address_state'] = df.apply(_fill_addr_state, axis=1)
+            
+        except Exception as e:
+            logger.warning(f"Enhanced address_state normalization failed: {e}")
+
+        # Backfill missing stable_id deterministically from core fields
+        try:
+            def _gen_stable(row):
+                if isinstance(row.get('stable_id'), str) and row.get('stable_id').strip():
+                    return row.get('stable_id')
+                key_parts = [
+                    str(row.get('full_name_display') or ''),
+                    str(row.get('state') or ''),
+                    str(row.get('election_year') or ''),
+                    str(row.get('office') or '')
+                ]
+                key = '|'.join(key_parts)
+                return hashlib.md5(key.encode()).hexdigest()[:12]
+            df['stable_id'] = df.apply(_gen_stable, axis=1)
+        except Exception as e:
+            logger.warning(f"stable_id backfill failed: {e}")
+
+        # Sort by state, office, full_name_display
+        df = df.sort_values(['state', 'office', 'full_name_display']).reset_index(drop=True)
+
+        # Drop candidate_name from final output if present
+        if 'candidate_name' in df.columns:
+            try:
+                df = df.drop(columns=['candidate_name'])
+            except Exception:
+                pass
         
         # Final logging
         logger.info(f"Final dataset: {len(df)} records")
@@ -1170,12 +1613,10 @@ class MainPipeline:
             logger.error(f"Address parsing failed: {e}")
             # Continue with original data
         
-        # Other national standardizations
-        try:
-            df = self._apply_national_standards(df)
-        except Exception as e:
-            logger.error(f"National standards application failed: {e}")
-            # Continue with original data
+        # Other national standardizations - this method is for a different phase
+        # The _apply_national_standards method expects a dict of state DataFrames
+        # but here we have a single combined DataFrame, so we skip it
+        logger.info("Skipping _apply_national_standards (designed for different phase)")
         
         # Save nationally standardized data
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -1933,15 +2374,35 @@ class MainPipeline:
             pipeline_state['national_standardization_completed'] = True
             logger.info("✅ National standardization completed")
             
-            # Step 4: Deduplication
+            # Step 4: Deduplication (load data and dedupe in memory)
             logger.info("=== STEP 4: Deduplication ===")
-            final_file = self.run_deduplication(nationally_standardized_file)
-            if not final_file:
-                logger.error("Deduplication failed")
+            try:
+                # Load the nationally standardized data
+                df = pd.read_excel(nationally_standardized_file)
+                if df is None or df.empty:
+                    logger.error("Nationally standardized file is empty or could not be loaded")
+                    return False
+                
+                # Remove exact duplicates in memory
+                original_count = len(df)
+                df_deduped = df.drop_duplicates()
+                final_count = len(df_deduped)
+                duplicates_removed = original_count - final_count
+                
+                logger.info(f"Removed {duplicates_removed} duplicate records")
+                logger.info("✅ Deduplication completed")
+                
+                # Save deduplicated data
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                final_file = os.path.join(self.final_dir, f"candidate_filings_{timestamp}.xlsx")
+                df_deduped.to_excel(final_file, index=False)
+                logger.info(f"✅ Deduplicated data saved to: {final_file}")
+                
+                pipeline_state['deduplication_completed'] = True
+                
+            except Exception as e:
+                logger.error(f"Deduplication failed: {e}")
                 return False
-            
-            pipeline_state['deduplication_completed'] = True
-            logger.info("✅ Deduplication completed")
             
             # Step 5: Data audit
             logger.info("=== STEP 5: Data Audit ===")
@@ -2128,7 +2589,7 @@ class MainPipeline:
             LIMIT 1
             """
             
-            result = self.db_manager.execute_query(query, (stable_id,))
+            result = self.db_manager.execute_query(query, {'stable_id': stable_id})
             
             if not result.empty:
                 row = result.iloc[0]
@@ -2237,6 +2698,27 @@ class MainPipeline:
                 'error': str(e)
             }
     
+    def recreate_staging_table(self) -> bool:
+        """Recreate the staging table with the updated schema."""
+        try:
+            if not self.db_manager:
+                logger.warning("No database connection for staging")
+                return False
+            
+            logger.info("🔄 Recreating staging table with updated schema...")
+            success = self.db_manager.recreate_staging_table()
+            
+            if success:
+                logger.info("✅ Staging table recreated successfully")
+            else:
+                logger.error("❌ Failed to recreate staging table")
+            
+            return success
+            
+        except Exception as e:
+            logger.error(f"Failed to recreate staging table: {e}")
+            return False
+    
     def _save_to_staging(self, data: pd.DataFrame, status: str):
         """Save data to staging table with metadata"""
         try:
@@ -2244,14 +2726,66 @@ class MainPipeline:
                 logger.warning("No database connection for staging")
                 return
             
-            # Add staging metadata
-            data['staging_timestamp'] = datetime.now()
-            data['staging_status'] = status
-            data['pipeline_run_id'] = datetime.now().strftime("%Y%m%d_%H%M%S")
+            # Define staging table columns (exact match to filings table + staging action columns)
+            staging_columns = [
+                'stable_id', 'election_year', 'election_type', 'office', 'district', 
+                'full_name_display', 'first_name', 'middle_name', 'last_name', 'prefix', 
+                'suffix', 'nickname', 'party', 'phone', 'email', 'address', 'website', 
+                'state', 'county', 'city', 'zip_code', 'address_state', 'filing_date', 
+                'election_date', 'facebook', 'twitter', 'processing_timestamp', 
+                'pipeline_version', 'data_source', 'first_added_date', 'last_updated_date', 
+                'data_hash', 'staging_action', 'staging_timestamp', 'staging_reason', 
+                'quality_score', 'promotion_status', 'review_timestamp', 'review_reason', 
+                'error_timestamp', 'error_message'
+            ]
+            
+            # Filter data to only include staging table columns
+            staging_data = data.copy()
+            
+            # Add missing columns with None values
+            for col in staging_columns:
+                if col not in staging_data.columns:
+                    staging_data[col] = None
+            
+            # Keep only staging table columns
+            staging_data = staging_data[staging_columns]
+            
+            # Verify staging table schema before upload
+            if not self.db_manager.table_exists('staging_candidates'):
+                logger.warning("Staging table doesn't exist - creating it...")
+                if not self.db_manager._create_staging_table():
+                    logger.error("Failed to create staging table")
+                    return
+            
+            # Set staging action metadata
+            staging_data['staging_action'] = status
+            staging_data['staging_timestamp'] = datetime.now()
+            
+            # Set staging reason based on status
+            if status == 'auto_promoted':
+                staging_data['staging_reason'] = 'Data quality passed thresholds for auto-promotion'
+            elif status == 'pending_review':
+                staging_data['staging_reason'] = 'Data quality requires manual review'
+            elif status == 'error_fallback':
+                staging_data['staging_reason'] = 'Pipeline error occurred, manual review required'
+            
+            # Ensure all staging metadata columns exist with proper values
+            if 'quality_score' not in staging_data.columns:
+                staging_data['quality_score'] = None
+            if 'promotion_status' not in staging_data.columns:
+                staging_data['promotion_status'] = status
+            if 'review_timestamp' not in staging_data.columns:
+                staging_data['review_timestamp'] = None
+            if 'review_reason' not in staging_data.columns:
+                staging_data['review_reason'] = None
+            if 'error_timestamp' not in staging_data.columns:
+                staging_data['error_timestamp'] = None
+            if 'error_message' not in staging_data.columns:
+                staging_data['error_message'] = None
             
             # Save to staging table
             success = self.db_manager.upload_dataframe(
-                data, 'staging_candidates', if_exists='replace', index=False
+                staging_data, 'staging_candidates', if_exists='append', index=False
             )
             
             if success:
@@ -2267,9 +2801,10 @@ def main():
     pipeline = MainPipeline()
     
     # Run the full pipeline
-    success = pipeline.run_full_pipeline()
+    success = pipeline.run_pipeline()
     
-    if success:
+    # success may be a DataFrame; check explicitly
+    if success is not None and getattr(success, 'empty', False) is False:
         print("\n✅ Pipeline completed successfully!")
         print("Check the logs and output files for details.")
     else:

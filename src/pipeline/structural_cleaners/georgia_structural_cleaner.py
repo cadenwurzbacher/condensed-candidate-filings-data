@@ -338,7 +338,7 @@ class GeorgiaStructuralCleaner:
         expected_columns = [
             'candidate_name', 'office', 'party', 'county', 'district',
             'address', 'city', 'state', 'zip_code', 'phone', 'email',
-            'filing_date', 'election_year', 'election_type', 'address_state', 'raw_data'
+            'facebook', 'twitter', 'filing_date', 'election_year', 'election_type', 'address_state', 'raw_data'
         ]
         
         # Add missing columns with None values

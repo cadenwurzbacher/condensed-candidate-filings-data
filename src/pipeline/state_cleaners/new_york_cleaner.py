@@ -76,20 +76,7 @@ class NewYorkCleaner:
         logger.info("Removing duplicate columns...")
         
         # Columns to remove (original versions) - New York 1982-2024 (after renaming)
-        columns_to_remove = [
-            'Election', 'Office', 'Name', 'Party', 'Email', 'Website', 'Phone Number',
-            'Filer Type', 'Compliance Type', 'Committee Type', 'Filer ID', 'District', 'County',
-            'Address_Date', 'Filing_Date', 'Termination Date', 'Status', 'Candidate Name',
-            'Election Year', 'Candidate Office', 'Candidate District', 'Purpose Type',
-            'Candidate_Filing_Date', 'Candidate Termination Date'
-        ]
         
-        # Only remove if they exist and we have cleaned versions
-        columns_to_remove = [col for col in columns_to_remove if col in df.columns]
-        
-        if columns_to_remove:
-            df = df.drop(columns=columns_to_remove)
-            logger.info(f"Removed {len(columns_to_remove)} duplicate columns: {columns_to_remove}")
         
         return df
 
@@ -169,7 +156,7 @@ class NewYorkCleaner:
             return year, election_type
         
         # Check if Election Year column exists, if not try to extract from filename
-        election_col = 'Election Year' if 'Election Year' in df.columns else 'Election'
+        election_col = 'Election Year' if 'Election Year' in df.columns else 'election_type'
         if election_col not in df.columns:
             if filename:
                 # Extract year from filename (e.g., "new_york_candidates_2024.csv" -> 2024)
@@ -200,9 +187,9 @@ class NewYorkCleaner:
         logger.info("Processing office and district information...")
 
         # Choose best available columns
-        office_source_col = 'Office' if 'Office' in df.columns else None
+        office_source_col = 'office' if 'office' in df.columns else None
         candidate_office_col = 'Candidate Office' if 'Candidate Office' in df.columns else None
-        district_source_col = 'District' if 'District' in df.columns else None
+        district_source_col = 'district' if 'district' in df.columns else None
         candidate_district_col = 'Candidate District' if 'Candidate District' in df.columns else None
 
         def _looks_numeric(value: object) -> bool:
@@ -293,7 +280,7 @@ class NewYorkCleaner:
             return cleaned
         
         # Apply name cleaning with office context
-        df['full_name_display'] = df.apply(lambda row: clean_name(row['Name'], row['Office']), axis=1)
+        df['full_name_display'] = df.apply(lambda row: clean_name(row['candidate_name'], row['office']), axis=1)
         
         # Parse names into components
         df = self._parse_names(df)
@@ -315,7 +302,7 @@ class NewYorkCleaner:
         for idx, row in df.iterrows():
             name = row['full_name_display']
             office = row['office']
-            original_name = row['Name']
+            original_name = row['candidate_name']
             
             if pd.isna(name) or not name:
                 continue
@@ -506,8 +493,8 @@ class NewYorkCleaner:
         # Handle different party column names - New York doesn't have party data
         if 'Office Political Party' in df.columns:
             df['party'] = df['Office Political Party'].apply(standardize_party)
-        elif 'Party' in df.columns:
-            df['party'] = df['Party'].apply(standardize_party)
+        elif 'party' in df.columns:
+            df['party'] = df['party'].apply(standardize_party)
         else:
             # New York doesn't have party data, set to None
             df['party'] = pd.NA
@@ -578,9 +565,9 @@ class NewYorkCleaner:
         df['website'] = pd.NA
         
         # Parse address to extract components
-        # Now using the renamed 'Address' column (was 'Municipality')
-        if 'Address' in df.columns:
-            df['address'] = df['Address'].apply(clean_address)
+        # Now using the renamed 'address' column (was 'Municipality')
+        if 'address' in df.columns:
+            df['address'] = df['address'].apply(clean_address)
             
             # Parse city, zip_code, and address_state from Address field
             def parse_address_components(address_str: str) -> Tuple[Optional[str], Optional[str], Optional[str]]:
@@ -624,7 +611,7 @@ class NewYorkCleaner:
 
                 return None, None, None
             
-            address_results = df['Address'].apply(parse_address_components)
+            address_results = df['address'].apply(parse_address_components)
             df['city'] = [result[0] for result in address_results]
             df['zip_code'] = [result[1] for result in address_results]
             df['address_state'] = [result[2] for result in address_results]
@@ -660,18 +647,18 @@ class NewYorkCleaner:
         
         # Add original data preservation columns
         # Prefer Name, fallback to Candidate Name for original_name
-        if 'Name' in df.columns and 'Candidate Name' in df.columns:
-            df['original_name'] = df['Name']
-            df['original_name'] = df['original_name'].fillna(df['Candidate Name'])
-        elif 'Name' in df.columns:
-            df['original_name'] = df['Name'].copy()
-        elif 'Candidate Name' in df.columns:
-            df['original_name'] = df['Candidate Name'].copy()
+        if 'candidate_name' in df.columns and 'candidate_name' in df.columns:
+            df['original_name'] = df['candidate_name']
+            df['original_name'] = df['original_name'].fillna(df['candidate_name'])
+        elif 'candidate_name' in df.columns:
+            df['original_name'] = df['candidate_name'].copy()
+        elif 'candidate_name' in df.columns:
+            df['original_name'] = df['candidate_name'].copy()
         else:
             df['original_name'] = pd.NA
         df['original_state'] = df['state'].copy()
         df['original_election_year'] = df['election_year'].copy()
-        df['original_office'] = df['Office'].copy()
+        df['original_office'] = df['office'].copy()
         # Map filing date from New York data
         if 'Filing_Date' in df.columns:
             def parse_filing_date(filing_str: str) -> str:
@@ -831,12 +818,12 @@ def clean_new_york_candidates(input_file: str, output_dir: str = DEFAULT_OUTPUT_
         df = pd.read_csv(input_file, low_memory=False)
         
         # Fix column names for New York CSV (columns are misaligned)
-        # The 'Address' column actually contains dates, 'Municipality' contains addresses
+        # The 'address' column actually contains dates, 'Municipality' contains addresses
         # Rename columns to be more intuitive
         column_mapping = {
-            'Municipality': 'Address',  # Municipality contains the real addresses
-            'Address': 'Address_Date',  # Address column contains dates (misleading name)
-            'Registration Date': 'Filing_Date',  # More descriptive name
+            'Municipality': 'address',  # Municipality contains the real addresses
+            'address': 'Address_Date',  # Address column contains dates (misleading name)
+            'filing_date': 'Filing_Date',  # More descriptive name
             'Candidate Registration Date': 'Candidate_Filing_Date'  # More descriptive name
         }
         
@@ -848,7 +835,7 @@ def clean_new_york_candidates(input_file: str, output_dir: str = DEFAULT_OUTPUT_
         df = pd.read_excel(input_file)
     
     # Initialize cleaner with output directory
-    cleaner = NewYorkCleaner(output_dir=output_dir)
+    cleaner = New_YorkCleaner(output_dir=output_dir)
     
     # Clean the data
     cleaned_df = cleaner.clean_new_york_data(df)

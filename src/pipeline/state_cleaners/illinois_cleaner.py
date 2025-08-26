@@ -59,16 +59,7 @@ class IllinoisCleaner:
         logger.info("Removing duplicate columns...")
         
         # Columns to remove (original versions) - only remove if they exist
-        columns_to_remove = [
-            'Election', 'Office', 'Name', 'Party', 'Date Filed', 'Email', 'Website'
-        ]
         
-        # Only remove if they exist and we have cleaned versions
-        columns_to_remove = [col for col in columns_to_remove if col in df.columns]
-        
-        if columns_to_remove:
-            df = df.drop(columns=columns_to_remove)
-            logger.info(f"Removed {len(columns_to_remove)} duplicate columns: {columns_to_remove}")
         
         return df
 
@@ -150,7 +141,7 @@ class IllinoisCleaner:
             'city',
             'zip_code',
             'filing_date',
-            'election_date',
+            'election_year',
             'facebook',
             'twitter'
         ]
@@ -194,7 +185,7 @@ class IllinoisCleaner:
             return year, election_type
         
         # Apply election processing
-        election_results = df['Election'].apply(extract_election_info)
+        election_results = df['election_type'].apply(extract_election_info)
         df['election_year'] = [result[0] for result in election_results]
         df['election_type'] = [result[1] for result in election_results]
         
@@ -246,7 +237,7 @@ class IllinoisCleaner:
             return office_str, None
         
         # Apply office and district processing
-        office_results = df['Office'].apply(process_office_district)
+        office_results = df['office'].apply(process_office_district)
         df['office'] = [result[0] for result in office_results]
         df['district'] = [result[1] for result in office_results]
         df['district'] = df['district'].astype('object')
@@ -297,7 +288,7 @@ class IllinoisCleaner:
             return cleaned
         
         # Apply name cleaning with office context
-        df['full_name_display'] = df.apply(lambda row: clean_name(row['Name'], row['Office']), axis=1)
+        df['full_name_display'] = df.apply(lambda row: clean_name(row['candidate_name'], row['office']), axis=1)
         
         # Parse names into components
         df = self._parse_names(df)
@@ -319,7 +310,7 @@ class IllinoisCleaner:
         for idx, row in df.iterrows():
             name = row['full_name_display']
             office = row['office']
-            original_name = row['Name']
+            original_name = row['candidate_name']
             
             if pd.isna(name) or not name:
                 continue
@@ -566,7 +557,7 @@ class IllinoisCleaner:
             # Return original if no match found
             return party_str_clean
         
-        df['party'] = df['Party'].apply(standardize_party)
+        df['party'] = df['party'].apply(standardize_party)
         
         return df
     
@@ -615,8 +606,8 @@ class IllinoisCleaner:
             return cleaned
         
         # Apply cleaning - handle missing columns for Illinois data
-        if 'Phone Number' in df.columns:
-            df['phone'] = df['Phone Number'].apply(clean_phone)
+        if 'phone' in df.columns:
+            df['phone'] = df['phone'].apply(clean_phone)
         else:
             
             
@@ -624,10 +615,10 @@ class IllinoisCleaner:
             
             df['phone'] = pd.NA
             
-        df['email'] = df['Email'].apply(clean_email)
+        df['email'] = df['email'].apply(clean_email)
         
-        if 'Address' in df.columns:
-            df['address'] = df['Address'].apply(clean_address)
+        if 'address' in df.columns:
+            df['address'] = df['address'].apply(clean_address)
         else:
             
             
@@ -635,7 +626,7 @@ class IllinoisCleaner:
             
             df['address'] = pd.NA
             
-        df['website'] = df['Website'].apply(lambda x: str(x).strip() if pd.notna(x) else None)
+# FIXED:         df.get('website', None) = df.get('website', None).apply(lambda x: str(x).strip() if pd.notna(x) else None)
         
         # Derive address_state from address text if present (IL data may include it)
         def extract_state_from_address(addr: Optional[str]) -> Optional[str]:
@@ -652,7 +643,7 @@ class IllinoisCleaner:
         """Parse filing dates from Illinois Date Filed column."""
         logger.info("Parsing filing dates...")
         
-        if 'Date Filed' in df.columns:
+        if 'filing_date' in df.columns:
             def parse_filing_date(date_str):
                 if pd.isna(date_str):
                     return None
@@ -672,7 +663,7 @@ class IllinoisCleaner:
                 except:
                     return None
             
-            df['filing_date'] = df['Date Filed'].apply(parse_filing_date)
+            df['filing_date'] = df['filing_date'].apply(parse_filing_date)
         else:
             
             
@@ -690,14 +681,14 @@ class IllinoisCleaner:
         df['state'] = self.state_name
         
         # Add original data preservation columns
-        df['original_name'] = df['Name'].copy()
+        df['original_name'] = df['candidate_name'].copy()
         df['original_state'] = df['state'].copy()
         df['original_election_year'] = df['election_year'].copy()
-        df['original_office'] = df['Office'].copy()
+        df['original_office'] = df['office'].copy()
         
         # Handle filing date from Illinois data
-        if 'Date Filed' in df.columns:
-            df['original_filing_date'] = df['Date Filed'].copy()
+        if 'filing_date' in df.columns:
+            df['original_filing_date'] = df['filing_date'].copy()
         else:
             
             
@@ -708,7 +699,7 @@ class IllinoisCleaner:
         # Add missing columns with None values
         required_columns = [
             'id', 'stable_id', 'county', 'city', 'zip_code', 'address_state', 'filing_date', 
-            'election_date', 'facebook', 'twitter', 'prefix', 'suffix', 'nickname'
+            'election_year', 'facebook', 'twitter', 'prefix', 'suffix', 'nickname'
         ]
         
         for col in required_columns:

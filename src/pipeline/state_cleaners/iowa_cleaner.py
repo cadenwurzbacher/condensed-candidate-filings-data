@@ -51,12 +51,12 @@ class IowaCleaner:
         
         # Step 1: Fill in blank office cells by forward-filling from row above
         logger.info("Filling in blank office cells...")
-        df['Office'] = df['Office'].ffill()
+        df['office'] = df['office'].ffill()
         
         # Step 2: Filter out rows where candidate name is "No Candidate"
         logger.info("Filtering out 'No Candidate' rows...")
         initial_count = len(df)
-        df = df[~df['Ballot Name(s)'].str.contains('No Candidate', na=False)]
+        df = df[~df['candidate_name'].str.contains('No Candidate', na=False)]
         filtered_count = len(df)
         logger.info(f"Filtered out {initial_count - filtered_count} 'No Candidate' rows")
         
@@ -127,7 +127,7 @@ class IowaCleaner:
         logger.info("Processing election data...")
         
         # Check if Election column exists, if not try to extract from filename
-        if 'Election' not in df.columns:
+        if 'election_type' not in df.columns:
             if filename:
                 # Extract year from filename (e.g., "iowa_candidates_2024.xlsx" -> 2024)
                 year_match = re.search(r'(\d{4})', filename)
@@ -174,7 +174,7 @@ class IowaCleaner:
             return year, election_type
         
         # Apply election processing
-        election_results = df['Election'].apply(extract_election_info)
+        election_results = df['election_type'].apply(extract_election_info)
         df['election_year'] = [result[0] for result in election_results]
         df['election_type'] = [result[1] for result in election_results]
         
@@ -218,7 +218,7 @@ class IowaCleaner:
             return office_str, None
         
         # Apply office and district processing
-        office_results = df['Office'].apply(process_office_district)
+        office_results = df['office'].apply(process_office_district)
         df['office'] = [result[0] for result in office_results]
         df['district'] = [result[1] for result in office_results]
         df['district'] = df['district'].astype('object')
@@ -261,8 +261,8 @@ class IowaCleaner:
             return cleaned
         
         # Apply name cleaning with office context - handle different column names
-        name_col = 'Ballot Name(s)' if 'Ballot Name(s)' in df.columns else 'Name'
-        df['full_name_display'] = df.apply(lambda row: clean_name(row[name_col], row['Office']), axis=1)
+        name_col = 'candidate_name' if 'candidate_name' in df.columns else 'candidate_name'
+        df['full_name_display'] = df.apply(lambda row: clean_name(row[name_col], row['office']), axis=1)
         
         # Parse names into components
         df = self._parse_names(df)
@@ -284,7 +284,7 @@ class IowaCleaner:
         for idx, row in df.iterrows():
             name = row['full_name_display']
             office = row['office']
-            name_col = 'Ballot Name(s)' if 'Ballot Name(s)' in df.columns else 'Name'
+            name_col = 'candidate_name' if 'candidate_name' in df.columns else 'candidate_name'
             original_name = row[name_col]
             
             if pd.isna(name) or not name:
@@ -452,7 +452,7 @@ class IowaCleaner:
             party_lower = str(party_str).strip().lower()
             return party_mapping.get(party_lower, party_str)
         
-        df['party'] = df['Party'].apply(standardize_party)
+        df['party'] = df['party'].apply(standardize_party)
         
         return df
     
@@ -486,30 +486,151 @@ class IowaCleaner:
             
             return None
         
-        # Clean addresses
+        # Enhanced address parsing and cleaning for Iowa
         def clean_address(address_str: str) -> str:
             if pd.isna(address_str):
                 return None
             
             cleaned = str(address_str).strip().strip('"\'')
             cleaned = re.sub(r'\s+', ' ', cleaned)
-            return cleaned
+            
+            # Extract and remove ZIP codes from address
+            zip_pattern = re.compile(r'\b\d{5}(?:-\d{4})?\b')
+            zip_match = zip_pattern.search(cleaned)
+            if zip_match:
+                zip_code = zip_match.group(0)
+                # Don't extract PO Box numbers as ZIP codes
+                if not re.search(r'\bPO\s+BOX\s*' + re.escape(zip_code), cleaned, re.IGNORECASE):
+                    # Remove ZIP from address
+                    cleaned = zip_pattern.sub('', cleaned).strip().rstrip(',')
+            
+            # Extract and remove state abbreviations
+            state_patterns = [
+                r',\s*([A-Z]{2})\s*,?\s*$',  # State at end with optional comma
+                r',\s*([A-Z]{2})\s*$',       # State at end
+                r'\s+([A-Z]{2})\s+\d{5}',   # State before ZIP
+                r'\b([A-Z]{2})\b'            # Any 2-letter code (more aggressive)
+            ]
+            
+            for pattern in state_patterns:
+                state_match = re.search(pattern, cleaned)
+                if state_match:
+                    state_code = state_match.group(1)
+                    # Filter out common non-state abbreviations
+                    non_state_abbrevs = {'ST', 'RD', 'DR', 'LN', 'CT', 'BL', 'APT', 'STE', 'UNIT', 'PO', 'BOX', 'AVE', 'WAY', 'PL', 'CR', 'CRT', 'CIR', 'HWY', 'US', 'SR', 'CO', 'INC', 'LLC', 'LTD', 'CORP'}
+                    if state_code not in non_state_abbrevs:
+                        # Remove state from address
+                        cleaned = re.sub(pattern, '', cleaned).strip().rstrip(',')
+                        break
+            
+            # Extract city (everything between street and state/ZIP)
+            if ',' in cleaned:
+                parts = [p.strip() for p in cleaned.split(',') if p.strip()]
+                if len(parts) >= 2:
+                    if len(parts) == 2:
+                        # "Street, City" format
+                        cleaned = parts[0]
+                    elif len(parts) >= 3:
+                        # "Street, City, State" format - city is middle part
+                        last_part = parts[-1].strip()
+                        if re.match(r'^[A-Z]{2}$', last_part):
+                            # Last part is state, second-to-last is city
+                            cleaned = ','.join(parts[:-2])
+                        else:
+                            # Last part is not state, so city is last part
+                            cleaned = ','.join(parts[:-1])
+                    else:
+                        # Only 2 parts, treat as "Street, City"
+                        cleaned = parts[0]
+            
+            return cleaned.strip().rstrip(',')
         
         # Apply cleaning - handle different column names
-        phone_col = 'Phone' if 'Phone' in df.columns else 'Phone Number'
+        phone_col = 'phone' if 'phone' in df.columns else 'phone'
         df['phone'] = df[phone_col].apply(clean_phone)
-        df['email'] = df['Email'].apply(clean_email)
-        df['address'] = df['Address'].apply(clean_address)
+        df['email'] = df['email'].apply(clean_email)
+        df['address'] = df['address'].apply(clean_address)
         # Iowa doesn't have Website column - set to None
         df['website'] = None
         
-        # Extract address_state from Address if present
+        # Enhanced ZIP code and city extraction from address
+        def extract_zip_from_address(addr):
+            if pd.isna(addr) or not isinstance(addr, str):
+                return None
+            
+            zip_pattern = re.compile(r'\b\d{5}(?:-\d{4})?\b')
+            zip_match = zip_pattern.search(addr)
+            if zip_match:
+                zip_code = zip_match.group(0)
+                # Don't extract PO Box numbers as ZIP codes
+                if not re.search(r'\bPO\s+BOX\s*' + re.escape(zip_code), addr, re.IGNORECASE):
+                    return zip_code
+            return None
+        
+        # Extract ZIP codes from address if not already present
+        if 'zip_code' not in df.columns:
+            df['zip_code'] = df['address'].apply(extract_zip_from_address)
+        else:
+            # Update existing zip_code with extracted values if empty
+            df['zip_code'] = df.apply(lambda row: extract_zip_from_address(row.get('address')) if pd.isna(row.get('zip_code')) or str(row.get('zip_code')).strip() == '' else row.get('zip_code'), axis=1)
+        
+        # Extract cities from address
+        def extract_city_from_address(addr):
+            if pd.isna(addr) or not isinstance(addr, str):
+                return None
+            
+            # Look for city in comma-separated format
+            if ',' in addr:
+                parts = [p.strip() for p in addr.split(',') if p.strip()]
+                if len(parts) >= 2:
+                    if len(parts) == 2:
+                        # "Street, City" format
+                        return parts[1]
+                    elif len(parts) >= 3:
+                        # "Street, City, State" format - city is middle part
+                        last_part = parts[-1].strip()
+                        if re.match(r'^[A-Z]{2}$', last_part):
+                            # Last part is state, second-to-last is city
+                            return parts[-2]
+                        else:
+                            # Last part is not state, so city is last part
+                            return parts[-1]
+            return None
+        
+        # Extract cities from address if not already present
+        if 'city' not in df.columns:
+            df['city'] = df['address'].apply(extract_city_from_address)
+        else:
+            # Update existing city with extracted values if empty
+            df['city'] = df.apply(lambda row: extract_city_from_address(row.get('address')) if pd.isna(row.get('city')) or str(row.get('city')).strip() == '' else row.get('city'), axis=1)
+        
+        # Enhanced address_state extraction from address
         def extract_state(addr: Optional[str]) -> Optional[str]:
             if addr is None or pd.isna(addr):
                 return None
             s = str(addr)
+            
+            # Look for state codes in address
+            state_patterns = [
+                r',\s*([A-Z]{2})\s*,?\s*$',  # State at end with optional comma
+                r',\s*([A-Z]{2})\s*$',       # State at end
+                r'\s+([A-Z]{2})\s+\d{5}',   # State before ZIP
+                r'\b([A-Z]{2})\b'            # Any 2-letter code (more aggressive)
+            ]
+            
+            for pattern in state_patterns:
+                state_match = re.search(pattern, s)
+                if state_match:
+                    state_code = state_match.group(1)
+                    # Filter out common non-state abbreviations
+                    non_state_abbrevs = {'ST', 'RD', 'DR', 'LN', 'CT', 'BL', 'APT', 'STE', 'UNIT', 'PO', 'BOX', 'AVE', 'WAY', 'PL', 'CR', 'CRT', 'CIR', 'HWY', 'US', 'SR', 'CO', 'INC', 'LLC', 'LTD', 'CORP'}
+                    if state_code not in non_state_abbrevs:
+                        return state_code
+            
+            # Fallback to original pattern
             m = re.search(r"\b([A-Z]{2})\s+\d{5}(?:-\d{4})?\b", s)
             return m.group(1) if m else None
+        
         df['address_state'] = df['address'].apply(extract_state)
         
         return df
@@ -522,11 +643,11 @@ class IowaCleaner:
         df['state'] = self.state_name
         
         # Add original data preservation columns
-        # Iowa has 'Ballot Name(s)' instead of 'Name'
-        if 'Name' in df.columns:
-            df['original_name'] = df['Name'].copy()
-        elif 'Ballot Name(s)' in df.columns:
-            df['original_name'] = df['Ballot Name(s)'].copy()
+        # Iowa has 'candidate_name' instead of 'candidate_name'
+        if 'candidate_name' in df.columns:
+            df['original_name'] = df['candidate_name'].copy()
+        elif 'candidate_name' in df.columns:
+            df['original_name'] = df['candidate_name'].copy()
         else:
             
             
@@ -535,11 +656,11 @@ class IowaCleaner:
             df['original_name'] = 'Unknown'
         df['original_state'] = df['state'].copy()
         df['original_election_year'] = df['election_year'].copy()
-        df['original_office'] = df['Office'].copy()
+        df['original_office'] = df['office'].copy()
         # Map Filing Date to filing_date
-        if 'Filing Date' in df.columns:
-            df['original_filing_date'] = df['Filing Date'].copy()
-            df['filing_date'] = df['Filing Date'].copy()
+        if 'filing_date' in df.columns:
+            df['original_filing_date'] = df['filing_date'].copy()
+            df['filing_date'] = df['filing_date'].copy()
         else:
             df['original_filing_date'] = pd.NA
             df['filing_date'] = pd.NA
@@ -563,15 +684,7 @@ class IowaCleaner:
         """Remove original columns that have been replaced by cleaned versions."""
         logger.info("Removing duplicate columns...")
         
-        columns_to_remove = [
-            'Election', 'Office', 'Name', 'Party', 'Address', 'Email', 'Website', 'Phone'
-        ]
         
-        columns_to_remove = [col for col in columns_to_remove if col in df.columns]
-        
-        if columns_to_remove:
-            df = df.drop(columns=columns_to_remove)
-            logger.info(f"Removed {len(columns_to_remove)} duplicate columns: {columns_to_remove}")
         
         return df
 

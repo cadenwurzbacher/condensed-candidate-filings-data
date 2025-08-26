@@ -59,18 +59,7 @@ class LouisianaCleaner:
         logger.info("Removing duplicate columns...")
         
         # Columns to remove (original versions)
-        columns_to_remove = [
-            'Election', 'OfficeTitle', 'OfficeTitleDescription', 'BallotFirstName', 
-            'BallotLastName', 'BallotSuffix', 'Party', 'Address', 'Phone', 
-            'Email Address', 'City', 'State', 'Zip', 'Filed Date'
-        ]
         
-        # Only remove if they exist and we have cleaned versions
-        columns_to_remove = [col for col in columns_to_remove if col in df.columns]
-        
-        if columns_to_remove:
-            df = df.drop(columns=columns_to_remove)
-            logger.info(f"Removed {len(columns_to_remove)} duplicate columns: {columns_to_remove}")
         
         return df
 
@@ -149,7 +138,7 @@ class LouisianaCleaner:
             'city',
             'zip_code',
             'filing_date',
-            'election_date',
+            'election_year',
             'facebook',
             'twitter'
         ]
@@ -198,7 +187,7 @@ class LouisianaCleaner:
             return year, election_type
         
         # Apply election processing
-        election_results = df['Election'].apply(extract_election_info)
+        election_results = df['election_type'].apply(extract_election_info)
         df['election_year'] = [result[0] for result in election_results]
         df['election_type'] = [result[1] for result in election_results]
         
@@ -253,7 +242,7 @@ class LouisianaCleaner:
             return office_str, None
         
         # Apply office and district processing
-        office_results = df.apply(lambda row: process_office_district(row['OfficeTitle'], row['OfficeTitleDescription']), axis=1)
+        office_results = df.apply(lambda row: process_office_district(row['office'], row['office']), axis=1)
         df['office'] = [result[0] for result in office_results]
         df['district'] = [result[1] for result in office_results]
         df['district'] = df['district'].astype('object')
@@ -284,7 +273,7 @@ class LouisianaCleaner:
             return ' '.join(name_parts).strip()
         
         # Apply name cleaning
-        df['full_name_display'] = df.apply(lambda row: clean_name(row['BallotFirstName'], row['BallotLastName'], row['BallotSuffix']), axis=1)
+        df['full_name_display'] = df.apply(lambda row: clean_name(row['candidate_name'], row['candidate_name'], None), axis=1)
         
         # Parse names into components
         df = self._parse_names(df)
@@ -304,9 +293,9 @@ class LouisianaCleaner:
         df['nickname'] = pd.NA
         
         for idx, row in df.iterrows():
-            first_name = row['BallotFirstName']
-            last_name = row['BallotLastName']
-            suffix = row['BallotSuffix']
+            first_name = row['candidate_name']
+            last_name = row['candidate_name']
+            suffix = None  # Suffix is already included in candidate_name from structural cleaner
             
             # Extract first name
             if pd.notna(first_name):
@@ -377,7 +366,7 @@ class LouisianaCleaner:
             party_lower = str(party_str).strip().lower()
             return party_mapping.get(party_lower, party_str)
         
-        df['party'] = df['Party'].apply(standardize_party)
+        df['party'] = df['party'].apply(standardize_party)
         
         return df
     
@@ -426,9 +415,15 @@ class LouisianaCleaner:
             return cleaned
         
         # Apply cleaning
-        df['phone'] = df['Phone'].apply(clean_phone)
-        df['email'] = df['Email Address'].apply(clean_email)
-        df['address'] = df['Address'].apply(clean_address)
+        df['phone'] = df['phone'].apply(clean_phone)
+        # Email column name may vary; default to None when missing
+        if 'Email Address' in df.columns:
+            df['email'] = df['Email Address'].apply(clean_email)
+        elif 'email' in df.columns:
+            df['email'] = df['email'].apply(clean_email)
+        else:
+            df['email'] = None
+        df['address'] = df['address'].apply(clean_address)
         df['website'] = pd.NA  # Not available in Louisiana data
         
         # Derive address_state from explicit State column when present, else from address
@@ -452,17 +447,10 @@ class LouisianaCleaner:
         # Add state column
         df['state'] = self.state_name
         
-        # Add original data preservation columns
-        df['original_name'] = df.apply(lambda row: f"{row['BallotFirstName']} {row['BallotLastName']}".strip(), axis=1)
-        df['original_state'] = df['state'].copy()
-        df['original_election_year'] = df['election_year'].copy()
-        df['original_office'] = df['OfficeTitle'].copy()
-        df['original_filing_date'] = df['Filed Date'].copy()
-        
         # Add missing columns with None values
         required_columns = [
             'id', 'stable_id', 'county', 'city', 'zip_code', 'address_state', 'filing_date', 
-            'election_date', 'facebook', 'twitter', 'prefix', 'suffix', 'nickname',
+            'election_year', 'facebook', 'twitter', 'prefix', 'suffix', 'nickname',
             'website', 'middle_name'
         ]
         
@@ -473,15 +461,20 @@ class LouisianaCleaner:
         # Set id to empty string (will be generated later in process)
         df['id'] = ""
         
-        # Map city and zip_code from original data
-        df['city'] = df['City'].copy()
-        df['zip_code'] = df['Zip'].copy()
+        # Map city and zip_code from original data if columns exist
+        if 'City' in df.columns:
+            df['city'] = df['City'].copy()
+        if 'zip_code' in df.columns:
+            df['zip_code'] = df['zip_code'].copy()
         
-        # Map filing_date from original data
-        df['filing_date'] = df['Filed Date'].copy()
+        # Map filing_date from original data if column exists
+        if 'Filed Date' in df.columns:
+            df['filing_date'] = df['Filed Date'].copy()
+        elif 'filing_date' in df.columns:
+            df['filing_date'] = df['filing_date'].copy()
         
         # Set election_date to election year (approximate)
-        df['election_date'] = df['election_year'].apply(lambda x: f"{x}-12-31" if pd.notna(x) else None)
+        df['election_year'] = df['election_year'].apply(lambda x: f"{x}-12-31" if pd.notna(x) else None)
         
         return df
     

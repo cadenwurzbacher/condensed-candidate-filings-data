@@ -59,18 +59,7 @@ class WashingtonCleaner:
         logger.info("Removing duplicate columns...")
         
         # Columns to remove (original versions)
-        columns_to_remove = [
-            'district_type', 'race', 'term_type', 'term_length', 'name',
-            'mailing_address', 'email', 'phone', 'party_preference',
-            'status', 'election_status', 'ballot_order', 'election'
-        ]
         
-        # Only remove if they exist and we have cleaned versions
-        columns_to_remove = [col for col in columns_to_remove if col in df.columns]
-        
-        if columns_to_remove:
-            df = df.drop(columns=columns_to_remove)
-            logger.info(f"Removed {len(columns_to_remove)} duplicate columns: {columns_to_remove}")
         
         return df
 
@@ -149,7 +138,7 @@ class WashingtonCleaner:
             'city',
             'zip_code',
             'filing_date',
-            'election_date',
+            'election_year',
             'facebook',
             'twitter'
         ]
@@ -197,7 +186,7 @@ class WashingtonCleaner:
             return year, election_type
         
         # Apply election processing
-        election_results = df['election'].apply(extract_election_info)
+        election_results = df['election_type'].apply(extract_election_info)
         df['election_year'] = [result[0] for result in election_results]
         df['election_type'] = [result[1] for result in election_results]
         
@@ -259,7 +248,7 @@ class WashingtonCleaner:
             return race_str, district_str if district_str else None
         
         # Apply office and district processing
-        office_results = df.apply(lambda row: process_office_district(row['race'], row['district'], row['district_type']), axis=1)
+        office_results = df.apply(lambda row: process_office_district(row['office'], row['district'], row['district']), axis=1)
         df['office'] = [result[0] for result in office_results]
         df['district'] = [result[1] for result in office_results]
         df['district'] = df['district'].astype('object')
@@ -281,7 +270,7 @@ class WashingtonCleaner:
             return cleaned
         
         # Apply name cleaning
-        df['full_name_display'] = df['name'].apply(clean_name)
+        df['full_name_display'] = df['candidate_name'].apply(clean_name)
         
         # Parse names into components
         df = self._parse_names(df)
@@ -302,7 +291,7 @@ class WashingtonCleaner:
         
         for idx, row in df.iterrows():
             name = row['full_name_display']
-            original_name = row['name']
+            original_name = row['candidate_name']
             
             if pd.isna(name) or not name:
                 continue
@@ -488,7 +477,7 @@ class WashingtonCleaner:
             party_lower = str(party_str).strip().lower()
             return party_mapping.get(party_lower, party_str)
         
-        df['party'] = df['party_preference'].apply(standardize_party)
+        df['party'] = df['party'].apply(standardize_party)
         
         return df
     
@@ -525,7 +514,7 @@ class WashingtonCleaner:
             
             return None
         
-        # Clean addresses
+        # Enhanced address parsing and cleaning for Washington format: "Street, City, State, ZIP"
         def clean_address(address_str: str) -> str:
             if pd.isna(address_str):
                 return None
@@ -534,12 +523,62 @@ class WashingtonCleaner:
             cleaned = str(address_str).strip().strip('"\'')
             # Remove multiple spaces
             cleaned = re.sub(r'\s+', ' ', cleaned)
-            return cleaned
+            
+            # Extract and remove ZIP codes from address
+            zip_pattern = re.compile(r'\b\d{5}(?:-\d{4})?\b')
+            zip_match = zip_pattern.search(cleaned)
+            if zip_match:
+                zip_code = zip_match.group(0)
+                # Don't extract PO Box numbers as ZIP codes
+                if not re.search(r'\bPO\s+BOX\s*' + re.escape(zip_code), cleaned, re.IGNORECASE):
+                    # Remove ZIP from address
+                    cleaned = zip_pattern.sub('', cleaned).strip().rstrip(',')
+            
+            # Extract and remove state abbreviations
+            state_patterns = [
+                r',\s*([A-Z]{2})\s*,?\s*$',  # State at end with optional comma
+                r',\s*([A-Z]{2})\s*$',       # State at end
+                r'\s+([A-Z]{2})\s+\d{5}',   # State before ZIP
+                r'\b([A-Z]{2})\b'            # Any 2-letter code (more aggressive)
+            ]
+            
+            for pattern in state_patterns:
+                state_match = re.search(pattern, cleaned)
+                if state_match:
+                    state_code = state_match.group(1)
+                    # Filter out common non-state abbreviations
+                    non_state_abbrevs = {'ST', 'RD', 'DR', 'LN', 'CT', 'BL', 'APT', 'STE', 'UNIT', 'PO', 'BOX', 'AVE', 'WAY', 'PL', 'CR', 'CRT', 'CIR', 'HWY', 'US', 'SR', 'CO', 'INC', 'LLC', 'LTD', 'CORP'}
+                    if state_code not in non_state_abbrevs:
+                        # Remove state from address
+                        cleaned = re.sub(pattern, '', cleaned).strip().rstrip(',')
+                        break
+            
+            # Extract city (everything between street and state/ZIP)
+            if ',' in cleaned:
+                parts = [p.strip() for p in cleaned.split(',') if p.strip()]
+                if len(parts) >= 2:
+                    if len(parts) == 2:
+                        # "Street, City" format
+                        cleaned = parts[0]
+                    elif len(parts) >= 3:
+                        # "Street, City, State" format - city is middle part
+                        last_part = parts[-1].strip()
+                        if re.match(r'^[A-Z]{2}$', last_part):
+                            # Last part is state, second-to-last is city
+                            cleaned = ','.join(parts[:-2])
+                        else:
+                            # Last part is not state, so city is last part
+                            cleaned = ','.join(parts[:-1])
+                    else:
+                        # Only 2 parts, treat as "Street, City"
+                        cleaned = parts[0]
+            
+            return cleaned.strip().rstrip(',')
         
         # Apply cleaning
         df['phone'] = df['phone'].apply(clean_phone)
         df['email'] = df['email'].apply(clean_email)
-        df['address'] = df['mailing_address'].apply(clean_address)
+        df['address'] = df['address'].apply(clean_address)
         df['website'] = pd.NA  # Not available in Washington data
         
         # Extract address_state from Washington address format: "Street, City, State, ZIP"
@@ -565,6 +604,47 @@ class WashingtonCleaner:
             
             return None
         
+        # Extract ZIP codes from address
+        def extract_zip_from_address(addr):
+            if pd.isna(addr) or not isinstance(addr, str):
+                return None
+            
+            zip_pattern = re.compile(r'\b\d{5}(?:-\d{4})?\b')
+            zip_match = zip_pattern.search(addr)
+            if zip_match:
+                zip_code = zip_match.group(0)
+                # Don't extract PO Box numbers as ZIP codes
+                if not re.search(r'\bPO\s+BOX\s*' + re.escape(zip_code), addr, re.IGNORECASE):
+                    return zip_code
+            return None
+        
+        df['zip_code'] = df['address'].apply(extract_zip_from_address)
+        
+        # Extract cities from address
+        def extract_city_from_address(addr):
+            if pd.isna(addr) or not isinstance(addr, str):
+                return None
+            
+            # Look for city in comma-separated format: "Street, City, State, ZIP"
+            if ',' in addr:
+                parts = [p.strip() for p in addr.split(',') if p.strip()]
+                if len(parts) >= 2:
+                    if len(parts) == 2:
+                        # "Street, City" format
+                        return parts[1]
+                    elif len(parts) >= 3:
+                        # "Street, City, State" format - city is middle part
+                        last_part = parts[-1].strip()
+                        if re.match(r'^[A-Z]{2}$', last_part):
+                            # Last part is state, second-to-last is city
+                            return parts[-2]
+                        else:
+                            # Last part is not state, so city is last part
+                            return parts[-1]
+            return None
+        
+        df['city'] = df['address'].apply(extract_city_from_address)
+        
         df['address_state'] = df['address'].apply(extract_state)
         
         return df
@@ -577,16 +657,16 @@ class WashingtonCleaner:
         df['state'] = self.state_name
         
         # Add original data preservation columns
-        df['original_name'] = df['name'].copy()
+        df['original_name'] = df['candidate_name'].copy()
         df['original_state'] = df['state'].copy()
         df['original_election_year'] = df['election_year'].copy()
-        df['original_office'] = df['race'].copy()
+        df['original_office'] = df['office'].copy()
         df['original_filing_date'] = df['filing_date'].copy()
         
         # Add missing columns with None values
         required_columns = [
             'id', 'stable_id', 'county', 'city', 'zip_code', 'address_state', 
-            'election_date', 'facebook', 'twitter', 'prefix', 'suffix', 'nickname'
+            'election_year', 'facebook', 'twitter', 'prefix', 'suffix', 'nickname'
         ]
         
         for col in required_columns:
@@ -615,7 +695,7 @@ class WashingtonCleaner:
                 return date_match.group(1)
             return None
         
-        df['election_date'] = df['election'].apply(extract_election_date)
+        df['election_year'] = df['election_type'].apply(extract_election_date)
         
         # Extract city and zip from address
         def extract_city_zip(address_str: str) -> Tuple[Optional[str], Optional[str]]:
@@ -633,7 +713,7 @@ class WashingtonCleaner:
             
             return None, None
         
-        city_zip_results = df['mailing_address'].apply(extract_city_zip)
+        city_zip_results = df['address'].apply(extract_city_zip)
         df['city'] = [result[0] for result in city_zip_results]
         df['zip_code'] = [result[1] for result in city_zip_results]
         

@@ -59,16 +59,7 @@ class AlaskaCleaner:
         logger.info("Removing duplicate columns...")
         
         # Columns to remove (original versions)
-        columns_to_remove = [
-            'Election', 'Office', 'Name', 'Party', 'Address', 'Email', 'Website', 'Phone Number'
-        ]
         
-        # Only remove if they exist and we have cleaned versions
-        columns_to_remove = [col for col in columns_to_remove if col in df.columns]
-        
-        if columns_to_remove:
-            df = df.drop(columns=columns_to_remove)
-            logger.info(f"Removed {len(columns_to_remove)} duplicate columns: {columns_to_remove}")
         
         return df
     
@@ -78,9 +69,8 @@ class AlaskaCleaner:
             'election_year', 'election_type', 'office', 'district', 'full_name_display',
             'first_name', 'middle_name', 'last_name', 'prefix', 'suffix', 'nickname',
             'party', 'phone', 'email', 'address', 'website',
-            'state', 'original_name', 'original_state', 'original_election_year',
-            'original_office', 'original_filing_date', 'id', 'stable_id', 'county',
-            'city', 'zip_code', 'filing_date', 'election_date', 'facebook', 'twitter'
+            'state',  'id', 'stable_id', 'county',
+            'city', 'zip_code', 'filing_date', 'election_year', 'facebook', 'twitter'
         ]
         
         for col in ALASKA_COLUMN_ORDER:
@@ -116,16 +106,16 @@ class AlaskaCleaner:
         # Step 4: Standardize party names
         cleaned_df = self._standardize_parties(cleaned_df)
         
-        # Step 5: Clean contact information
-        cleaned_df = self._clean_contact_info(cleaned_df)
-        
-        # Step 6: Add required columns for final schema
-        cleaned_df = self._add_required_columns(cleaned_df)
-        
-        # Step 7: Generate stable IDs (skipped - will be done later in process)
-        ## Step 8: Parse geographic data from addresses
+        # Step 5: Parse geographic data from addresses
         cleaned_df = self._parse_geographic_data(cleaned_df)
         
+        # Step 6: Clean contact information
+        cleaned_df = self._clean_contact_info(cleaned_df)
+        
+        # Step 7: Add required columns for final schema
+        cleaned_df = self._add_required_columns(cleaned_df)
+        
+        # Step 8: Generate stable IDs (skipped - will be done later in process)
         # Step 9: Remove duplicate columns
         cleaned_df = self._remove_duplicate_columns(cleaned_df)
         
@@ -175,14 +165,14 @@ class AlaskaCleaner:
             return year, election_type
         
         # Apply election processing
-        election_results = df['Election'].apply(extract_election_info)
+        election_results = df['election_type'].apply(extract_election_info)
         df['election_year'] = [result[0] for result in election_results]
         df['election_type'] = [result[1] for result in election_results]
         
         # Filter out statewide/federal candidates from incorporation elections
         logger.info("Filtering out inappropriate candidates from incorporation elections...")
-        incorporation_mask = df['Election'].str.contains('Incorporation Election', na=False)
-        statewide_offices = df['Office'].str.contains('US PRESIDENT|UNITED STATES REPRESENTATIVE|SUPREME COURT|COURT OF APPEALS', na=False)
+        incorporation_mask = df['election_type'].str.contains('Incorporation Election', na=False)
+        statewide_offices = df['office'].str.contains('US PRESIDENT|UNITED STATES REPRESENTATIVE|SUPREME COURT|COURT OF APPEALS', na=False)
         
         # Remove statewide candidates from incorporation elections
         invalid_incorporation = incorporation_mask & statewide_offices
@@ -226,7 +216,7 @@ class AlaskaCleaner:
             return office_str, None
         
         # Apply office and district processing
-        office_results = df['Office'].apply(process_office_district)
+        office_results = df['office'].apply(process_office_district)
         df['office'] = [result[0] for result in office_results]
         df['district'] = [result[1] for result in office_results]
         df['district'] = df['district'].astype('object')
@@ -271,7 +261,7 @@ class AlaskaCleaner:
             return cleaned
         
         # Apply name cleaning with office context
-        df['full_name_display'] = df.apply(lambda row: clean_name(row['Name'], row['Office']), axis=1)
+        df['full_name_display'] = df.apply(lambda row: clean_name(row['candidate_name'], row['office']), axis=1)
         
         # Parse names into components
         df = self._parse_names(df)
@@ -293,7 +283,7 @@ class AlaskaCleaner:
         for idx, row in df.iterrows():
             name = row['full_name_display']
             office = row['office']
-            original_name = row['Name']
+            original_name = row['candidate_name']
             
             if pd.isna(name) or not name:
                 continue
@@ -489,7 +479,7 @@ class AlaskaCleaner:
             party_lower = str(party_str).strip().lower()
             return party_mapping.get(party_lower, party_str)
         
-        df['party'] = df['Party'].apply(standardize_party)
+        df['party'] = df['party'].apply(standardize_party)
         
         return df
     
@@ -526,22 +516,10 @@ class AlaskaCleaner:
             
             return None
         
-        # Clean addresses
-        def clean_address(address_str: str) -> str:
-            if pd.isna(address_str):
-                return None
-            
-            # Remove extra whitespace and quotes
-            cleaned = str(address_str).strip().strip('"\'')
-            # Remove multiple spaces
-            cleaned = re.sub(r'\s+', ' ', cleaned)
-            return cleaned
-        
         # Apply cleaning
-        df['phone'] = df['Phone Number'].apply(clean_phone)
-        df['email'] = df['Email'].apply(clean_email)
-        df['address'] = df['Address'].apply(clean_address)
-        df['website'] = df['Website'].apply(lambda x: str(x).strip() if pd.notna(x) else None)
+        df['phone'] = df['phone'].apply(clean_phone)
+        df['email'] = df['email'].apply(clean_email)
+        # Note: Address cleaning removed - already handled by _parse_geographic_data
         
         return df
     
@@ -552,17 +530,12 @@ class AlaskaCleaner:
         # Add state column
         df['state'] = self.state_name
         
-        # Add original data preservation columns
-        df['original_name'] = df['Name'].copy()
-        df['original_state'] = df['state'].copy()
-        df['original_election_year'] = df['election_year'].copy()
-        df['original_office'] = df['Office'].copy()
-        df['original_filing_date'] = pd.NA  # Not available in Alaska data
+        # Note: original_ columns removed - not needed for final output
         
         # Add missing columns with None values
         required_columns = [
             'id', 'stable_id', 'county', 'city', 'zip_code', 'address_state', 'filing_date', 
-            'election_date', 'facebook', 'twitter', 'prefix', 'suffix', 'nickname'
+            'election_year', 'facebook', 'twitter', 'prefix', 'suffix', 'nickname'
         ]
         
         for col in required_columns:
@@ -587,13 +560,42 @@ class AlaskaCleaner:
             address_str = str(address_str).strip()
             
             # Alaska addresses follow pattern: "Street Address with City, State ZIP"
-            # First, extract the zip code
+            # First, extract the zip code (look for 5-digit numbers)
             zip_match = re.search(r'\b\d{5}\b', address_str)
             zip_code = zip_match.group() if zip_match else None
             
             if zip_code:
                 # Remove zip code from address
                 address_without_zip = re.sub(r'\b\d{5}\b', '', address_str).strip()
+                
+                # Check if this is a PO Box address
+                if any(abbr in address_without_zip.lower() for abbr in ['po box', 'p.o. box', 'post office box']):
+                    # For PO Box addresses, extract zip code and city if present
+                    # Handle cases like "PO Box 869 Crawfordsville, IN 47933"
+                    
+                    # Split by comma to separate PO Box from city/state
+                    parts = [part.strip() for part in address_without_zip.split(',')]
+                    
+                    if len(parts) >= 2:
+                        # Format: "PO Box 869 Crawfordsville, IN"
+                        po_box_part = parts[0]  # "PO Box 869 Crawfordsville"
+                        state_part = parts[1]   # "IN"
+                        
+                        # Extract city from the PO Box part (everything after "PO Box 869")
+                        po_box_match = re.match(r'PO\s+Box\s+\d+\s*(.*)', po_box_part, re.IGNORECASE)
+                        if po_box_match:
+                            city_part = po_box_match.group(1).strip()
+                            city = city_part if city_part else None
+                        else:
+                            city = None
+                        
+                        # Extract state from state part
+                        state = state_part if state_part else None
+                        
+                        return city, zip_code, state, state
+                    else:
+                        # Single part - just PO Box number
+                        return None, zip_code, None, None
                 
                 # Split by comma to separate street address from state
                 parts = [part.strip() for part in address_without_zip.split(',')]
@@ -613,7 +615,8 @@ class AlaskaCleaner:
                         'PO', 'Box', 'St', 'St.', 'Ave', 'Ave.', 'Rd', 'Rd.', 'Dr', 'Dr.', 
                         'Blvd', 'Blvd.', 'Ln', 'Ln.', 'Way', 'Ct', 'Ct.', 'Pl', 'Pl.',
                         'Ste', 'Ste.', 'Suite', 'Apt', 'Apt.', 'Unit', '#', 'PMB', 'Bldg',
-                        'N', 'S', 'E', 'W', 'NE', 'NW', 'SE', 'SW', 'North', 'South', 'East', 'West'
+                        'N', 'S', 'E', 'W', 'NE', 'NW', 'SE', 'SW', 'North', 'South', 'East', 'West',
+                        'PO Box', 'P.O.', 'P.O', 'Post Office', 'Post', 'Office'
                     }
                     
                     # Start from the end and collect words until we hit an address abbreviation
@@ -663,6 +666,73 @@ class AlaskaCleaner:
         df['zip_code'] = [data[1] for data in geographic_data]
         df['county'] = [data[2] for data in geographic_data]
         df['address_state'] = [data[3] for data in geographic_data]
+        
+        # Clean the address field by removing extracted city, zip, and state information
+        def clean_address_field(address_str, city, zip_code, address_state):
+            if pd.isna(address_str):
+                return address_str
+            
+            address_str = str(address_str).strip()
+            
+            # For PO Box addresses, keep just the PO Box part
+            if any(abbr in address_str.lower() for abbr in ['po box', 'p.o. box', 'post office box']):
+                # Extract just the PO Box number
+                po_box_match = re.search(r'PO\s+Box\s+\d+', address_str, re.IGNORECASE)
+                if po_box_match:
+                    return po_box_match.group()
+                else:
+                    return address_str
+            
+            # For regular addresses, remove extracted components more carefully
+            cleaned = address_str
+            
+            # Remove zip code if it was extracted
+            if zip_code:
+                cleaned = re.sub(r'\b' + re.escape(str(zip_code)) + r'\b', '', cleaned)
+            
+            # Remove state if it was extracted
+            if address_state:
+                # Remove state from end of address
+                cleaned = re.sub(r',\s*' + re.escape(str(address_state)) + r'\s*$', '', cleaned)
+                # Remove state before zip code
+                cleaned = re.sub(r'\s+' + re.escape(str(address_state)) + r'\s+\d{5}', '', cleaned)
+            
+            # Remove city if it was extracted
+            if city:
+                city_str = str(city)
+                # Remove city from comma-separated format
+                if ',' in cleaned:
+                    parts = [p.strip() for p in cleaned.split(',') if p.strip()]
+                    # Filter out parts that match the city name
+                    cleaned_parts = []
+                    for part in parts:
+                        # Check if this part is the city
+                        if not any(city_word.lower() in part.lower() for city_word in city_str.split()):
+                            cleaned_parts.append(part)
+                    cleaned = ', '.join(cleaned_parts)
+                else:
+                    # Remove city from space-separated format
+                    city_words = city_str.split()
+                    address_words = cleaned.split()
+                    cleaned_words = []
+                    for word in address_words:
+                        # Check if this word is part of the city name
+                        if not any(city_word.lower() in word.lower() for city_word in city_words):
+                            cleaned_words.append(word)
+                    cleaned = ' '.join(cleaned_words)
+            
+            # Clean up extra commas and whitespace
+            cleaned = re.sub(r',\s*,', ',', cleaned)  # Remove double commas
+            cleaned = re.sub(r'^\s*,\s*', '', cleaned)  # Remove leading comma
+            cleaned = re.sub(r'\s*,\s*$', '', cleaned)  # Remove trailing comma
+            cleaned = re.sub(r'\s+', ' ', cleaned)  # Normalize whitespace
+            
+            return cleaned.strip()
+        
+        # Apply address cleaning
+        df['address'] = df.apply(lambda row: clean_address_field(
+            row['address'], row['city'], row['zip_code'], row['address_state']
+        ), axis=1)
         
         return df
 
@@ -762,7 +832,7 @@ class AlaskaCleaner:
             parts.append(suffix)
         
         return ' '.join(parts).strip()
-
+    
 def clean_alaska_candidates(input_file: str, output_file: str = None, output_dir: str = DEFAULT_OUTPUT_DIR) -> pd.DataFrame:
     """
     Main function to clean Alaska candidate data.

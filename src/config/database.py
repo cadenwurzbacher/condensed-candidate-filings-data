@@ -122,7 +122,11 @@ class DatabaseManager:
                 return self._upload_dataframe_chunked(df, table_name, if_exists, index)
             else:
                 # For smaller datasets, use standard upload
-                df.to_sql(
+                # Clean NaN values before upload - replace with None for proper NULL conversion
+                df_clean = df.replace({pd.NA: None, pd.NaT: None})
+                df_clean = df_clean.where(pd.notnull(df_clean), None)
+                
+                df_clean.to_sql(
                     name=table_name,
                     con=self.engine,
                     if_exists=if_exists,
@@ -155,7 +159,11 @@ class DatabaseManager:
                 # Use replace for first chunk, append for subsequent chunks
                 chunk_if_exists = 'replace' if i == 0 else 'append'
                 
-                chunk.to_sql(
+                # Clean NaN values before upload - replace with None for proper NULL conversion
+                chunk_clean = chunk.replace({pd.NA: None, pd.NaT: None})
+                chunk_clean = chunk_clean.where(pd.notnull(chunk_clean), None)
+                
+                chunk_clean.to_sql(
                     name=table_name,
                     con=self.engine,
                     if_exists=chunk_if_exists,
@@ -291,68 +299,50 @@ class DatabaseManager:
                 -- Core Identifiers
                 id SERIAL PRIMARY KEY,
                 stable_id VARCHAR(100),
-                external_id VARCHAR(100),
                 
-                -- Basic Candidate Info
+                -- Basic Candidate Info (exact match to filings table)
+                election_year INTEGER,
+                election_type VARCHAR(50),
+                office TEXT,
+                district VARCHAR(100),
+                full_name_display TEXT,
                 first_name VARCHAR(100),
                 middle_name VARCHAR(100),
                 last_name VARCHAR(100),
-                nickname VARCHAR(100),
                 prefix VARCHAR(50),
                 suffix VARCHAR(50),
-                full_name_display VARCHAR(255),
-                
-                -- Election Details
-                election_year INTEGER,
-                election_type VARCHAR(50),
-                office VARCHAR(255),                    -- Clean, standardized office names
-                office_confidence DECIMAL(3,2),         -- Standardization confidence (0.00-1.00)
-                office_category VARCHAR(100),           -- Federal/State/Local grouping
-                district VARCHAR(100),
-                
-                -- Party & Contact
+                nickname VARCHAR(100),
                 party VARCHAR(100),
-                party_standardized VARCHAR(100),        -- Cleaned party names
                 phone VARCHAR(50),
-                email VARCHAR(255),
-                website VARCHAR(255),
-                
-                -- Location
+                email TEXT,
+                address TEXT,
+                website TEXT,
                 state VARCHAR(50),
                 county VARCHAR(100),
                 city VARCHAR(100),
-                address TEXT,
-                address_parsed BOOLEAN,                -- Address parsing success
-                address_clean TEXT,                    -- Standardized address
-                zip_code VARCHAR(20),
-                has_zip BOOLEAN,                       -- Data quality flag
-                has_state BOOLEAN,                     -- Data quality flag
-                
-                -- Dates
+                zip_code VARCHAR(100),
+                address_state VARCHAR(50),
                 filing_date DATE,
                 election_date DATE,
+                facebook TEXT,
+                twitter TEXT,
+                processing_timestamp TIMESTAMP,
+                pipeline_version VARCHAR(100),
+                data_source VARCHAR(255),
+                first_added_date TIMESTAMP,
+                last_updated_date TIMESTAMP,
+                data_hash VARCHAR(100),
                 
-                -- Social Media
-                facebook VARCHAR(255),
-                twitter VARCHAR(255),
-                
-                -- Original Data (for audit)
-                original_name VARCHAR(255),
-                original_state VARCHAR(50),
-                original_election_year INTEGER,
-                original_office VARCHAR(255),           -- Original messy office names
-                original_filing_date DATE,
-                source_state VARCHAR(50),               -- Track origin state
-                
-                -- Processing Metadata
-                processing_timestamp TIMESTAMP,         -- When processed
-                pipeline_version BIGINT,               -- Pipeline version
-                data_source VARCHAR(255),              -- Source file/state
-                
-                -- System Fields
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                first_added_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                last_updated_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                -- Staging Action Columns
+                staging_action VARCHAR(50) DEFAULT 'pending_review',  -- auto_promoted, pending_review, error_fallback
+                staging_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                staging_reason TEXT,
+                quality_score DECIMAL(3,2),
+                promotion_status VARCHAR(50),
+                review_timestamp TIMESTAMP,
+                review_reason TEXT,
+                error_timestamp TIMESTAMP,
+                error_message TEXT
             );
             """
             
@@ -365,6 +355,25 @@ class DatabaseManager:
             
         except Exception as e:
             logger.error(f"Failed to create staging table: {e}")
+            return False
+    
+    def recreate_staging_table(self) -> bool:
+        """Drop and recreate the staging_candidates table with the new schema."""
+        try:
+            # Drop existing table if it exists
+            drop_table_sql = "DROP TABLE IF EXISTS staging_candidates CASCADE;"
+            
+            with self.engine.connect() as conn:
+                conn.execute(text(drop_table_sql))
+                conn.commit()
+            
+            logger.info("Dropped existing staging_candidates table")
+            
+            # Create new table with updated schema
+            return self._create_staging_table()
+            
+        except Exception as e:
+            logger.error(f"Failed to recreate staging table: {e}")
             return False
 
 # Global database manager instance

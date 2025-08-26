@@ -59,18 +59,7 @@ class NewMexicoCleaner:
         logger.info("Removing duplicate columns...")
         
         # Columns to remove (original versions)
-        columns_to_remove = [
-            'Contest', 'District', 'Filing County', 'First Name', 'Middle Name', 'Last Name', 
-            'Party', 'Mailing Address', 'Address', 'City', 'State', 'Zip', 'Phone', 'Email', 
-            'Website', 'Filing Date/Time', 'Ballot Order', 'Status'
-        ]
         
-        # Only remove if they exist and we have cleaned versions
-        columns_to_remove = [col for col in columns_to_remove if col in df.columns]
-        
-        if columns_to_remove:
-            df = df.drop(columns=columns_to_remove)
-            logger.info(f"Removed {len(columns_to_remove)} duplicate columns: {columns_to_remove}")
         
         return df
 
@@ -138,11 +127,7 @@ class NewMexicoCleaner:
             'website',
             'state',
             'address_state',
-            'original_name',
-            'original_state',
-            'original_election_year',
-            'original_office',
-            'original_filing_date',
+
             'id',
             'stable_id',
             'county',
@@ -201,7 +186,7 @@ class NewMexicoCleaner:
             return year, election_type
         
         # Apply election processing
-        election_results = df['Contest'].apply(extract_election_info)
+        election_results = df['office'].apply(extract_election_info)
         df['election_year'] = [result[0] for result in election_results]
         df['election_type'] = [result[1] for result in election_results]
         
@@ -253,7 +238,7 @@ class NewMexicoCleaner:
             return contest_str, district_str if pd.notna(district_str) and district_str else None
         
         # Apply office and district processing
-        office_results = df.apply(lambda row: process_office_district(row['Contest'], row['District']), axis=1)
+        office_results = df.apply(lambda row: process_office_district(row['office'], row['district']), axis=1)
         df['office'] = [result[0] for result in office_results]
         df['district'] = [result[1] for result in office_results]
         df['district'] = df['district'].astype('object')
@@ -265,19 +250,11 @@ class NewMexicoCleaner:
         logger.info("Processing candidate names...")
         
         def build_full_name(row) -> str:
-            """Build full name from individual components."""
-            parts = []
-            
-            if pd.notna(row['First Name']) and str(row['First Name']).strip():
-                parts.append(str(row['First Name']).strip())
-            
-            if pd.notna(row['Middle Name']) and str(row['Middle Name']).strip():
-                parts.append(str(row['Middle Name']).strip())
-            
-            if pd.notna(row['Last Name']) and str(row['Last Name']).strip():
-                parts.append(str(row['Last Name']).strip())
-            
-            return ' '.join(parts) if parts else None
+            """Build full name from candidate_name (already processed by structural cleaner)."""
+            candidate_name = row.get('candidate_name')
+            if pd.notna(candidate_name) and str(candidate_name).strip():
+                return str(candidate_name).strip()
+            return None
         
         # Build candidate name from components
         df['full_name_display'] = df.apply(build_full_name, axis=1)
@@ -300,25 +277,22 @@ class NewMexicoCleaner:
         df['nickname'] = pd.NA
         
         for idx, row in df.iterrows():
-            first = row['First Name']
-            middle = row['Middle Name']
-            last = row['Last Name']
+            candidate_name = row.get('candidate_name')
             
-            # Clean and assign components
-            df.at[idx, 'first_name'] = str(first).strip() if pd.notna(first) else None
-            df.at[idx, 'middle_name'] = str(middle).strip() if pd.notna(middle) else None
-            df.at[idx, 'last_name'] = str(last).strip() if pd.notna(last) else None
-            
-            # Build display name
-            display_parts = []
-            if pd.notna(first):
-                display_parts.append(str(first).strip())
-            if pd.notna(middle):
-                display_parts.append(str(middle).strip())
-            if pd.notna(last):
-                display_parts.append(str(last).strip())
-            
-            df.at[idx, 'full_name_display'] = ' '.join(display_parts) if display_parts else None
+            if pd.notna(candidate_name) and str(candidate_name).strip():
+                # Parse the candidate name into components
+                name_parts = str(candidate_name).strip().split()
+                
+                if len(name_parts) >= 1:
+                    df.at[idx, 'first_name'] = name_parts[0]
+                if len(name_parts) >= 2:
+                    df.at[idx, 'last_name'] = name_parts[-1]
+                if len(name_parts) > 2:
+                    # Middle names are everything between first and last
+                    df.at[idx, 'middle_name'] = ' '.join(name_parts[1:-1])
+                
+                # Use the original candidate_name as display name
+                df.at[idx, 'full_name_display'] = str(candidate_name).strip()
         
         return df
     
@@ -367,7 +341,7 @@ class NewMexicoCleaner:
             party_lower = str(party_str).strip().lower()
             return party_mapping.get(party_lower, party_str)
         
-        df['party'] = df['Party'].apply(standardize_party)
+        df['party'] = df['party'].apply(standardize_party)
         
         return df
     
@@ -416,10 +390,12 @@ class NewMexicoCleaner:
             return cleaned
         
         # Apply cleaning
-        df['phone'] = df['Phone'].apply(clean_phone)
-        df['email'] = df['Email'].apply(clean_email)
-        df['address'] = df['Address'].apply(clean_address)
-        df['website'] = df['Website'].apply(lambda x: str(x).strip() if pd.notna(x) else None)
+        df['phone'] = df['phone'].apply(clean_phone)
+        df['email'] = df['email'].apply(clean_email)
+        df['address'] = df['address'].apply(clean_address)
+        if 'website' not in df.columns:
+            df['website'] = pd.NA
+        df['website'] = df['website'].apply(lambda x: str(x).strip() if pd.notna(x) else None)
         
         # Derive address_state from explicit State field when present, else from address
         if 'State' in df.columns:
@@ -442,12 +418,7 @@ class NewMexicoCleaner:
         # Add state column
         df['state'] = self.state_name
         
-        # Add original data preservation columns
-        df['original_name'] = df['full_name_display'].copy()
-        df['original_state'] = df['state'].copy()
-        df['original_election_year'] = df['election_year'].copy()
-        df['original_office'] = df['Contest'].copy()
-        df['original_filing_date'] = df['Filing Date/Time'].copy()
+        # Note: original_ columns removed - not needed for final output
         
         # Add missing columns with None values
         required_columns = [
@@ -462,11 +433,15 @@ class NewMexicoCleaner:
         # Set id to empty string (will be generated later in process)
         df['id'] = ""
         
-        # Map existing columns to required schema
-        df['county'] = df['Filing County'].copy()
-        df['city'] = df['City'].copy()
-        df['zip_code'] = df['Zip'].copy()
-        df['filing_date'] = df['Filing Date/Time'].copy()
+        # Map existing columns to required schema if they exist
+        if 'Filing County' in df.columns:
+            df['county'] = df['Filing County'].copy()
+        if 'City' in df.columns:
+            df['city'] = df['City'].copy()
+        if 'zip_code' in df.columns:
+            df['zip_code'] = df['zip_code'].copy()
+        if 'Filing Date/Time' in df.columns:
+            df['filing_date'] = df['Filing Date/Time'].copy()
         
         return df
     

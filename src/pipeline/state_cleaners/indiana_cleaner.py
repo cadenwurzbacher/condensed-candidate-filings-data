@@ -59,16 +59,7 @@ class IndianaCleaner:
         logger.info("Removing duplicate columns...")
         
         # Columns to remove (original versions) - Indiana data structure
-        columns_to_remove = [
-            'Year', 'Election', 'Name', 'Office', 'Party', 'Date Filed', 'Source'
-        ]
         
-        # Only remove if they exist and we have cleaned versions
-        columns_to_remove = [col for col in columns_to_remove if col in df.columns]
-        
-        if columns_to_remove:
-            df = df.drop(columns=columns_to_remove)
-            logger.info(f"Removed {len(columns_to_remove)} duplicate columns: {columns_to_remove}")
         
         return df
 
@@ -172,8 +163,8 @@ class IndianaCleaner:
             
             df['election_year'] = 2024
         
-        if 'Election' in df.columns:
-            df['election_type'] = df['Election'].str.capitalize()
+        if 'election_type' in df.columns:
+            df['election_type'] = df['election_type'].str.capitalize()
         else:
             
             
@@ -220,9 +211,9 @@ class IndianaCleaner:
             # Handle other offices (keep as is)
             return office_str, None
         
-        # Apply office and district processing - Indiana data has 'Office' column
-        if 'Office' in df.columns:
-            office_results = df['Office'].apply(process_office_district)
+        # Apply office and district processing - Indiana data has 'office' column
+        if 'office' in df.columns:
+            office_results = df['office'].apply(process_office_district)
             df['office'] = [result[0] for result in office_results]
             df['district'] = [result[1] for result in office_results]
             df['district'] = df['district'].astype('object')
@@ -258,9 +249,9 @@ class IndianaCleaner:
             # If no parentheses, return as is
             return name_str
         
-        # Apply name cleaning - Indiana data has 'Name' column
-        if 'Name' in df.columns:
-            df['full_name_display'] = df['Name'].apply(clean_name)
+        # Apply name cleaning - Indiana data has 'candidate_name' column
+        if 'candidate_name' in df.columns:
+            df['full_name_display'] = df['candidate_name'].apply(clean_name)
         else:
             # Fallback if no Name column
             df['full_name_display'] = 'Unknown'
@@ -285,7 +276,7 @@ class IndianaCleaner:
         for idx, row in df.iterrows():
             name = row['full_name_display']
             office = row['office']
-            original_name = row.get('Name', row.get('name', name))
+            original_name = row.get('candidate_name', row.get('candidate_name', name))
             
             if pd.isna(name) or not name:
                 # Set default values for empty names
@@ -478,9 +469,9 @@ class IndianaCleaner:
             party_lower = str(party_str).strip().lower()
             return party_mapping.get(party_lower, party_str)
         
-        # Apply party standardization - Indiana data has 'Party' column
-        if 'Party' in df.columns:
-            df['party'] = df['Party'].apply(standardize_party)
+        # Apply party standardization - Indiana data has 'party' column
+        if 'party' in df.columns:
+            df['party'] = df['party'].apply(standardize_party)
         else:
             
             
@@ -552,11 +543,11 @@ class IndianaCleaner:
         df['state'] = self.state_name
         
         # Add original data preservation columns
-        df['original_name'] = df['Name'].copy() if 'Name' in df.columns else None
+        df['original_name'] = df['candidate_name'].copy() if 'candidate_name' in df.columns else None
         df['original_state'] = df['state'].copy()
         df['original_election_year'] = df['election_year'].copy()
-        df['original_office'] = df['Office'].copy() if 'Office' in df.columns else None
-        df['original_filing_date'] = df['Date Filed'].copy() if 'Date Filed' in df.columns else None
+        df['original_office'] = df['office'].copy() if 'office' in df.columns else None
+        df['original_filing_date'] = df['filing_date'].copy() if 'filing_date' in df.columns else None
         
         # Add missing columns with None values
         required_columns = [
@@ -569,8 +560,8 @@ class IndianaCleaner:
                 df[col] = pd.NA
         
         # Map Date Filed to filing_date
-        if 'Date Filed' in df.columns:
-            df['filing_date'] = df['Date Filed']
+        if 'filing_date' in df.columns:
+            df['filing_date'] = df['filing_date']
         else:
             df['filing_date'] = pd.NA
         

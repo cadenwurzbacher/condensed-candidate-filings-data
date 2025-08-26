@@ -122,16 +122,7 @@ class KentuckyCleaner:
         logger.info("Removing duplicate columns...")
         
         # Columns to remove (original versions) - but NOT the new ones we created
-        columns_to_remove = [
-            'office_sought', 'location', 'election_date', 'election_type', 'Source_File'
-        ]
         
-        # Only remove if they exist and we have cleaned versions
-        columns_to_remove = [col for col in columns_to_remove if col in df.columns]
-        
-        if columns_to_remove:
-            df = df.drop(columns=columns_to_remove)
-            logger.info(f"Removed {len(columns_to_remove)} duplicate columns: {columns_to_remove}")
         
         return df
     
@@ -208,9 +199,9 @@ class KentuckyCleaner:
             'office',
             'district',
             'full_name_display',
-            'first_name',
+            'candidate_name',
             'middle_name',
-            'last_name',
+            'candidate_name',
             'prefix',
             'suffix',
             'nickname',
@@ -232,7 +223,7 @@ class KentuckyCleaner:
             'city',
             'zip_code',
             'filing_date',
-            'election_date',
+            'election_year',
             'facebook',
             'twitter'
         ]
@@ -257,7 +248,7 @@ class KentuckyCleaner:
         logger.info("Processing election data...")
         
         # Use the actual column names
-        election_date_col = 'election_date'
+        election_date_col = 'election_year'
         election_type_col = 'election_type'
         
         def extract_election_year(election_date_str: str) -> Optional[int]:
@@ -301,7 +292,7 @@ class KentuckyCleaner:
         logger.info("Processing office and district information...")
         
         # Use the actual column names
-        office_col = 'office_sought'
+        office_col = 'office'
         
         def process_office_district(office_str: str) -> Tuple[str, Optional[str]]:
             if pd.isna(office_str):
@@ -389,8 +380,8 @@ class KentuckyCleaner:
         logger.info("Processing candidate names...")
         
         # Use the actual column names from raw data
-        first_name_col = 'first_name'
-        last_name_col = 'last_name'
+        first_name_col = 'candidate_name'
+        last_name_col = 'candidate_name'
         
         # Create full_name_display by combining first and last names
         df['full_name_display'] = df.apply(
@@ -470,8 +461,8 @@ class KentuckyCleaner:
             df.at[idx, 'full_name_display'] = display_name
         
         # Assign clean names to the dataframe
-        df['first_name'] = clean_first_names
-        df['last_name'] = clean_last_names
+        df['candidate_name'] = clean_first_names
+        df['candidate_name'] = clean_last_names
         
         return df
     
@@ -518,7 +509,7 @@ class KentuckyCleaner:
             return party_mapping.get(party_lower, party_str)
         
         # Look for party column in raw data
-        party_columns = ['party', 'Party', 'PARTY', 'party_affiliation', 'Party Affiliation']
+        party_columns = ['party', 'party', 'party', 'party_affiliation', 'party']
         party_col = None
         for col in party_columns:
             if col in df.columns:
@@ -553,7 +544,7 @@ class KentuckyCleaner:
             location = str(location_str).strip()
             
             # Pattern 1: "City-County" (e.g., "Glasgow-Barren")
-            if '-' in location and 'District' not in location and 'County' not in location:
+            if '-' in location and 'district' not in location and 'County' not in location:
                 parts = location.split('-', 1)
                 if len(parts) == 2:
                     city = parts[0].strip()
@@ -594,7 +585,7 @@ class KentuckyCleaner:
                 return city, county, district
             
             # Pattern 5: "County" only (e.g., "Pulaski")
-            if not any(char in location for char in ['-', 'District', 'Ward']):
+            if not any(char in location for char in ['-', 'district', 'district']):
                 county = location.strip()
                 city = None
                 district = None
@@ -632,9 +623,9 @@ class KentuckyCleaner:
         logger.info("Adding required columns...")
         
         # Use the actual column names
-        first_name_col = 'first_name'
-        last_name_col = 'last_name'
-        office_col = 'office_sought'
+        first_name_col = 'candidate_name'
+        last_name_col = 'candidate_name'
+        office_col = 'office'
         election_year_col = 'election_year'
         
         # Add state column
@@ -650,7 +641,7 @@ class KentuckyCleaner:
         # Add missing columns with None values
         required_columns = [
             'id', 'stable_id', 'zip_code', 'filing_date', 
-            'election_date', 'facebook', 'twitter'
+            'election_year', 'facebook', 'twitter'
         ]
         
         for col in required_columns:
