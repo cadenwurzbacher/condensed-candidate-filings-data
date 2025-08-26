@@ -59,16 +59,7 @@ class DelawareCleaner:
         logger.info("Removing duplicate columns...")
         
         # Columns to remove (original versions)
-        columns_to_remove = [
-            'Year', 'Election', 'Name', 'Office', 'District', 'County', 'Date Filed', 'Website', 'Phone'
-        ]
         
-        # Only remove if they exist and we have cleaned versions
-        columns_to_remove = [col for col in columns_to_remove if col in df.columns]
-        
-        if columns_to_remove:
-            df = df.drop(columns=columns_to_remove)
-            logger.info(f"Removed {len(columns_to_remove)} duplicate columns: {columns_to_remove}")
         
         return df
 
@@ -125,8 +116,8 @@ class DelawareCleaner:
         logger.info("Processing election data...")
         
         def extract_election_info(row) -> Tuple[Optional[int], Optional[str], Optional[str]]:
-            year_val = row['Year']
-            election_str = row['Election']
+            year_val = row['election_year']
+            election_str = row['election_type']
             
             # Get year from Year column first
             if pd.notna(year_val):
@@ -187,7 +178,7 @@ class DelawareCleaner:
         election_results = df.apply(extract_election_info, axis=1)
         df['election_year'] = [result[0] for result in election_results]
         df['election_type'] = [result[1] for result in election_results]
-        df['election_date'] = [result[2] for result in election_results]
+        df['election_year'] = [result[0] for result in election_results]
         
         # Ensure election_year is int64 to match Alaska's format
         # Handle NaN values by filling with 0 first, then converting
@@ -239,17 +230,18 @@ class DelawareCleaner:
                 if district_match:
                     district = district_match.group(1)
                 else:
-            
-            
-            
-            
                     # Try abbreviated format
                     district_match = re.search(r'DIS (\d+)', office_str, re.IGNORECASE)
                     if district_match:
                         district = district_match.group(1)
                     else:
                         district = None
-                return "State Representative", district
+                
+                # Return State House District format as requested
+                if district:
+                    return f"State House District {district}", district
+                else:
+                    return "State House", None
             
             # Handle State Senator (multiple formats)
             if any(pattern in office_str for pattern in ["State Senator District", "STATE SENATOR DISTRICT", "STATE SEN DIS"]):
@@ -304,7 +296,7 @@ class DelawareCleaner:
                 return "President of City Council", None
             
             # Handle County positions (multiple formats)
-            if "County" in office_str or "COUNTY" in office_str:
+            if "county" in office_str or "COUNTY" in office_str:
                 if "Levy Court" in office_str or "LEVY COURT" in office_str:
                     # Extract district number from office string
                     district_match = re.search(r'District (\d+)', office_str, re.IGNORECASE)
@@ -364,8 +356,8 @@ class DelawareCleaner:
             if "Representative in Congress" in office_str:
                 return "U.S. Representative", None
             
-            # Catch-all: Look for any office with "District" in the name
-            if "District" in office_str:
+            # Catch-all: Look for any office with "district" in the name
+            if "district" in office_str:
                 # Extract district number from office string
                 district_match = re.search(r'District (\d+)', office_str, re.IGNORECASE)
                 if district_match:
@@ -395,19 +387,19 @@ class DelawareCleaner:
             return office_str, None
         
         # Apply office and district processing
-        office_results = df.apply(lambda row: process_office_district(row['Office'], row['District']), axis=1)
+        office_results = df.apply(lambda row: process_office_district(row['office'], row['district']), axis=1)
         df['office'] = [result[0] for result in office_results]
         
         # Map district from raw District column, with fallback to extracted district
-        df['district'] = df['District'].fillna('')
+        df['district'] = df['district'].fillna('')
         # Only use extracted district if raw District is empty
-        for i, (raw_district, extracted_district) in enumerate(zip(df['District'], [result[1] for result in office_results])):
+        for i, (raw_district, extracted_district) in enumerate(zip(df['district'], [result[1] for result in office_results])):
             if pd.isna(raw_district) or raw_district == '':
                 df.loc[i, 'district'] = extracted_district if extracted_district else ''
         
         # Log some examples of office processing for debugging
         logger.info("Office processing examples:")
-        for i, (original, processed) in enumerate(zip(df['Office'].head(10), df['office'].head(10))):
+        for i, (original, processed) in enumerate(zip(df['office'].head(10), df['office'].head(10))):
             logger.info(f"  {original} -> {processed}")
         
         # Ensure district is string type
@@ -495,11 +487,11 @@ class DelawareCleaner:
             return None
         
         # Map county from raw County column
-        df['county'] = df['County'].apply(map_county_from_raw)
+        df['county'] = df['county'].apply(map_county_from_raw)
         logger.info(f"County mapping completed. Sample results: {df['county'].value_counts().head(5).to_dict()}")
         
         # Apply city extraction AFTER county extraction to avoid conflicts
-        df['city'] = df['Office'].apply(extract_city_from_office)
+        df['city'] = df['office'].apply(extract_city_from_office)
         logger.info(f"City extraction completed. Sample results: {df['city'].value_counts().head(5).to_dict()}")
         
         # Clean up problematic city values
@@ -648,8 +640,8 @@ class DelawareCleaner:
         logger.info("Processing candidate names...")
         
         def clean_name(row) -> str:
-            name_str = row['Name']
-            office_str = row['Office']
+            name_str = row['candidate_name']
+            office_str = row['office']
             
             if pd.isna(name_str):
                 return None
@@ -712,7 +704,7 @@ class DelawareCleaner:
         
         for idx, row in df.iterrows():
             name = row['full_name_display']
-            original_name = row['Name']
+            original_name = row['candidate_name']
             
             if pd.isna(name) or not name:
                 continue
@@ -913,10 +905,11 @@ class DelawareCleaner:
             return None
         
         # Apply cleaning
-        df['phone'] = df['Phone'].apply(clean_phone)
+        df['website'] = df.get('website', None)
+        df['phone'] = df['phone'].apply(clean_phone)
         df['email'] = df.apply(lambda x: clean_email(None), axis=1)  # Always None
         df['address'] = df.apply(lambda x: clean_address(None), axis=1)  # Always None
-        df['website'] = df['Website'].apply(clean_website)
+        df['website'] = df['website'].apply(clean_website)
         # No address available → address_state should be null
         df['address_state'] = pd.NA
         
@@ -929,12 +922,8 @@ class DelawareCleaner:
         # Add state column
         df['state'] = self.state_name
         
-        # Add original data preservation columns
-        df['original_name'] = df['Name'].copy()
-        df['original_state'] = df['state'].copy()
-        df['original_election_year'] = df['election_year'].copy()
-        df['original_office'] = df['Office'].copy()
-        df['original_filing_date'] = df['Date Filed'].copy()
+        # Note: original_ columns removed - not needed for final output
+
         
         # Ensure original_election_year is int64 to match Alaska's format
         # Handle NaN values by filling with 0 first, then converting
@@ -948,7 +937,7 @@ class DelawareCleaner:
         # Add missing columns with None values
         required_columns = [
             'county', 'city', 'zip_code', 'address_state', 'filing_date', 
-            'election_date', 'facebook', 'twitter', 'prefix', 'suffix', 'nickname'
+            'election_year', 'facebook', 'twitter', 'prefix', 'suffix', 'nickname'
         ]
         
         for col in required_columns:
@@ -963,8 +952,8 @@ class DelawareCleaner:
         # No need to set county to None since it's already populated during office processing
         
         # Map filing date
-        if 'Date Filed' in df.columns:
-            df['filing_date'] = df['Date Filed'].fillna('').astype(str).replace('nan', '')
+        if 'filing_date' in df.columns:
+            df['filing_date'] = df['filing_date'].fillna('').astype(str).replace('nan', '')
         
         return df
     
@@ -1191,18 +1180,15 @@ class DelawareCleaner:
             'website',
             'state',
             'address_state',
-            'original_name',
-            'original_state',
-            'original_election_year',
-            'original_office',
-            'original_filing_date',
+
+
             'id',
             'stable_id',
             'county',
             'city',
             'zip_code',
             'filing_date',
-            'election_date',
+            'election_year',
             'facebook',
             'twitter'
         ]
