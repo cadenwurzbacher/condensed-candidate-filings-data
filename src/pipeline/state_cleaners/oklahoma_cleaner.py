@@ -151,7 +151,7 @@ class OklahomaCleaner:
         
         # Oklahoma data is from 2024, default to General election
         df['election_year'] = 2024
-        df['election_type'] = "General"  # Default for Oklahoma 2024 data
+                    df['election_type'] = "Unknown"  # No default for Oklahoma 2024 data
         
         return df
     

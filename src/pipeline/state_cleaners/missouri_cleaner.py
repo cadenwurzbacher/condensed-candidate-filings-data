@@ -199,7 +199,7 @@ class MissouriCleaner:
             year = int(year_match.group(1)) if year_match else 2024
             
             # Determine election type based on context
-            election_type = "General"  # Default to General for Missouri
+                            election_type = "Unknown"
             
             # Check for primary indicators
             if any(term in election_str.lower() for term in ['primary', 'pri']):
@@ -211,7 +211,7 @@ class MissouriCleaner:
         
         # Extract election year and type
         df['election_year'] = 2024  # Missouri data is from 2024
-        df['election_type'] = "General"  # Default to General
+                    df['election_type'] = "Unknown"  # No default
         
         return df
     

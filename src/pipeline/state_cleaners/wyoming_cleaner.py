@@ -156,7 +156,7 @@ class WyomingCleaner:
         # Extract year from filename (2024) and set election type to General
         # Wyoming data is typically for general elections
         df['election_year'] = 2024
-        df['election_type'] = "General"
+                    df['election_type'] = "Unknown"
         
         return df
     

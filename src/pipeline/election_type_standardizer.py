@@ -88,19 +88,6 @@ class ElectionTypeStandardizer:
             # Process each individual type
             for election_type_single in types:
                 self._set_election_type_flags(result_df, idx, election_type_single, notes)
-            
-            # FALLBACK RULE: If no primary or general was set, and we have an election type, it's special
-            if (not result_df.loc[idx, 'ran_in_primary'] and 
-                not result_df.loc[idx, 'ran_in_general'] and 
-                election_str and 
-                election_str.lower() not in ['nan', 'none', 'null', '']):
-                result_df.loc[idx, 'ran_in_special'] = True
-                # Add note about fallback
-                current_notes = result_df.loc[idx, 'election_type_notes']
-                if current_notes:
-                    result_df.loc[idx, 'election_type_notes'] = f"{current_notes}; Fallback: marked as special"
-                else:
-                    result_df.loc[idx, 'election_type_notes'] = f"Fallback: marked as special (election type: {election_str})"
         
         # Remove the original election_type column
         if 'election_type' in result_df.columns:
@@ -152,9 +139,9 @@ class ElectionTypeStandardizer:
         # Add to notes for manual review
         current_notes = df.loc[idx, 'election_type_notes']
         if current_notes:
-            df.loc[idx, 'election_type_notes'] = f"{current_notes}; Unrecognized: {election_type}"
+            df.loc[idx, 'election_type_notes'] = f"{current_notes}; Unknown: {election_type}"
         else:
-            df.loc[idx, 'election_type_notes'] = f"Unrecognized: {election_type}"
+            df.loc[idx, 'election_type_notes'] = f"Unknown: {election_type}"
     
     def _add_default_binary_columns(self, df: pd.DataFrame) -> pd.DataFrame:
         """Add default binary columns when no election_type exists"""

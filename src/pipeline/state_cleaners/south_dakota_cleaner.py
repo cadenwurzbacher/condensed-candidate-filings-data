@@ -158,7 +158,7 @@ class SouthDakotaCleaner:
         
         def determine_election_type(contest_str: str) -> str:
             if pd.isna(contest_str):
-                return "General"
+                return "Unknown"
             
             contest_str = str(contest_str).strip().lower()
             
@@ -169,9 +169,7 @@ class SouthDakotaCleaner:
             elif 'special' in contest_str:
                 return "Special"
             else:
-            
-            
-                return "General"  # Default for most state/local offices
+                return "Unknown"
         
         df['election_type'] = df['office'].apply(determine_election_type)
         

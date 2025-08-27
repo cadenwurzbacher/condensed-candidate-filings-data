@@ -155,7 +155,7 @@ class NebraskaCleaner:
         # Determine election type based on office
         def determine_election_type(office_str: str) -> str:
             if pd.isna(office_str):
-                return "General"
+                return "Unknown"
             
             office_str = str(office_str).strip()
             
@@ -163,8 +163,8 @@ class NebraskaCleaner:
             if "President" in office_str:
                 return "General"
             
-            # Default to General for Nebraska
-            return "General"
+            # Default to Unknown for Nebraska
+            return "Unknown"
         
         df['election_type'] = df['office'].apply(determine_election_type)
         

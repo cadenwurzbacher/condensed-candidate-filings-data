@@ -93,6 +93,9 @@ class DelawareCleaner:
         # Step 5: Clean contact information
         cleaned_df = self._clean_contact_info(cleaned_df)
         
+        # Step 5.5: Standardize county names
+        cleaned_df = self._standardize_counties(cleaned_df)
+        
         # Step 6: Add required columns for final schema
         cleaned_df = self._add_required_columns(cleaned_df)
         
@@ -156,7 +159,7 @@ class DelawareCleaner:
                             break
             
             # Determine election type from Election column
-            election_type = "General"  # Default
+                            election_type = "Unknown"
             if pd.notna(election_str):
                 election_str = str(election_str).strip()
                 election_str_lower = election_str.lower()
@@ -957,7 +960,35 @@ class DelawareCleaner:
         
         return df
     
-    
+    def _standardize_counties(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Standardize county names from abbreviated codes to full names."""
+        logger.info("Standardizing county names...")
+        
+        # Delaware county mapping
+        county_mapping = {
+            'K': 'Kent County',
+            'N': 'New Castle County', 
+            'S': 'Sussex County',
+            'Nk': 'New Castle County',  # Alternative abbreviation
+            'Ks': 'Kent County',        # Alternative abbreviation
+            'N,k': 'New Castle County', # Comma-separated
+            'N, K': 'New Castle County', # Comma-separated with space
+            'K, S': 'Kent County',      # Comma-separated
+            'N/k': 'New Castle County'  # Slash-separated
+        }
+        
+        def standardize_county(county_code: str) -> str:
+            if pd.isna(county_code):
+                return None
+            
+            county_str = str(county_code).strip()
+            return county_mapping.get(county_str, county_str)
+        
+        # Apply county standardization
+        df['county'] = df['county'].apply(standardize_county)
+        
+        logger.info("County standardization completed")
+        return df
 
     def _is_initial_or_suffix(self, part: str) -> bool:
         """Check if a name part is an initial, suffix, or nickname."""

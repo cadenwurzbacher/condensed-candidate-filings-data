@@ -229,8 +229,8 @@ class GeorgiaCleaner:
                 return "Special"
             if "general" in l:
                 return "General"
-            # Georgia municipal/county races are generally nonpartisan on ballot; still mark as General unless stated
-            return "General"
+            # Georgia municipal/county races are generally nonpartisan on ballot; mark as Unknown if not stated
+            return "Unknown"
 
         df["election_type"] = df.apply(
             lambda r: infer_type([str(r.get("raw_election")) if pd.notna(r.get("raw_election")) else "", filename or ""]),

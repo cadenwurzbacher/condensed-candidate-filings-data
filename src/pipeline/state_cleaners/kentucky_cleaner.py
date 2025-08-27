@@ -266,7 +266,7 @@ class KentuckyCleaner:
         
         def standardize_election_type(election_type_str: str) -> str:
             if pd.isna(election_type_str):
-                return "General"  # Default
+                return "Unknown"
             
             election_type_str = str(election_type_str).strip().lower()
             
@@ -277,9 +277,7 @@ class KentuckyCleaner:
             elif 'special' in election_type_str:
                 return "Special"
             else:
-            
-            
-                return "General"  # Default
+                return "Unknown"
         
         # Apply election processing
         df['election_year'] = df[election_date_col].apply(extract_election_year)

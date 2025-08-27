@@ -155,7 +155,7 @@ class IdahoCleaner:
         
         # Idaho data is from 2024, extract from filename or set default
         df['election_year'] = 2024
-        df['election_type'] = "General"  # Default to General for Idaho data
+                    df['election_type'] = "Unknown"  # No default for Idaho data
         
         return df
     

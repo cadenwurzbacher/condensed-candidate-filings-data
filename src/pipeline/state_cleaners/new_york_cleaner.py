@@ -149,9 +149,9 @@ class NewYorkCleaner:
             elif 'general' in election_str_lower:
                 election_type = "General"
             elif 'special' in election_str_lower:
-                election_type = "General"
+                election_type = "Special"
             else:
-                election_type = "General"  # Default
+                election_type = "Unknown"
             
             return year, election_type
         
@@ -172,7 +172,7 @@ class NewYorkCleaner:
                 logger.warning("No filename provided and no Election Year column found")
             
             df['election_year'] = election_year
-            df['election_type'] = "General"  # Default for New York
+            df['election_type'] = "Unknown"  # No default for New York
             return df
         
         # Apply election processing

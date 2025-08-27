@@ -178,7 +178,7 @@ class WestVirginiaCleaner:
             elif 'special' in election_str_lower:
                 election_type = "Special"
             else:
-                election_type = "General"  # Default
+                election_type = "Unknown"
             
             return year, election_type
         
@@ -191,7 +191,7 @@ class WestVirginiaCleaner:
         else:
             # If no election column, set default values
             df['election_year'] = 2024  # Default to current year
-            df['election_type'] = "General"  # Default to general election
+            df['election_type'] = "Unknown"  # No default
         
         return df
     

@@ -150,7 +150,7 @@ class NorthCarolinaCleaner:
             elif 'special' in election_str_lower:
                 election_type = "Special"
             else:
-                election_type = "General"  # Default
+                election_type = "Unknown"
             
             return year, election_type
         
@@ -403,39 +403,60 @@ class NorthCarolinaCleaner:
             suffix = suffix_match.group(1)
             # Remove suffix from the name for further processing
             name = re.sub(suffix_pattern, '', name, flags=re.IGNORECASE).strip()
+            # Clean up any trailing commas and whitespace
+            name = re.sub(r',\s*$', '', name).strip()
         
         # Handle names with commas (Last, First Middle format)
         if ',' in name:
             parts = [part.strip() for part in name.split(',')]
             if len(parts) >= 2:
                 last_name = parts[0]
-                first_middle = parts[1].split()
+                first_middle_part = parts[1]
                 
-                if len(first_middle) == 1:
-                    first_name = first_middle[0]
-                elif len(first_middle) == 2:
-                    # Check if second part is an initial or nickname
-                    second_part = first_middle[1]
-                    if self._is_initial(second_part):
-                        first_name = first_middle[0]
-                        middle_name = second_part
-                    elif '"' in second_part or '"' in second_part or '"' in second_part or "'" in second_part or "'" in second_part or "'" in second_part or '\u201c' in second_part or '\u201d' in second_part or '\u2018' in second_part or '\u2019' in second_part:
-                        # This is a nickname, not a middle name
-                        first_name = first_middle[0]
-                        # Nickname should already be extracted above
+                # Check if the second part is just a suffix (like "Jr", "II", etc.)
+                if self._is_initial_or_suffix(first_middle_part):
+                    # This is a suffix, not a first/middle name
+                    # The last_name contains the full name, so we need to parse it differently
+                    full_name_parts = last_name.split()
+                    if len(full_name_parts) == 1:
+                        first_name = full_name_parts[0]
                         middle_name = None
+                    elif len(full_name_parts) == 2:
+                        first_name = full_name_parts[0]
+                        middle_name = full_name_parts[1]
                     else:
-                        first_name = first_middle[0]
-                        middle_name = second_part
+                        first_name = full_name_parts[0]
+                        middle_name = ' '.join(full_name_parts[1:-1]) if len(full_name_parts) > 2 else None
+                        last_name = full_name_parts[-1]
                 else:
-                    # Handle multiple parts
-                    first_name = first_middle[0]
-                    middle_parts = []
-                    for part in first_middle[1:]:
-                        if self._should_treat_as_middle_name(part):
-                            middle_parts.append(part)
+                    # This is a regular first/middle name
+                    first_middle = first_middle_part.split()
                     
-                    middle_name = ' '.join(middle_parts) if middle_parts else None
+                    if len(first_middle) == 1:
+                        first_name = first_middle[0]
+                    elif len(first_middle) == 2:
+                        # Check if second part is an initial or nickname
+                        second_part = first_middle[1]
+                        if self._is_initial(second_part):
+                            first_name = first_middle[0]
+                            middle_name = second_part
+                        elif '"' in second_part or '"' in second_part or '"' in second_part or "'" in second_part or "'" in second_part or "'" in second_part or '\u201c' in second_part or '\u201d' in second_part or '\u2018' in second_part or '\u2019' in second_part:
+                            # This is a nickname, not a middle name
+                            first_name = first_middle[0]
+                            # Nickname should already be extracted above
+                            middle_name = None
+                        else:
+                            first_name = first_middle[0]
+                            middle_name = second_part
+                    else:
+                        # Handle multiple parts
+                        first_name = first_middle[0]
+                        middle_parts = []
+                        for part in first_middle[1:]:
+                            if self._should_treat_as_middle_name(part):
+                                middle_parts.append(part)
+                        
+                        middle_name = ' '.join(middle_parts) if middle_parts else None
                 
                 display_name = self._build_display_name(first_name, middle_name, last_name, suffix, nickname)
                 return first_name, middle_name, last_name, prefix, suffix, nickname, display_name
@@ -459,20 +480,23 @@ class NorthCarolinaCleaner:
                 return parts[0], parts[1], parts[2], None, suffix, nickname, f"{parts[0]} {parts[1]} {parts[2]}"
         else:
             # For names with more than 3 parts, treat first as first, last as last, rest as middle
+            if len(parts) < 1:
+                return None, None, None, None, suffix, nickname, ""
+            
             first = parts[0]
-            last = parts[-1]
+            last = parts[-1] if len(parts) > 1 else None
             
             # Check if last part is an initial, suffix, or nickname
-            if self._is_initial_or_suffix(last):
+            if last and self._is_initial_or_suffix(last):
                 last = parts[-2] if len(parts) > 2 else None
-                middle_parts = parts[1:-2] if len(parts) > 3 else []
+                middle_parts = parts[1:-2] if len(parts) > 3 else parts[1:-1] if len(parts) > 2 else []
             else:
-                middle_parts = parts[1:-1]
+                middle_parts = parts[1:-1] if len(parts) > 2 else []
             
             # Filter out initials, suffixes, and nicknames from middle parts
             filtered_middle_parts = []
             for part in middle_parts:
-                if self._should_treat_as_middle_name(part):
+                if part and self._should_treat_as_middle_name(part):
                     filtered_middle_parts.append(part)
             
             middle = ' '.join(filtered_middle_parts) if filtered_middle_parts else None

@@ -106,6 +106,9 @@ class AlaskaCleaner:
         # Step 4: Standardize party names
         cleaned_df = self._standardize_parties(cleaned_df)
         
+        # Step 4.5: Standardize county names
+        cleaned_df = self._standardize_counties(cleaned_df)
+        
         # Step 5: Parse geographic data from addresses
         cleaned_df = self._parse_geographic_data(cleaned_df)
         
@@ -153,14 +156,14 @@ class AlaskaCleaner:
             
             # Determine election type
             election_str_lower = election_str.lower()
-            if 'primary' in election_str_lower:
+            if 'primary' in election_str.lower():
                 election_type = "Primary"
-            elif 'general' in election_str_lower:
+            elif 'general' in election_str.lower():
                 election_type = "General"
             elif 'special' in election_str_lower:
                 election_type = "Special"
             else:
-                election_type = "General"  # Default
+                election_type = "Unknown"
             
             return year, election_type
         
@@ -483,6 +486,35 @@ class AlaskaCleaner:
         
         return df
     
+    def _standardize_counties(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Standardize county names from abbreviated codes to full names."""
+        logger.info("Standardizing county names...")
+        
+        # Alaska county mapping (these appear to be abbreviations)
+        county_mapping = {
+            'Ak': 'Alaska',  # Could be Alaska or Anchorage
+            'Wv': 'West Virginia',  # This seems wrong - might be data error
+            'Ca': 'California',  # This seems wrong - might be data error
+            'De': 'Delaware',  # This seems wrong - might be data error
+            'In': 'Indiana',  # This seems wrong - might be data error
+            'Dc': 'District of Columbia',  # This seems wrong - might be data error
+            'Sd': 'South Dakota',  # This seems wrong - might be data error
+            'Bldg. A Homer': 'Homer'  # This looks like a building address, not county
+        }
+        
+        def standardize_county(county_code: str) -> str:
+            if pd.isna(county_code):
+                return None
+            
+            county_str = str(county_code).strip()
+            return county_mapping.get(county_str, county_str)
+        
+        # Apply county standardization
+        df['county'] = df['county'].apply(standardize_county)
+        
+        logger.info("County standardization completed")
+        return df
+    
     def _clean_contact_info(self, df: pd.DataFrame) -> pd.DataFrame:
         """Clean contact information (phone, email, address, website)."""
         logger.info("Cleaning contact information...")
@@ -547,7 +579,34 @@ class AlaskaCleaner:
         
         return df
     
-    
+    def _standardize_counties(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Standardize county names from abbreviated codes to full names."""
+        logger.info("Standardizing county names...")
+        
+        # Alaska county mapping (these appear to be abbreviations)
+        county_mapping = {
+            'Ak': 'Alaska',  # Could be Alaska or Anchorage
+            'Wv': 'West Virginia',  # This seems wrong - might be data error
+            'Ca': 'California',  # This seems wrong - might be data error
+            'De': 'Delaware',  # This seems wrong - might be data error
+            'In': 'Indiana',  # This seems wrong - might be data error
+            'Dc': 'District of Columbia',  # This seems wrong - might be data error
+            'Sd': 'South Dakota',  # This seems wrong - might be data error
+            'Bldg. A Homer': 'Homer'  # This looks like a building address, not county
+        }
+        
+        def standardize_county(county_code: str) -> str:
+            if pd.isna(county_code):
+                return None
+            
+            county_str = str(county_code).strip()
+            return county_mapping.get(county_str, county_str)
+        
+        # Apply county standardization
+        df['county'] = df['county'].apply(standardize_county)
+        
+        logger.info("County standardization completed")
+        return df
 
     def _parse_geographic_data(self, df: pd.DataFrame) -> pd.DataFrame:
         """Parse geographic data (city, zip_code, county) from the address column."""

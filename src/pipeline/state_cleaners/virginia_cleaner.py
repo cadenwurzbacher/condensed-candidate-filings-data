@@ -156,7 +156,7 @@ class VirginiaCleaner:
             elif 'special' in election_str_lower:
                 election_type = "Special"
             else:
-                election_type = "General"
+                election_type = "Unknown"
             
             return year, election_type
         
@@ -164,7 +164,7 @@ class VirginiaCleaner:
         if 'election_type' not in df.columns:
             logger.warning("Election column not found in Virginia data, setting defaults")
             df['election_year'] = None
-            df['election_type'] = 'General'  # Default for Virginia
+            df['election_type'] = 'Unknown'  # No default for Virginia
             return df
         
         election_results = df['election_type'].apply(extract_election_info)

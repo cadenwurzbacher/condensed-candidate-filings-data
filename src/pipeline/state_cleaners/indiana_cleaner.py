@@ -170,7 +170,7 @@ class IndianaCleaner:
             
             
             
-            df['election_type'] = "General"
+            df['election_type'] = "Unknown"
         
         return df
     

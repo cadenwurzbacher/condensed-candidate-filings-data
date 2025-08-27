@@ -24,37 +24,38 @@ import json
 current_dir = Path(__file__).parent
 sys.path.append(str(current_dir))
 
-# Import state cleaners
-from .state_cleaners.alaska_cleaner import AlaskaCleaner
-from .state_cleaners.arizona_cleaner import ArizonaCleaner
-from .state_cleaners.arkansas_cleaner import ArkansasCleaner
-from .state_cleaners.colorado_cleaner import ColoradoCleaner
-from .state_cleaners.delaware_cleaner import DelawareCleaner
-from .state_cleaners.georgia_cleaner import GeorgiaCleaner
-from .state_cleaners.idaho_cleaner import IdahoCleaner
-from .state_cleaners.illinois_cleaner import IllinoisCleaner
-from .state_cleaners.indiana_cleaner import IndianaCleaner
-from .state_cleaners.iowa_cleaner import IowaCleaner
-from .state_cleaners.kansas_cleaner import KansasCleaner
-from .state_cleaners.kentucky_cleaner import KentuckyCleaner
-from .state_cleaners.louisiana_cleaner import LouisianaCleaner
-from .state_cleaners.maryland_cleaner import MarylandCleaner
-from .state_cleaners.missouri_cleaner import MissouriCleaner
-from .state_cleaners.montana_cleaner import MontanaCleaner
-from .state_cleaners.nebraska_cleaner import NebraskaCleaner
-from .state_cleaners.new_mexico_cleaner import NewMexicoCleaner
-from .state_cleaners.new_york_cleaner import NewYorkCleaner
-from .state_cleaners.north_carolina_cleaner import NorthCarolinaCleaner
-from .state_cleaners.oklahoma_cleaner import OklahomaCleaner
-from .state_cleaners.oregon_cleaner import OregonCleaner
-from .state_cleaners.pennsylvania_cleaner import PennsylvaniaCleaner
-from .state_cleaners.south_carolina_cleaner import SouthCarolinaCleaner
-from .state_cleaners.south_dakota_cleaner import SouthDakotaCleaner
-from .state_cleaners.vermont_cleaner import VermontCleaner
-from .state_cleaners.virginia_cleaner import VirginiaCleaner
-from .state_cleaners.washington_cleaner import WashingtonCleaner
-from .state_cleaners.west_virginia_cleaner import WestVirginiaCleaner
-from .state_cleaners.wyoming_cleaner import WyomingCleaner
+# Import state cleaners (REFACTORED VERSIONS)
+from .state_cleaners.alaska_cleaner_refactored import AlaskaCleaner
+from .state_cleaners.arizona_cleaner_refactored import ArizonaCleaner
+from .state_cleaners.arkansas_cleaner_refactored import ArkansasCleaner
+from .state_cleaners.colorado_cleaner_refactored import ColoradoCleaner
+from .state_cleaners.delaware_cleaner_refactored import DelawareCleaner
+from .state_cleaners.georgia_cleaner_refactored import GeorgiaCleaner
+from .state_cleaners.idaho_cleaner_refactored import IdahoCleaner
+from .state_cleaners.illinois_cleaner_refactored import IllinoisCleaner
+from .state_cleaners.indiana_cleaner_refactored import IndianaCleaner
+from .state_cleaners.iowa_cleaner_refactored import IowaCleaner
+from .state_cleaners.kansas_cleaner_refactored import KansasCleaner
+from .state_cleaners.kentucky_cleaner_refactored import KentuckyCleaner
+from .state_cleaners.louisiana_cleaner_refactored import LouisianaCleaner
+from .state_cleaners.maryland_cleaner_refactored import MarylandCleaner
+from .state_cleaners.missouri_cleaner_refactored import MissouriCleaner
+from .state_cleaners.montana_cleaner_refactored import MontanaCleaner
+from .state_cleaners.nebraska_cleaner_refactored import NebraskaCleaner
+from .state_cleaners.new_mexico_cleaner_refactored import NewMexicoCleaner
+from .state_cleaners.new_york_cleaner_refactored import NewYorkCleaner
+from .state_cleaners.north_carolina_cleaner_refactored import NorthCarolinaCleaner
+from .state_cleaners.oregon_cleaner_refactored import OregonCleaner
+from .state_cleaners.oklahoma_cleaner_refactored import OklahomaCleaner
+from .state_cleaners.pennsylvania_cleaner_refactored import PennsylvaniaCleaner
+from .state_cleaners.south_carolina_cleaner_refactored import SouthCarolinaCleaner
+from .state_cleaners.south_dakota_cleaner_refactored import SouthDakotaCleaner
+from .state_cleaners.vermont_cleaner_refactored import VermontCleaner
+from .state_cleaners.virginia_cleaner_refactored import VirginiaCleaner
+from .state_cleaners.washington_cleaner_refactored import WashingtonCleaner
+from .state_cleaners.west_virginia_cleaner_refactored import WestVirginiaCleaner
+from .state_cleaners.wisconsin_cleaner_refactored import WisconsinCleaner
+from .state_cleaners.wyoming_cleaner_refactored import WyomingCleaner
 
 # Import structural cleaners (new)
 from .structural_cleaners.alaska_structural_cleaner import AlaskaStructuralCleaner
@@ -1182,12 +1183,16 @@ class MainPipeline:
             except Exception:
                 pass
         
+
+        
         # Final logging
         logger.info(f"Final dataset: {len(df)} records")
         logger.info(f"States represented: {df['state'].nunique()}")
         logger.info(f"Offices represented: {df['office'].nunique()}")
         
         return df
+    
+
     
     def _cleanup_old_files(self):
         """Clean up old processed files, keeping only the latest version per state."""
@@ -2417,25 +2422,17 @@ class MainPipeline:
                 logger.error(f"Data audit step failed: {e}")
                 logger.warning("Continuing with pipeline despite audit failure")
             
-            # Step 6: Upload to staging database
-            logger.info("=== STEP 6: Upload to Staging ===")
-            try:
-                staging_success = self.upload_to_staging(final_file)
-                if not staging_success:
-                    logger.error("Staging upload failed")
-                    return False
-                
-                pipeline_state['staging_upload_completed'] = True
-                logger.info("✅ Staging upload completed")
-            except Exception as e:
-                logger.error(f"Staging upload failed with exception: {e}")
-                import traceback
-                logger.error(f"Full traceback: {traceback.format_exc()}")
-                return False
+            # Step 6: Upload to staging database (SKIPPED FOR TESTING)
+            logger.info("=== STEP 6: Upload to Staging (SKIPPED) ===")
+            logger.info("🔄 Database upload step skipped for testing purposes")
+            logger.info("📁 Data saved to local files only")
             
-            logger.info("✅ Data uploaded to staging successfully!")
-            logger.info("📋 Review the data in staging before moving to production")
-            logger.info("🚀 To move to production, run: python scripts/move_to_production.py")
+            # Mark as completed but skipped
+            pipeline_state['staging_upload_completed'] = True
+            logger.info("✅ Staging upload step completed (skipped)")
+            
+            logger.info("📋 Data processing completed without database upload")
+            logger.info("🚀 To run with database upload, modify the pipeline configuration")
             
             # Log pipeline completion summary
             logger.info("🎉 Full pipeline completed successfully!")

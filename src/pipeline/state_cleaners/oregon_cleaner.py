@@ -177,7 +177,7 @@ class OregonCleaner:
             elif 'special' in election_str_lower:
                 election_type = "Special"
             else:
-                election_type = "General"  # Default
+                election_type = "Unknown"
             
             return year, election_type
         

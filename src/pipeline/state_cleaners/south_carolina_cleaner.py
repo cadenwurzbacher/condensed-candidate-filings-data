@@ -221,7 +221,7 @@ class SouthCarolinaCleaner:
             elif 'special' in election_str_lower:
                 election_type = "Special"
             else:
-                election_type = "General"  # Default
+                election_type = "Unknown"
             
             return year, election_type
         
@@ -478,10 +478,24 @@ class SouthCarolinaCleaner:
             cleaned = re.sub(r'\s+', ' ', cleaned)
             return cleaned
         
-        # Apply cleaning
-        df['phone'] = df['Contact Phone Number'].apply(clean_phone)
-        df['email'] = df['Contact Email'].apply(clean_email)
-        df['address'] = df['Contact Address'].apply(clean_address)
+        # Apply cleaning with proper column existence checks
+        if 'Contact Phone Number' in df.columns:
+            df['phone'] = df['Contact Phone Number'].apply(clean_phone)
+        else:
+            df['phone'] = pd.NA
+            logger.warning("Contact Phone Number column not found, setting phone to None")
+        
+        if 'Contact Email' in df.columns:
+            df['email'] = df['Contact Email'].apply(clean_email)
+        else:
+            df['email'] = pd.NA
+            logger.warning("Contact Email column not found, setting email to None")
+        
+        if 'Contact Address' in df.columns:
+            df['address'] = df['Contact Address'].apply(clean_address)
+        else:
+            df['address'] = pd.NA
+            logger.warning("Contact Address column not found, setting address to None")
         df['website'] = pd.NA  # Not available in South Carolina data
         
         # Parse address to extract city, zip_code, and address_state
@@ -573,9 +587,24 @@ class SouthCarolinaCleaner:
             return f"{(fm or '').strip()} {(ls or '').strip()}".strip() or None
         df['original_name'] = df.apply(orig_name, axis=1)
         df['original_state'] = df['state'].copy()
-        df['original_election_year'] = df['election_year'].copy()
-        df['original_office'] = df['office'].copy()
-        df['original_filing_date'] = df['filing_date'].copy()
+        
+        # Add election_year if it exists, otherwise set to None
+        if 'election_year' in df.columns:
+            df['original_election_year'] = df['election_year'].copy()
+        else:
+            df['original_election_year'] = pd.NA
+        
+        # Add office if it exists, otherwise set to None
+        if 'office' in df.columns:
+            df['original_office'] = df['office'].copy()
+        else:
+            df['original_office'] = pd.NA
+        
+        # Add filing_date if it exists, otherwise set to None
+        if 'filing_date' in df.columns:
+            df['original_filing_date'] = df['filing_date'].copy()
+        else:
+            df['original_filing_date'] = pd.NA
         
         # Add missing columns with None values
         required_columns = [

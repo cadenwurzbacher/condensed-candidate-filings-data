@@ -173,7 +173,7 @@ class MontanaCleaner:
             elif 'special' in election_str_lower:
                 election_type = "Special"
             else:
-                election_type = "General"  # Default
+                election_type = "Unknown"
             
             return year, election_type
         
@@ -190,7 +190,7 @@ class MontanaCleaner:
             
             # If no election column, try to extract from filename or set defaults
             df['election_year'] = 2024  # Default year
-            df['election_type'] = "General"  # Default type
+            df['election_type'] = "Unknown"  # No default
         
         return df
     

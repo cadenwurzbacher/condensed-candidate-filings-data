@@ -150,7 +150,7 @@ class MarylandCleaner:
             elif 'special' in election_str_lower:
                 election_type = "Special"
             else:
-                election_type = "General"  # Default
+                election_type = "Unknown"
             
             return year, election_type
         
@@ -170,7 +170,7 @@ class MarylandCleaner:
                 logger.warning("No filename provided and no Election column found")
             
             df['election_year'] = election_year
-            df['election_type'] = "General"  # Default for Maryland
+            df['election_type'] = "Unknown"  # No default for Maryland
             return df
         
         # Apply election processing

@@ -142,7 +142,7 @@ class IowaCleaner:
                 logger.warning("No filename provided and no Election column found")
             
             df['election_year'] = election_year
-            df['election_type'] = "General"  # Default for Iowa
+            df['election_type'] = "Unknown"  # No default for Iowa
             return df
         
         def extract_election_info(election_str: str) -> Tuple[Optional[int], Optional[str]]:
@@ -169,7 +169,7 @@ class IowaCleaner:
             elif 'special' in election_str_lower:
                 election_type = "Special"
             else:
-                election_type = "General"  # Default
+                election_type = "Unknown"
             
             return year, election_type
         
