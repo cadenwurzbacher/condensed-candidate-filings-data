@@ -1447,12 +1447,21 @@ class MainPipeline:
             logger.error(f"Full traceback: {traceback.format_exc()}")
             return None
         
-        # Party standardization
+        # Party standardization using new modular party standardizer
         try:
-            df = self._standardize_parties(df)
+            from .party_standardizer import PartyStandardizer
+            party_standardizer = PartyStandardizer()
+            df = party_standardizer.standardize_parties(df)
+            logger.info("Party standardization completed using new modular party standardizer")
         except Exception as e:
-            logger.error(f"Party standardization failed: {e}")
-            # Continue with original data
+            logger.error(f"New party standardizer failed: {e}")
+            # Fallback to old method if new one fails
+            try:
+                df = self._standardize_parties(df)
+                logger.info("Fallback to old party standardization method")
+            except Exception as e2:
+                logger.error(f"Fallback party standardization also failed: {e2}")
+                # Continue with original data
         
         # Address parsing and standardization
         try:
