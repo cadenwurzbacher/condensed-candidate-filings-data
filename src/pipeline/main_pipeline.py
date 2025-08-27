@@ -956,127 +956,29 @@ class MainPipeline:
         except Exception as e:
             logger.warning(f"raw_data normalization failed: {e}")
 
-        # Comprehensive address parsing: extract ZIP, city, state and keep only street address
+        # Use new modular address parser for comprehensive address parsing
         try:
-            import re
+            from .address_parser import AddressParser
             
-            def _parse_address_comprehensive(addr, existing_zip, existing_city, existing_state):
-                """Parse address to extract ZIP, city, state and return clean street address"""
-                if not isinstance(addr, str) or not addr.strip():
-                    return existing_zip, existing_city, existing_state, addr
-                
-                addr = addr.strip()
-                original_addr = addr
-                
-                # Extract ZIP code first (most reliable pattern)
-                # But avoid PO Box numbers which are not ZIP codes
-                zip_pattern = re.compile(r'\b\d{5}(?:-\d{4})?\b')
-                zip_match = zip_pattern.search(addr)
-                extracted_zip = None
-                if zip_match:
-                    zip_code = zip_match.group(0)
-                    # Check if this is part of a PO Box (don't extract PO Box numbers as ZIP)
-                    if not re.search(r'\bPO\s+BOX\s*' + re.escape(zip_code), addr, re.IGNORECASE):
-                        extracted_zip = zip_code
-                        # Remove ZIP from address
-                        addr = zip_pattern.sub('', addr).strip().rstrip(',')
-                
-                # Extract state (2-letter codes or full names)
-                state_patterns = [
-                    # 2-letter state codes (avoid common abbreviations like ST, RD, DR, etc.)
-                    r',\s*([A-Z]{2})\s*,?\s*$',  # State at end with optional comma
-                    r',\s*([A-Z]{2})\s*$',       # State at end
-                    r'\s+([A-Z]{2})\s+\d{5}',   # State before ZIP
-                    r'\b([A-Z]{2})\b'            # Any 2-letter code (more aggressive)
-                ]
-                
-                extracted_state = None
-                for pattern in state_patterns:
-                    state_match = re.search(pattern, addr)
-                    if state_match:
-                        state_code = state_match.group(1)
-                        # Filter out common non-state abbreviations
-                        non_state_abbrevs = {'ST', 'RD', 'DR', 'LN', 'CT', 'BL', 'APT', 'STE', 'UNIT', 'PO', 'BOX', 'AVE', 'WAY', 'PL', 'CR', 'CRT', 'CIR', 'HWY', 'US', 'SR', 'CO', 'INC', 'LLC', 'LTD', 'CORP'}
-                        if state_code not in non_state_abbrevs:
-                            extracted_state = state_code
-                            # Remove state from address
-                            addr = re.sub(pattern, '', addr).strip().rstrip(',')
-                            break
-                
-                # Extract city and clean up address format
-                extracted_city = None
-                if ',' in addr:
-                    parts = [p.strip() for p in addr.split(',') if p.strip()]
-                    if len(parts) >= 2:
-                        # Handle different address formats
-                        if len(parts) == 2:
-                            # "Street, City" format
-                            extracted_city = parts[1]
-                            # Keep only street address
-                            addr = parts[0]
-                        elif len(parts) >= 3:
-                            # "Street, City, State" format - city is middle part
-                            # But first check if the last part is actually a state code
-                            last_part = parts[-1].strip()
-                            if re.match(r'^[A-Z]{2}$', last_part):
-                                # Last part is state, second-to-last is city
-                                extracted_city = parts[-2]
-                                # Keep street address (everything before city)
-                                addr = ','.join(parts[:-2])
-                            else:
-                                # Last part is not state, so city is last part
-                                extracted_city = parts[-1]
-                                # Keep street address (everything before city)
-                                addr = ','.join(parts[:-1])
-                        else:
-                            # Only 2 parts, treat as "Street, City"
-                            extracted_city = parts[1]
-                            addr = parts[0]
-                
-                # Clean up the street address
-                addr = addr.strip().rstrip(',')
-                
-                # Special handling for Alaska format: "Street City, State"
-                # If we didn't extract a city but the address contains a city name
-                if not extracted_city and extracted_state:
-                    # Look for common Alaska city names in the address
-                    alaska_cities = ['Anchorage', 'Ketchikan', 'Fairbanks', 'Juneau', 'Sitka', 'Kodiak', 'Palmer', 'Wasilla', 'Kenai', 'Soldotna']
-                    for city in alaska_cities:
-                        if city.lower() in addr.lower():
-                            extracted_city = city
-                            # Remove city from street address
-                            addr = addr.replace(city, '').strip().rstrip(',')
-                            break
-                
-                # Use extracted values if existing ones are empty
-                final_zip = extracted_zip if extracted_zip and (not existing_zip or str(existing_zip).strip() == '') else existing_zip
-                final_city = extracted_city if extracted_city and (not existing_city or str(existing_city).strip() == '') else existing_city
-                final_state = extracted_state if extracted_state and (not existing_state or str(existing_state).strip() == '') else existing_state
-                
-                return final_zip, final_city, final_state, addr
+            # Initialize the address parser
+            address_parser = AddressParser()
             
-            # Apply comprehensive address parsing
-            address_results = df.apply(
-                lambda r: _parse_address_comprehensive(
-                    r.get('address'), 
-                    r.get('zip_code'), 
-                    r.get('city'), 
-                    r.get('address_state')
-                ), 
-                axis=1, 
-                result_type='expand'
-            )
+            # Parse addresses using the new module
+            df = address_parser.parse_dataframe_addresses(df)
             
-            # Update columns with parsed results
-            df['zip_code'] = address_results[0]
-            df['city'] = address_results[1] 
-            df['address_state'] = address_results[2]
-            df['address'] = address_results[3]
+            # Normalize address states to USPS codes
+            df = address_parser.normalize_address_states(df)
+            
+            # Backfill missing states from main state column
+            df = address_parser.backfill_missing_states(df)
+            
+            logger.info("Address parsing completed using new modular parser")
             
         except Exception as e:
-            logger.warning(f"Comprehensive address parsing failed: {e}")
+            logger.warning(f"New address parser failed: {e}")
             # Fallback to basic ZIP extraction
             try:
+                import re
                 zip_pattern = re.compile(r'\b\d{5}(?:-\d{4})?\b')
                 def _extract_zip_fallback(addr, existing_zip):
                     if pd.notna(existing_zip) and str(existing_zip).strip() != "":
@@ -1091,70 +993,11 @@ class MainPipeline:
                 zips_streets = df.apply(lambda r: _extract_zip_fallback(r.get('address'), r.get('zip_code')), axis=1, result_type='expand')
                 df['zip_code'] = zips_streets[0]
                 df['address'] = zips_streets[1]
+                logger.info("Fallback ZIP extraction completed")
             except Exception as e2:
                 logger.warning(f"Fallback ZIP extraction also failed: {e2}")
 
-        # Enhanced address_state normalization and backfill
-        try:
-            state_to_usps = {
-                'Alabama':'AL','Alaska':'AK','Arizona':'AZ','Arkansas':'AR','California':'CA','Colorado':'CO','Connecticut':'CT','Delaware':'DE','Florida':'FL','Georgia':'GA','Hawaii':'HI','Idaho':'ID','Illinois':'IL','Indiana':'IN','Iowa':'IA','Kansas':'KS','Kentucky':'KY','Louisiana':'LA','Maine':'ME','Maryland':'MD','Massachusetts':'MA','Michigan':'MI','Minnesota':'MN','Mississippi':'MS','Missouri':'MO','Montana':'MT','Nebraska':'NE','Nevada':'NV','New Hampshire':'NH','New Jersey':'NJ','New Mexico':'NM','New York':'NY','North Carolina':'NC','North Dakota':'ND','Ohio':'OH','Oklahoma':'OK','Oregon':'OR','Pennsylvania':'PA','Rhode Island':'RI','South Carolina':'SC','South Dakota':'SD','Tennessee':'TN','Texas':'TX','Utah':'UT','Vermont':'VT','Virginia':'VA','Washington':'WA','West Virginia':'WV','Wisconsin':'WI','Wyoming':'WY',
-                'District of Columbia':'DC'
-            }
-            
-            def _normalize_address_state(addr_state_val):
-                """Normalize address_state to 2-letter USPS codes"""
-                if pd.isna(addr_state_val) or not str(addr_state_val).strip():
-                    return None
-                
-                addr_state_str = str(addr_state_val).strip().upper()
-                
-                # If it's already a 2-letter code, validate it
-                if len(addr_state_str) == 2:
-                    # Check if it's a valid USPS code
-                    if addr_state_str in state_to_usps.values():
-                        return addr_state_str
-                    # Check if it's a valid state code in reverse mapping
-                    if addr_state_str in [v for v in state_to_usps.values()]:
-                        return addr_state_str
-                
-                # Try to map full state names to USPS codes
-                if addr_state_str in state_to_usps:
-                    return state_to_usps[addr_state_str]
-                
-                # Try case-insensitive matching
-                for state_name, usps_code in state_to_usps.items():
-                    if addr_state_str.upper() == state_name.upper():
-                        return usps_code
-                
-                # If we can't normalize it, return None
-                return None
-            
-            # Normalize existing address_state values
-            df['address_state'] = df['address_state'].apply(_normalize_address_state)
-            
-            # Backfill missing address_state from state column
-            def _fill_addr_state(row):
-                current = row.get('address_state')
-                if current is not None:
-                    return current
-                
-                # Try to get from state column
-                s = row.get('state')
-                if isinstance(s, str) and s.strip():
-                    s_clean = s.strip()
-                    if s_clean in state_to_usps:
-                        return state_to_usps[s_clean]
-                    # Try case-insensitive matching
-                    for state_name, usps_code in state_to_usps.items():
-                        if s_clean.upper() == state_name.upper():
-                            return usps_code
-                
-                return None
-            
-            df['address_state'] = df.apply(_fill_addr_state, axis=1)
-            
-        except Exception as e:
-            logger.warning(f"Enhanced address_state normalization failed: {e}")
+        # State normalization and backfill now handled by AddressParser module
 
         # Backfill missing stable_id deterministically from core fields
         try:
