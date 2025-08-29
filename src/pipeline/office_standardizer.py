@@ -364,6 +364,12 @@ class OfficeStandardizer:
         # Add source_office column to preserve original names
         result_df['source_office'] = result_df['office']
         
+        # Add source_district column to preserve original district information
+        if 'district' in result_df.columns:
+            result_df['source_district'] = result_df['district']
+        else:
+            result_df['source_district'] = None
+        
         # Track standardization results
         total_records = len(result_df)
         standardized_count = 0
