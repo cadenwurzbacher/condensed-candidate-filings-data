@@ -119,6 +119,13 @@ class OfficeStandardizer:
             'city councilman': 'City Council',
             'city councilwoman': 'City Council',
             
+            # Town Council variations
+            'town council': 'Town Council',
+            'town council member': 'Town Council',
+            'member town council': 'Town Council',
+            'town of chapel hill town council': 'Town Council',
+            'town of indian trail council': 'Town Council',
+            
             # City Commission variations
             'city commission': 'City Commission',
             'city commissioner': 'City Commission',
@@ -168,7 +175,11 @@ class OfficeStandardizer:
             'soil conservation officer': 'Soil Conservation Officer',
             'soil and water conservation district supervisor': 'Soil Conservation Officer',
             'soil and water conservation director': 'Soil Conservation Officer',
+            'soil and water district commission': 'Special District Commission',
             'property valuation administrator': 'Property Valuation Administrator',
+            'levee and sanitary district': 'Special District',
+            'levee district': 'Special District',
+            'sanitary district': 'Special District',
             
             # Mayor variations
             'mayor': 'Mayor',
@@ -186,13 +197,30 @@ class OfficeStandardizer:
             List of regex patterns for district identification
         """
         patterns = [
+            # District number patterns
             r'\s*-\s*\d+[a-z]*\s*district\s*$',  # " - 3rd District"
             r'\s*district\s*\d+[a-z]*\s*$',      # "District 3"
             r'\s*,\s*district\s*\d+[a-z]*\s*$',  # ", District 3"
-            r'\s*\(\d+[a-z]*\)\s*$',             # "(3rd)"
             r'\s*\d+[a-z]*\s*district\s*$',      # "3rd District"
+            
+            # Parentheses patterns (enhanced)
+            r'\s*\(\d+[a-z]*\)\s*$',             # "(3rd)"
+            r'\s*\(\d+\)\s*$',                    # "(4)"
+            r'\s*\(\d+[a-z]*\s*district\)\s*$',  # "(3rd District)"
+            
+            # Position and division patterns
             r'\s*position\s*\d+\s*$',            # "Position 12"
             r'\s*division\s*[a-z]-\d+\s*$',     # "Division A-3"
+            r'\s*division\s*\d+\s*$',            # "Division 3"
+            
+            # Seat and place patterns
+            r'\s*seat\s*\d+\s*$',                # "Seat 2"
+            r'\s*place\s*\d+\s*$',               # "Place 1"
+            r'\s*ward\s*\d+\s*$',                # "Ward 3"
+            
+            # County-specific patterns
+            r'\s*,\s*[a-z\s]+county\s*$',       # ", Harney County"
+            r'\s*\([a-z\s]+county\)\s*$',        # "(Harney County)"
         ]
         return patterns
     
@@ -219,8 +247,13 @@ class OfficeStandardizer:
         office_str = re.sub(r'\s*\([rd]\)\s*$', '', office_str, flags=re.IGNORECASE)
         office_str = re.sub(r'\s*for\s+', '', office_str, flags=re.IGNORECASE)
         
-        # Remove county prefixes
+        # Remove county prefixes (enhanced)
         office_str = re.sub(r'^[a-z\s]+county\s+', '', office_str, flags=re.IGNORECASE)
+        office_str = re.sub(r'^county\s+', '', office_str, flags=re.IGNORECASE)
+        
+        # Remove city prefixes
+        office_str = re.sub(r'^city\s+of\s+', '', office_str, flags=re.IGNORECASE)
+        office_str = re.sub(r'^town\s+of\s+', '', office_str, flags=re.IGNORECASE)
         
         # Clean up extra whitespace
         office_str = re.sub(r'\s+', ' ', office_str).strip()
@@ -242,12 +275,18 @@ class OfficeStandardizer:
         
         office_str = str(office).strip()
         
-        # Try exact match first
+        # Try exact match first (case-insensitive)
+        office_lower = office_str.lower()
+        for source, target in self.office_mappings.items():
+            if office_lower == source.lower():
+                return target
+        
+        # Try exact match with original case
         if office_str in self.office_mappings:
             return self.office_mappings[office_str]
         
-        # Try exact word matches (more precise)
-        office_words = set(office_str.lower().split())
+        # Try exact word matches (more precise, case-insensitive)
+        office_words = set(office_lower.split())
         
         for source, target in self.office_mappings.items():
             source_words = set(source.lower().split())
