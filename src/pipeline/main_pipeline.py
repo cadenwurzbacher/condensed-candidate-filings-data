@@ -1107,7 +1107,8 @@ class MainPipeline:
             for col in name_columns:
                 if col in df.columns:
                     # Convert to proper case (first letter capitalized, rest lowercase)
-                    df[col] = df[col].astype(str).str.title()
+                    # Handle None values properly to avoid converting to "None" string
+                    df[col] = df[col].apply(lambda x: x.title() if pd.notna(x) and isinstance(x, str) else x)
                     logger.info(f"Converted {col} to proper case")
             
             logger.info("Name case conversion completed successfully")
@@ -1120,10 +1121,8 @@ class MainPipeline:
             logger.info("Converting email addresses to lowercase...")
             
             if 'email' in df.columns:
-                # Convert emails to lowercase and handle NaN values
-                df['email'] = df['email'].astype(str).str.lower()
-                # Convert 'nan' strings back to actual NaN
-                df['email'] = df['email'].replace('nan', None)
+                # Convert emails to lowercase and handle None values properly
+                df['email'] = df['email'].apply(lambda x: x.lower() if pd.notna(x) and isinstance(x, str) else x)
                 logger.info("Converted email addresses to lowercase")
             
             logger.info("Email case conversion completed successfully")
@@ -1137,14 +1136,15 @@ class MainPipeline:
             
             if 'address' in df.columns:
                 # Fix float street numbers (e.g., "123.0 Main St" -> "123 Main St")
-                df['address'] = df['address'].astype(str).str.replace(r'^(\d+)\.0\b', r'\1', regex=True)
+                # Handle None values properly to avoid converting to "None" string
+                df['address'] = df['address'].apply(lambda x: 
+                    re.sub(r'^(\d+)\.0\b', r'\1', str(x)) if pd.notna(x) else x
+                )
                 
                 # Fix other common address formatting issues
-                df['address'] = df['address'].str.replace(r'\s+', ' ', regex=True)  # Multiple spaces to single
-                df['address'] = df['address'].str.replace(r'^\s+|\s+$', '', regex=True)  # Trim whitespace
-                
-                # Convert 'nan' strings back to actual NaN
-                df['address'] = df['address'].replace('nan', None)
+                df['address'] = df['address'].apply(lambda x: 
+                    re.sub(r'\s+', ' ', str(x).strip()) if pd.notna(x) else x
+                )
                 
                 logger.info("Cleaned address formatting")
             
