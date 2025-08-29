@@ -77,6 +77,9 @@ class OfficeStandardizer:
             'house member': 'State House',
             'state house member': 'State House',
             
+            # Add exact matches
+            'State House': 'State House',
+            
             # State Senate variations
             'state senator': 'State Senate',
             'state senate': 'State Senate',
@@ -84,15 +87,24 @@ class OfficeStandardizer:
             'senate member': 'State Senate',
             'state senate member': 'State Senate',
             
+            # Add exact matches
+            'State Senate': 'State Senate',
+            
             # Governor variations
             'governor': 'Governor',
             'governor / lt. governor': 'Governor',
             'governor and lieutenant governor': 'Governor',
             
+            # Add exact matches
+            'Governor': 'Governor',
+            
             # Lieutenant Governor variations
             'lieutenant governor': 'Lieutenant Governor',
             'lt. governor': 'Lieutenant Governor',
             'lt governor': 'Lieutenant Governor',
+            
+            # Add exact matches
+            'Lieutenant Governor': 'Lieutenant Governor',
             
             # State Attorney General variations
             'attorney general': 'State Attorney General',
@@ -100,14 +112,23 @@ class OfficeStandardizer:
             'attorney general - statewide': 'State Attorney General',
             'solicitor general - state court': 'State Attorney General',
             
+            # Add exact matches
+            'State Attorney General': 'State Attorney General',
+            
             # State Treasurer variations
             'state treasurer': 'State Treasurer',
             'treasurer': 'State Treasurer',
             'state treasurer - statewide': 'State Treasurer',
             
+            # Add exact matches
+            'State Treasurer': 'State Treasurer',
+            
             # Secretary of State variations
             'secretary of state': 'Secretary of State',
             'state secretary': 'Secretary of State',
+            
+            # Add exact matches
+            'Secretary of State': 'Secretary of State',
             
             # City Council variations
             'city council member': 'City Council',
@@ -126,6 +147,14 @@ class OfficeStandardizer:
             'town of chapel hill town council': 'Town Council',
             'town of indian trail council': 'Town Council',
             
+            # Add the exact matches that were missing
+            'City Council': 'City Council',
+            'County Commission': 'County Commission',
+            'State House': 'State House',
+            'City Commission': 'City Commission',
+            'School Board': 'School Board',
+            'Sheriff': 'Sheriff',
+            
             # City Commission variations
             'city commission': 'City Commission',
             'city commissioner': 'City Commission',
@@ -137,6 +166,9 @@ class OfficeStandardizer:
             'member county commission': 'County Commission',
             'county board': 'County Commission',
             'county board member': 'County Commission',
+            
+            # Add exact matches
+            'County Commission': 'County Commission',
             
             # School Board variations
             'school board': 'School Board',
@@ -160,9 +192,19 @@ class OfficeStandardizer:
             'magistrate': 'Magistrate',
             'judge': 'Judge',
             
+            # Add exact matches
+            'Justice of the Peace': 'Justice of the Peace',
+            'Judge of the Court of Common Pleas': 'Judge of the Court of Common Pleas',
+            'Judge of the Orphans Court': 'Judge of the Orphans Court',
+            'Judge of the Municipal Court': 'Judge of the Municipal Court',
+            'Circuit Judge': 'Circuit Judge',
+            'District Judge': 'District Judge',
+            'District Magistrate Judge': 'District Magistrate Judge',
+            'Magistrate': 'Magistrate',
+            'Judge': 'Judge',
+            
             # County Office variations (enhanced)
             'constable': 'Constable',
-            'sheriff': 'Sheriff',
             'county judge executive': 'County Judge Executive',
             'county judge': 'County Judge',
             'county clerk': 'County Clerk',
@@ -170,6 +212,16 @@ class OfficeStandardizer:
             'coroner': 'Coroner',
             'surveyor': 'Surveyor',
             'jailer': 'Jailer',
+            
+            # Add exact matches
+            'Constable': 'Constable',
+            'County Judge Executive': 'County Judge Executive',
+            'County Judge': 'County Judge',
+            'County Clerk': 'County Clerk',
+            'County Attorney': 'County Attorney',
+            'Coroner': 'Coroner',
+            'Surveyor': 'Surveyor',
+            'Jailer': 'Jailer',
             
             # Special District variations (enhanced)
             'soil conservation officer': 'Soil Conservation Officer',
@@ -181,10 +233,25 @@ class OfficeStandardizer:
             'levee district': 'Special District',
             'sanitary district': 'Special District',
             
+            # Add exact matches
+            'Soil Conservation Officer': 'Soil Conservation Officer',
+            'Property Valuation Administrator': 'Property Valuation Administrator',
+            'Special District Commission': 'Special District Commission',
+            'Special District': 'Special District',
+            
             # Mayor variations
             'mayor': 'Mayor',
             'city mayor': 'Mayor',
             'town mayor': 'Mayor',
+            
+            # Add exact matches
+            'Mayor': 'Mayor',
+            
+            # New office categories identified in Phase 2.5
+            'district attorney': 'District Attorney',
+            'delegate to republican national convention': 'National Convention Delegate',
+            'delegate to democratic national convention': 'National Convention Delegate',
+            'delegate to national convention': 'National Convention Delegate',
         }
         
         return mappings
@@ -221,6 +288,11 @@ class OfficeStandardizer:
             # County-specific patterns
             r'\s*,\s*[a-z\s]+county\s*$',       # ", Harney County"
             r'\s*\([a-z\s]+county\)\s*$',        # "(Harney County)"
+            
+            # Enhanced district patterns for Phase 2.5
+            r'\s*,\s*district\s*\d+\s*$',       # ", District 3"
+            r'\s*district\s*\d+\s*$',            # "District 3"
+            r'\s*\([a-z]\d+\)\s*$',              # "(a2)", "(j2)"
         ]
         return patterns
     
