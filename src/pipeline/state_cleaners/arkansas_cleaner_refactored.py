@@ -231,9 +231,9 @@ class ArkansasCleaner(BaseStateCleaner):
         if 'county' in df.columns:
             df['county'] = df['county'].map(self.county_mappings).fillna(df['county'])
         
-        # Standardize offices
-        if 'office' in df.columns:
-            df['office'] = df['office'].map(self.office_mappings).fillna(df['office'])
+        # Standardize offices - MOVED TO NATIONAL STANDARDS PHASE
+        # if 'office' in df.columns:
+            # df['office'] = df['office'].map(self.office_mappings).fillna(df['office'])
         
         # Arkansas-specific formatting
         df = self._apply_arkansas_formatting(df)

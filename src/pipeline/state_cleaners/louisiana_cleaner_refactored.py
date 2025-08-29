@@ -216,9 +216,9 @@ class LouisianaCleaner(BaseStateCleaner):
         elif 'parish' in df.columns:
             df['parish'] = df['parish'].map(self.parish_mappings).fillna(df['parish'])
         
-        # Standardize offices
-        if 'office' in df.columns:
-            df['office'] = df['office'].map(self.office_mappings).fillna(df['office'])
+        # Standardize offices - MOVED TO NATIONAL STANDARDS PHASE
+        # if 'office' in df.columns:
+            # df['office'] = df['office'].map(self.office_mappings).fillna(df['office'])
         
         # Louisiana-specific formatting
         df = self._apply_louisiana_formatting(df)

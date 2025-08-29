@@ -1,454 +1,381 @@
 #!/usr/bin/env python3
 """
-Simple Office Name Standardization System
+Office Standardizer
 
-This script standardizes office names using a simple approach:
-1. Maps only the 12 key offices specified by the user
-2. Cleans up capitalization for everything else (no more ALL CAPS)
-3. Everything else remains as-is for filtering purposes
+This module handles the standardization of office names across all states.
+It maps various office names to standardized categories and preserves the original
+office name in a source_office column for reference and debugging.
 """
 
-import pandas as pd
 import re
-import logging
+import pandas as pd
 from typing import Dict, List, Tuple, Optional
-from pathlib import Path
-import json
-from datetime import datetime
+import logging
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
 logger = logging.getLogger(__name__)
 
 class OfficeStandardizer:
-    """Simple office standardizer that maps key offices and cleans capitalization."""
+    """
+    Standardizes office names to predefined categories while preserving original names.
+    """
     
     def __init__(self):
-        """Initialize the standardizer with the 12 key office mappings."""
-        self.key_office_mappings = self._create_key_office_mappings()
+        """Initialize the office standardizer with mapping rules."""
+        self.office_mappings = self._build_office_mappings()
+        self.district_patterns = self._build_district_patterns()
         
-    def _create_key_office_mappings(self) -> Dict[str, str]:
-        """Create comprehensive office mappings with simplified naming."""
-        return {
-            # Federal offices - simplified naming
-            'U.S. SENATE': 'US Senate',
-            'U.S. HOUSE': 'US House',
-            'US SENATE': 'US Senate',
-            'US HOUSE': 'US House',
-            'UNITED STATES SENATE': 'US Senate',
-            'UNITED STATES HOUSE': 'US House',
-            'UNITED STATES REPRESENTATIVE': 'US Representative',
-            'UNITED STATES SENATOR': 'US Senate',
-            'MEMBER, UNITED STATES SENATE': 'US Senate',
-            'MEMBER, US SENATE': 'US Senate',
-            'FEDERAL SENATE': 'US Senate',
-            'FEDERAL HOUSE': 'US House',
-            'U.S. SENATOR': 'US Senate',
-            'U.S. REPRESENTATIVE': 'US Representative',
-            'US REPRESENTATIVE': 'US Representative',
-            'US SENATE': 'US Senate',
-            'US HOUSE': 'US House',
-            'CONGRESSIONAL': 'US Representative',
-            'CONGRESS': 'US Representative',
-            'U.S. PRESIDENT': 'US President',
-            'U.S. VICE PRESIDENT': 'US Vice President',
-            'PRESIDENT OF THE UNITED STATES': 'US President',
-            'PRESIDENT AND VICE PRESIDENT OF THE UNITED STATES': 'US President',
-            'UNITED STATES PRESIDENT': 'US President',
-            'UNITED STATES PRESIDENT / VICE PRESIDENT': 'US President',
-            'PRESIDENT OF THE UNITED STATES - DEMOCRATIC PARTY': 'US President',
-            'PRESIDENT OF THE UNITED STATES - REPUBLICAN PARTY': 'US President',
-            'PRESIDENT AND VICE PRESIDENT': 'US President',
-            'PRESIDENT/VICE PRESIDENT': 'US President',
-            'PRESIDENT / VICE PRESIDENT': 'US President',
-            'PRESIDENTVICE PRESIDENT': 'US President',
-            'US PRESIDENT /US VICE PRESIDENT': 'US President',
-            'UNITED STATES PRESIDENT / VICE PRESIDENT': 'US President',
-            
-            # State executive offices
-            'GOVERNOR': 'Governor',
-            'STATE ATTORNEY GENERAL': 'State Attorney General',
-            'ATTORNEY GENERAL': 'State Attorney General',
-            'STATE TREASURER': 'State Treasurer',
-            'TREASURER': 'State Treasurer',
-            'SECRETARY OF STATE': 'Secretary of State',
-            'LIEUTENANT GOVERNOR': 'Lieutenant Governor',
-            'NC LIEUTENANT GOVERNOR': 'Lieutenant Governor',
-            
-            # State legislative offices
-            'STATE SENATE': 'State Senate',
-            'STATE SENATOR': 'State Senate',
-            'STATE HOUSE': 'State House',
-            'STATE REPRESENTATIVE': 'State House',
-            'STATE DELEGATE': 'State Delegate',
-            'ASSEMBLY': 'State House',
-            'ASSEMBLY MEMBER': 'State House',
-            'ASSEMBLYMAN': 'State House',
-            'ASSEMBLYWOMAN': 'State House',
-            
-            # City offices
-            'MAYOR': 'Mayor',
-            'MAYOR (A2)': 'Mayor',
-            'CITY COUNCIL': 'City Council',
-            'CITY COUNCIL MEMBER': 'City Council',
-            'CITY COUNCILMAN': 'City Council',
-            'CITY COUNCILWOMAN': 'City Council',
-            'CITY COMMISSIONER': 'City Commissioner',
-            'CITY COMMISSIONER (A)': 'City Commissioner',
-            'CITY COMMISSIONER (J)': 'City Commissioner',
-            'CITY COMMISSION': 'City Commission',
-            
-            # County offices
-            'COUNTY COMMISSION': 'County Commission',
-            'COUNTY COMMISSIONER': 'County Commissioner',
-            'COUNTY JUDGE EXECUTIVE': 'County Judge Executive',
-            'COUNTY EXECUTIVE': 'County Executive',
-            'SHERIFF': 'Sheriff',
-            'JAILER': 'Jailer',
-            'CONSTABLE': 'Constable',
-            
-            # School board
-            'SCHOOL BOARD': 'School Board',
-            'SCHOOL BOARD MEMBER': 'School Board Member',
-            'BOARD OF EDUCATION': 'School Board',
-            'COUNTY SCHOOL BOARD': 'County School Board',
-            'COUNTY SCHOOL BOARD MEMBER(2000)': 'County School Board Member',
-            'COUNTY SCHOOL BOARD MEMBER(1998)': 'County School Board Member',
-            'IND SCHOOL BOARD': 'Independent School Board',
-            'INDEPENDENT SCHOOL BOARD': 'Independent School Board',
-            
-            # Judicial offices
-            'MAGISTRATE/JUSTICE OF THE PEACE': 'Magistrate/Justice of the Peace',
-            'DISTRICT COURT JUDGE': 'District Court Judge',
-            'JUDGE': 'Judge',
-            'JUSTICE': 'Justice'
-        }
-    
-    def clean_capitalization(self, office_name: str) -> str:
-        """Clean up capitalization - convert from ALL CAPS to Title Case."""
-        if pd.isna(office_name) or not str(office_name).strip():
-            return str(office_name)
-        
-        office_str = str(office_name).strip()
-        
-        # If it's already in mixed case, leave it as-is
-        if not office_str.isupper():
-            return office_str
-        
-        # Convert from ALL CAPS to Title Case
-        # Handle special cases like "U.S." and "Jr."
-        words = office_str.split()
-        cleaned_words = []
-        
-        for word in words:
-            # Handle abbreviations and special cases
-            if word in ['U.S.', 'U.S.A.', 'JR.', 'SR.', 'II', 'III', 'IV']:
-                cleaned_words.append(word)
-            elif '.' in word:  # Abbreviations with periods
-                cleaned_words.append(word.title())
-            else:
-                cleaned_words.append(word.title())
-        
-        return ' '.join(cleaned_words)
-    
-    def _extract_district_info(self, office_name: str) -> Tuple[str, Optional[str]]:
-        """Extract district information from office name and return clean office + district."""
-        if pd.isna(office_name) or not str(office_name).strip():
-            return str(office_name), None
-        
-        office_str = str(office_name).strip()
-        district_info = None
-        
-        # IMPORTANT: Skip complex judicial offices with divisions/subdistricts FIRST
-        # These should NOT extract district numbers as they have more complex structure
-        if re.search(r'(?:Division|Subdistrict|Sub\.)', office_str, re.IGNORECASE):
-            return office_str, None
-        
-        # Enhanced pattern matching for better coverage
-        
-        # Pattern 1: "District X" or "District X (Party)" - most general
-        district_match = re.search(r'District\s+(\d+)(?:\s*\([DRILGC]\))?', office_str, re.IGNORECASE)
-        if district_match:
-            district_info = district_match.group(1)
-            # Remove district info from office name
-            office_clean = re.sub(r'District\s+\d+(?:\s*\([DRILGC]\))?', '', office_str, flags=re.IGNORECASE).strip()
-            # Clean up any trailing punctuation
-            office_clean = re.sub(r'[,\s-]+$', '', office_clean).strip()
-            return office_clean, district_info
-        
-        # Pattern 2: "United States Representative, District X (Party)" - with comma
-        us_rep_comma_match = re.search(r'United States Representative,\s*District\s+(\d+)(?:\s*\([DRILGC]\))?', office_str, re.IGNORECASE)
-        if us_rep_comma_match:
-            district_info = us_rep_comma_match.group(1)
-            office_clean = 'US Representative'
-            return office_clean, district_info
-        
-        # Pattern 3: "U.S. Representative - District X" - with dash
-        us_rep_dash_match = re.search(r'U\.S\.\s*Representative\s*-\s*District\s+(\d+)', office_str, re.IGNORECASE)
-        if us_rep_dash_match:
-            district_info = us_rep_dash_match.group(1)
-            office_clean = 'US Representative'
-            return office_clean, district_info
-        
-        # Pattern 4: "United States Representative District X" - no separator
-        us_rep_no_sep_match = re.search(r'United States Representative\s+District\s+(\d+)', office_str, re.IGNORECASE)
-        if us_rep_no_sep_match:
-            district_info = us_rep_no_sep_match.group(1)
-            office_clean = 'US Representative'
-            return office_clean, district_info
-        
-        # Pattern 5: "State Senate District X" or "State House District X"
-        state_district_match = re.search(r'(State\s+(?:Senate|House))\s+District\s+(\d+)', office_str, re.IGNORECASE)
-        if state_district_match:
-            district_info = state_district_match.group(2)
-            office_clean = state_district_match.group(1)
-            return office_clean, district_info
-        
-        # Pattern 6: "City Council District X"
-        city_district_match = re.search(r'(City\s+Council)\s+District\s+(\d+)', office_str, re.IGNORECASE)
-        if city_district_match:
-            district_info = city_district_match.group(2)
-            office_clean = city_district_match.group(1)
-            return office_clean, district_info
-        
-        # Pattern 7: "County Commission District X"
-        county_district_match = re.search(r'(County\s+Commission)\s+District\s+(\d+)', office_str, re.IGNORECASE)
-        if county_district_match:
-            district_info = county_district_match.group(2)
-            office_clean = county_district_match.group(1)
-            return office_clean, district_info
-        
-        # Pattern 8: "Assembly District X" (for states like California)
-        assembly_district_match = re.search(r'(Assembly)\s+District\s+(\d+)', office_str, re.IGNORECASE)
-        if assembly_district_match:
-            district_info = assembly_district_match.group(2)
-            office_clean = assembly_district_match.group(1)
-            return office_clean, district_info
-        
-        # Pattern 9: "Congressional District X" (alternative US House format)
-        congressional_district_match = re.search(r'Congressional\s+District\s+(\d+)', office_str, re.IGNORECASE)
-        if congressional_district_match:
-            district_info = congressional_district_match.group(1)
-            office_clean = 'US Representative'
-            return office_clean, district_info
-        
-        # Pattern 10: "State District Court XX" or "State Superior Court XX" - extract court number
-        state_court_match = re.search(r'(State\s+(?:District|Superior)\s+Court)\s+(\d+)', office_str, re.IGNORECASE)
-        if state_court_match:
-            district_info = state_court_match.group(2)
-            office_clean = state_court_match.group(1)
-            return office_clean, district_info
-        
-        # Pattern 11: "State District Court XX" or "State Superior Court XX" - alternative format
-        state_court_alt_match = re.search(r'(State\s+(?:District|Superior)\s+Court)\s+(\d{2})', office_str, re.IGNORECASE)
-        if state_court_alt_match:
-            district_info = state_court_alt_match.group(2)
-            office_clean = state_court_alt_match.group(1)
-            return office_clean, district_info
-        
-        # Pattern 12: "100th Representative" → "State House", district: "100"
-        ordinal_rep_match = re.search(r'^(\d+)(?:st|nd|rd|th)\s+(?:Representative|Rep)(?:\s+District)?(?:\s*,\s*Office\s*[AB])?', office_str, re.IGNORECASE)
-        if ordinal_rep_match:
-            district_info = ordinal_rep_match.group(1)
-            office_clean = 'State House'
-            return office_clean, district_info
-        
-        # Pattern 13: "100th Senator" → "State Senate", district: "100"
-        ordinal_sen_match = re.search(r'^(\d+)(?:st|nd|rd|th)\s+(?:Senator|Sen)(?:\s+District)?(?:\s*,\s*Office\s*[AB])?', office_str, re.IGNORECASE)
-        if ordinal_sen_match:
-            district_info = ordinal_sen_match.group(1)
-            office_clean = 'State Senate'
-            return office_clean, district_info
-        
-        # No district found, return original office name
-        return office_str, None
-    
-    def _post_process_office_name(self, office_name: str) -> str:
-        """Post-process office names to clean up any remaining issues."""
-        if pd.isna(office_name) or not str(office_name).strip():
-            return str(office_name)
-        
-        office_str = str(office_name).strip()
-        
-        # Clean up trailing punctuation and whitespace
-        office_str = re.sub(r'[,\s-]+$', '', office_str).strip()
-        office_str = re.sub(r'^[,\s-]+', '', office_str).strip()
-        
-        # Fix common abbreviations and inconsistencies
-        office_str = re.sub(r'\bU\.S\.\b', 'US', office_str)
-        office_str = re.sub(r'\bUnited States\b', 'US', office_str)
-        
-        # Handle edge cases where office names are incomplete
-        if office_str in ['United States Representative,', 'U.S. Representative -']:
-            office_str = 'US Representative'
-        
-        # Ensure proper spacing
-        office_str = re.sub(r'\s+', ' ', office_str).strip()
-        
-        return office_str
-    
-    def standardize_office_name(self, office_name: str) -> Tuple[str, float]:
+    def _build_office_mappings(self) -> Dict[str, str]:
         """
-        Standardize an office name using the simple approach.
+        Build comprehensive office name mappings.
         
         Returns:
-            Tuple of (standardized_name, confidence_score)
+            Dictionary mapping source office names to standardized names
         """
-        if pd.isna(office_name) or not str(office_name).strip():
-            return str(office_name), 0.0
+        mappings = {
+            # US President variations (very specific to avoid false matches)
+            'president of the united states': 'US President',
+            'president of united states': 'US President',
+            'u.s. president': 'US President',
+            'us president': 'US President',
+            'united states president': 'US President',
+            'president and vice president': 'US President',
+            
+            # US House variations
+            'house of representatives': 'US House',
+            'house representative': 'US House',
+            'u.s. house': 'US House',
+            'us house': 'US House',
+            'united states house': 'US House',
+            'congress': 'US House',
+            'congressional': 'US House',
+            'u.s. representative': 'US House',
+            'us representative': 'US House',
+            'united states representative': 'US House',
+            
+            # US Senate variations
+            'senate': 'US Senate',
+            'u.s. senate': 'US Senate',
+            'us senate': 'US Senate',
+            'united states senate': 'US Senate',
+            'u.s. senator': 'US Senate',
+            'us senator': 'US Senate',
+            'united states senator': 'US Senate',
+            
+            # State House variations
+            'state house': 'State House',
+            'state representative': 'State House',
+            'state house of representatives': 'State House',
+            'house of delegates': 'State House',
+            'assembly': 'State House',
+            'general assembly': 'State House',
+            'house of representatives': 'State House',
+            'representative': 'State House',
+            'delegate': 'State House',
+            
+            # State Senate variations
+            'state senate': 'State Senate',
+            'state senator': 'State Senate',
+            'senator': 'State Senate',
+            
+            # Governor variations
+            'governor': 'Governor',
+            'state governor': 'Governor',
+            
+            # State Attorney General variations
+            'attorney general': 'State Attorney General',
+            'state attorney general': 'State Attorney General',
+            'ag': 'State Attorney General',
+            
+            # State Treasurer variations
+            'treasurer': 'State Treasurer',
+            'state treasurer': 'State Treasurer',
+            
+            # Lieutenant Governor variations
+            'lieutenant governor': 'Lieutenant Governor',
+            'lt. governor': 'Lieutenant Governor',
+            'lt governor': 'Lieutenant Governor',
+            
+            # Secretary of State variations
+            'secretary of state': 'Secretary of State',
+            'state secretary': 'Secretary of State',
+            
+            # City Council variations
+            'city council': 'City Council',
+            'city council member': 'City Council',
+            'council member': 'City Council',
+            'councilman': 'City Council',
+            'councilwoman': 'City Council',
+            'alderman': 'City Council',
+            'alderwoman': 'City Council',
+            
+            # City Commission variations
+            'city commission': 'City Commission',
+            'city commissioner': 'City Commission',
+            'commissioner': 'City Commission',
+            
+            # County Commission variations
+            'county commission': 'County Commission',
+            'county commissioner': 'County Commission',
+            'county board': 'County Commission',
+            'county board member': 'County Commission',
+            
+            # School Board variations
+            'school board': 'School Board',
+            'school board member': 'School Board',
+            'board of education': 'School Board',
+            'board member': 'School Board',
+            
+            # Judicial Office variations
+            'justice of the peace': 'Justice of the Peace',
+            'judge of the court of common pleas': 'Judge of the Court of Common Pleas',
+            'judge of the orphans court': 'Judge of the Orphans Court',
+            'judge of the orphans\' court': 'Judge of the Orphans Court',
+            'judge of the municipal court': 'Judge of the Municipal Court',
+            'judge of the circuit court': 'Judge of the Circuit Court',
+            'magistrate': 'Magistrate',
+            'judge': 'Judge',
+            
+            # Other common offices
+            'constable': 'Constable',
+            'sheriff': 'Sheriff',
+            'mayor': 'Mayor',
+            'county judge executive': 'County Judge Executive',
+        }
         
-        office_str = str(office_name).strip()
-        
-        # First, check if this office matches one of our key mappings
-        for key, standard in self.key_office_mappings.items():
-            if office_str.upper() == key.upper():
-                return standard, 1.0
-        
-        # If no key mapping found, just clean up capitalization
-        cleaned_name = self.clean_capitalization(office_str)
-        return cleaned_name, 0.5  # Lower confidence since it's just cleaned, not standardized
+        return mappings
     
-    def standardize_dataset(self, df: pd.DataFrame, office_column: str = 'office') -> pd.DataFrame:
-        """Comprehensive office standardization with district extraction."""
-        logger.info(f"Starting comprehensive office standardization for {len(df):,} records...")
+    def _build_district_patterns(self) -> List[Tuple[str, str]]:
+        """
+        Build patterns to remove district numbers from office names.
         
-        if office_column not in df.columns:
-            logger.error(f"Office column '{office_column}' not found in dataset")
+        Returns:
+            List of (pattern, replacement) tuples
+        """
+        patterns = [
+            # Remove district numbers and related text
+            (r'\s*district\s*\d+', ''),
+            (r'\s*#\s*\d+', ''),
+            (r'\s*number\s*\d+', ''),
+            (r'\s*seat\s*\d+', ''),
+            (r'\s*position\s*\d+', ''),
+            (r'\s*place\s*\d+', ''),
+            (r'\s*ward\s*\d+', ''),
+            (r'\s*precinct\s*\d+', ''),
+            (r'\s*area\s*\d+', ''),
+            (r'\s*zone\s*\d+', ''),
+            (r'\s*region\s*\d+', ''),
+            (r'\s*division\s*\d+', ''),
+            (r'\s*section\s*\d+', ''),
+            (r'\s*part\s*\d+', ''),
+            (r'\s*portion\s*\d+', ''),
+            
+            # Remove specific district formats
+            (r'\s*1st\s*district', ''),
+            (r'\s*2nd\s*district', ''),
+            (r'\s*3rd\s*district', ''),
+            (r'\s*\d+th\s*district', ''),
+            (r'\s*first\s*district', ''),
+            (r'\s*second\s*district', ''),
+            (r'\s*third\s*district', ''),
+            (r'\s*\d+st\s*district', ''),
+            (r'\s*\d+nd\s*district', ''),
+            (r'\s*\d+rd\s*district', ''),
+            
+            # Clean up extra whitespace
+            (r'\s+', ' '),
+            (r'^\s+|\s+$', ''),
+        ]
+        
+        return patterns
+    
+    def _clean_office_name(self, office: str) -> str:
+        """
+        Clean office name by removing district numbers and standardizing format.
+        
+        Args:
+            office: Raw office name
+            
+        Returns:
+            Cleaned office name without district numbers
+        """
+        if pd.isna(office) or not isinstance(office, str):
+            return office
+            
+        cleaned = office.lower().strip()
+        
+        # Apply district removal patterns
+        for pattern, replacement in self.district_patterns:
+            cleaned = re.sub(pattern, replacement, cleaned, flags=re.IGNORECASE)
+        
+        # Clean up extra whitespace
+        cleaned = re.sub(r'\s+', ' ', cleaned).strip()
+        
+        return cleaned
+    
+    def _find_best_match(self, office: str) -> Optional[str]:
+        """
+        Find the best matching standardized office name.
+        
+        Args:
+            office: Cleaned office name
+            
+        Returns:
+            Standardized office name or None if no match found
+        """
+        if not office:
+            return None
+            
+        # Try exact match first
+        if office in self.office_mappings:
+            return self.office_mappings[office]
+        
+        # Try exact word matches (more precise)
+        office_words = set(office.lower().split())
+        
+        for source, target in self.office_mappings.items():
+            source_words = set(source.lower().split())
+            
+            # Only match if there's significant overlap (at least 2 words)
+            # AND the source is not significantly longer than the office
+            if (len(office_words.intersection(source_words)) >= 2 and 
+                len(source_words) <= len(office_words) + 1):
+                
+                # Additional safety checks for specific office types
+                if self._is_safe_match(office, source, target):
+                    return target
+        
+        return None
+    
+    def _is_safe_match(self, office: str, source: str, target: str) -> bool:
+        """
+        Check if a match is safe (prevents incorrect mappings).
+        
+        Args:
+            office: Original office name
+            source: Source pattern from mappings
+            target: Target standardized name
+            
+        Returns:
+            True if the match is safe
+        """
+        office_lower = office.lower()
+        source_lower = source.lower()
+        
+        # Prevent judicial offices from being mapped to executive offices
+        judicial_keywords = ['judge', 'justice', 'court', 'magistrate', 'orphan']
+        executive_keywords = ['president', 'governor', 'mayor']
+        
+        if any(keyword in office_lower for keyword in judicial_keywords):
+            if any(keyword in target.lower() for keyword in executive_keywords):
+                return False
+        
+        # Prevent state offices from being mapped to federal offices
+        state_keywords = ['state', 'county', 'city', 'local']
+        federal_keywords = ['us ', 'united states', 'federal']
+        
+        if any(keyword in office_lower for keyword in state_keywords):
+            if any(keyword in target.lower() for keyword in federal_keywords):
+                return False
+        
+        # Additional safety checks
+        if 'justice of the peace' in office_lower and 'president' in target.lower():
+            return False
+        
+        if 'judge' in office_lower and 'president' in target.lower():
+            return False
+        
+        return True
+    
+    def standardize_offices(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Standardize office names in the dataframe.
+        
+        Args:
+            df: Input dataframe with 'office' column
+            
+        Returns:
+            Dataframe with standardized 'office' and new 'source_office' columns
+        """
+        if 'office' not in df.columns:
+            logger.warning("No 'office' column found in dataframe")
             return df
         
         # Create a copy to avoid modifying the original
-        df_standardized = df.copy()
+        result_df = df.copy()
         
-        # Ensure we have original_office column for audit trail
-        if 'original_office' not in df_standardized.columns:
-            df_standardized['original_office'] = df_standardized[office_column]
-            logger.info("Created original_office column from existing office data")
+        # Add source_office column to preserve original names
+        result_df['source_office'] = result_df['office']
         
-        # Initialize the confidence column
-        df_standardized['office_confidence'] = None
+        # Standardize office names
+        standardized_offices = []
+        match_counts = {}
         
-        # Process each office name
-        standardization_results = []
-        key_offices_count = 0
-        cleaned_offices_count = 0
-        district_extracted_count = 0
-        
-        for idx, row in df_standardized.iterrows():
-            office_name = row[office_column]
-            
-            # Step 1: Extract district information
-            office_clean, district_info = self._extract_district_info(office_name)
-            
-            # Step 2: Standardize office name
-            standardized, confidence = self.standardize_office_name(office_clean)
-            
-            # Step 3: Store results
-            df_standardized.at[idx, office_column] = standardized
-            df_standardized.at[idx, 'office_confidence'] = confidence
-            
-            # Step 4: Update district column if district was found
-            if district_info and 'district' in df_standardized.columns:
-                df_standardized.at[idx, 'district'] = district_info
-                district_extracted_count += 1
-            
-            # Step 5: Post-process office names for final cleanup
-            final_office = self._post_process_office_name(standardized)
-            df_standardized.at[idx, office_column] = final_office
-            
-            # Track statistics
-            if confidence == 1.0:
-                key_offices_count += 1
-            else:
-                cleaned_offices_count += 1
+        for idx, office in enumerate(result_df['office']):
+            if pd.isna(office):
+                standardized_offices.append(office)
+                continue
                 
-            standardization_results.append({
-                'original': row['original_office'],
-                'standardized': final_office,
-                'confidence': confidence,
-                'district_extracted': district_info
-            })
+            # Clean the office name
+            cleaned_office = self._clean_office_name(office)
+            
+            # Find best match
+            standardized = self._find_best_match(cleaned_office)
+            
+            if standardized:
+                standardized_offices.append(standardized)
+                match_counts[standardized] = match_counts.get(standardized, 0) + 1
+            else:
+                # Keep original if no match found
+                standardized_offices.append(office)
         
-        # Generate standardization statistics
-        self._generate_standardization_stats(standardization_results, key_offices_count, cleaned_offices_count, district_extracted_count)
+        # Update the office column
+        result_df['office'] = standardized_offices
         
-        logger.info("✅ Comprehensive office standardization completed!")
-        logger.info("  • Key offices mapped to standard names")
-        logger.info("  • All other offices cleaned for proper capitalization")
-        logger.info(f"  • District information extracted for {district_extracted_count:,} records")
-        logger.info("  • Post-processing cleanup applied")
-        logger.info("  • 'original_office' preserves raw data for audit")
+        # Log standardization results
+        total_records = len(result_df)
+        matched_records = sum(match_counts.values())
+        match_rate = (matched_records / total_records) * 100 if total_records > 0 else 0
         
-        return df_standardized
+        logger.info(f"Office standardization completed:")
+        logger.info(f"  Total records: {total_records:,}")
+        logger.info(f"  Matched records: {matched_records:,}")
+        logger.info(f"  Match rate: {match_rate:.1f}%")
+        
+        # Log top standardized offices
+        if match_counts:
+            logger.info("  Top standardized offices:")
+            for office, count in sorted(match_counts.items(), key=lambda x: x[1], reverse=True)[:10]:
+                logger.info(f"    {office}: {count:,} records")
+        
+        return result_df
     
-    def _generate_standardization_stats(self, results: List[Dict], key_offices: int, cleaned_offices: int, district_extracted: int) -> None:
-        """Generate and log comprehensive standardization statistics."""
-        total_records = len(results)
+    def get_unmatched_offices(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Get offices that couldn't be standardized for analysis.
         
-        # Count confidence levels
-        high_confidence = sum(1 for r in results if r['confidence'] == 1.0)
-        medium_confidence = sum(1 for r in results if r['confidence'] == 0.5)
-        low_confidence = sum(1 for r in results if r['confidence'] == 0.0)
+        Args:
+            df: Dataframe with 'office' and 'source_office' columns
+            
+        Returns:
+            Dataframe with unmatched offices and their counts
+        """
+        if 'source_office' not in df.columns:
+            logger.warning("No 'source_office' column found. Run standardize_offices first.")
+            return pd.DataFrame()
         
-        # Count district extractions
-        districts_found = sum(1 for r in results if r.get('district_extracted'))
+        # Find offices that weren't standardized (source_office != office)
+        unmatched = df[df['source_office'] != df['office']]
         
-        logger.info("📊 Comprehensive Office Standardization Statistics:")
-        logger.info(f"  • Total records processed: {total_records:,}")
-        logger.info(f"  • Key offices mapped (confidence 1.0): {key_offices:,} ({key_offices/total_records*100:.1f}%)")
-        logger.info(f"  • Offices cleaned (confidence 0.5): {cleaned_offices:,} ({cleaned_offices/total_records*100:.1f}%)")
-        logger.info(f"  • District information extracted: {district_extracted:,} ({district_extracted/total_records*100:.1f}%)")
-        logger.info(f"  • High confidence: {high_confidence:,} ({high_confidence/total_records*100:.1f}%)")
-        logger.info(f"  • Medium confidence: {medium_confidence:,} ({medium_confidence/total_records*100:.1f}%)")
-        logger.info(f"  • Low confidence: {low_confidence:,} ({low_confidence/total_records*100:.1f}%)")
+        if len(unmatched) == 0:
+            logger.info("All offices were successfully standardized!")
+            return pd.DataFrame()
         
-        # Show sample of high-confidence standardizations
-        high_conf_results = [r for r in results if r['confidence'] == 1.0][:5]
-        if high_conf_results:
-            logger.info(f"  • Sample high-confidence mappings:")
-            for result in high_conf_results:
-                district_info = f" (District: {result['district_extracted']})" if result.get('district_extracted') else ""
-                logger.info(f"    '{result['original']}' → '{result['standardized']}'{district_info}")
+        # Group by source office and count
+        unmatched_summary = unmatched.groupby('source_office').size().reset_index(name='count')
+        unmatched_summary = unmatched_summary.sort_values('count', ascending=False)
         
-        # Show sample of medium-confidence cleanups
-        medium_conf_results = [r for r in results if r['confidence'] == 0.5][:5]
-        if medium_conf_results:
-            logger.info(f"  • Sample medium-confidence cleanups:")
-            for result in medium_conf_results:
-                district_info = f" (District: {result['standardized']})" if result.get('district_extracted') else ""
-                logger.info(f"    '{result['standardized']}'{district_info}")
+        logger.info(f"Found {len(unmatched_summary):,} unmatched office types:")
+        for _, row in unmatched_summary.head(20).iterrows():
+            logger.info(f"  {row['source_office']}: {row['count']:,} records")
         
-        # Show sample of district extractions
-        district_results = [r for r in results if r.get('district_extracted')][:5]
-        if district_results:
-            logger.info(f"  • Sample district extractions:")
-            for result in district_results:
-                logger.info(f"    '{result['original']}' → Office: '{result['standardized']}', District: {result['district_extracted']}")
-
-def main():
-    """Main function for testing the office standardizer."""
-    # Example usage
-    standardizer = OfficeStandardizer()
-    
-    # Test some office names
-    test_offices = [
-        "U.S. SENATE",
-        "GOVERNOR", 
-        "STATE SENATE",
-        "MAYOR",
-        "CITY COUNCIL MEMBER",
-        "COUNTY COMMISSIONER",
-        "SCHOOL BOARD",
-        "SOME RANDOM OFFICE",
-        "ANOTHER ALL CAPS OFFICE"
-    ]
-    
-    print("Testing office standardization:")
-    for office in test_offices:
-        standardized, confidence = standardizer.standardize_office_name(office)
-        print(f"  '{office}' → '{standardized}' (confidence: {confidence})")
-
-if __name__ == "__main__":
-    main()
+        return unmatched_summary

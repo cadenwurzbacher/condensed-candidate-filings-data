@@ -250,9 +250,9 @@ class NebraskaCleaner(BaseStateCleaner):
         if 'county' in df.columns:
             df['county'] = df['county'].map(self.county_mappings).fillna(df['county'])
         
-        # Standardize offices
-        if 'office' in df.columns:
-            df['office'] = df['office'].map(self.office_mappings).fillna(df['office'])
+        # Standardize offices - MOVED TO NATIONAL STANDARDS PHASE
+        # if 'office' in df.columns:
+            # df['office'] = df['office'].map(self.office_mappings).fillna(df['office'])
         
         # Nebraska-specific formatting
         df = self._apply_nebraska_formatting(df)

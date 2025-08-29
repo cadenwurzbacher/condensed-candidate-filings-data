@@ -67,6 +67,9 @@ class NationalStandards:
         # Make a copy to avoid modifying original
         df_standardized = df.copy()
         
+        # Apply office standardization (preserves source_office column)
+        df_standardized = self._apply_office_standardization(df_standardized)
+        
         # Apply smart case standardization
         df_standardized = self._apply_smart_case_standardization(df_standardized)
         
@@ -319,6 +322,41 @@ class NationalStandards:
             logger.info("No duplicate stable_ids found")
         
         return df_deduped
+    
+    def _apply_office_standardization(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Apply office standardization to all records
+        
+        Args:
+            df: Input DataFrame with 'office' column
+            
+        Returns:
+            DataFrame with standardized 'office' and new 'source_office' columns
+        """
+        logger.info("Applying office standardization...")
+        
+        if 'office' not in df.columns:
+            logger.warning("No 'office' column found, skipping office standardization")
+            return df
+        
+        # Initialize the office standardizer
+        office_standardizer = OfficeStandardizer()
+        
+        # Apply standardization
+        result_df = office_standardizer.standardize_offices(df)
+        
+        # Get unmatched offices for analysis
+        unmatched_summary = office_standardizer.get_unmatched_offices(result_df)
+        
+        if not unmatched_summary.empty:
+            logger.info(f"Found {len(unmatched_summary):,} unmatched office types")
+            logger.info("Top unmatched offices:")
+            for _, row in unmatched_summary.head(10).iterrows():
+                logger.info(f"  {row['source_office']}: {row['count']:,} records")
+        else:
+            logger.info("All offices were successfully standardized!")
+        
+        return result_df
     
     def _generate_stable_id(self, name: str, state: str, office: str, election_year: str, county: str = None) -> str:
         """
