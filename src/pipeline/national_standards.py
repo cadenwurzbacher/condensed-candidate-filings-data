@@ -70,6 +70,9 @@ class NationalStandards:
         # Apply office standardization (preserves source_office column)
         df_standardized = self._apply_office_standardization(df_standardized)
         
+        # Apply party standardization (preserves source_party column)
+        df_standardized = self._apply_party_standardization(df_standardized)
+        
         # Apply smart case standardization
         df_standardized = self._apply_smart_case_standardization(df_standardized)
         
@@ -322,6 +325,113 @@ class NationalStandards:
             logger.info("No duplicate stable_ids found")
         
         return df_deduped
+    
+    def _apply_party_standardization(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Apply party standardization to all records
+        
+        Args:
+            df: Input DataFrame with 'party' column
+            
+        Returns:
+            DataFrame with standardized 'party' and new 'source_party' column
+        """
+        logger.info("Applying party standardization...")
+        
+        if 'party' not in df.columns:
+            logger.warning("No 'party' column found, skipping party standardization")
+            return df
+        
+        # Make a copy to avoid modifying original
+        df_standardized = df.copy()
+        
+        # Add source_party column to preserve original values
+        df_standardized['source_party'] = df_standardized['party'].copy()
+        
+        # Apply party standardization
+        df_standardized['party'] = df_standardized['party'].apply(self._standardize_party)
+        
+        # Log the results
+        original_parties = df['party'].nunique()
+        standardized_parties = df_standardized['party'].nunique()
+        reduction = original_parties - standardized_parties
+        
+        logger.info(f"Party standardization complete:")
+        logger.info(f"  Original unique parties: {original_parties}")
+        logger.info(f"  Standardized unique parties: {standardized_parties}")
+        logger.info(f"  Reduction: {reduction} party variations")
+        
+        return df_standardized
+    
+    def _standardize_party(self, party: str) -> str:
+        """
+        Standardize party names using conservative mapping
+        
+        Args:
+            party: Original party name
+            
+        Returns:
+            str: Standardized party name
+        """
+        if pd.isna(party) or not isinstance(party, str):
+            return party
+        
+        party = party.strip()
+        
+        # Conservative party mapping - only standardize obvious duplicates/abbreviations
+        party_mapping = {
+            # Democratic variations
+            'Democrat': 'Democratic',
+            'Dem': 'Democratic', 
+            'Democratic Party': 'Democratic',
+            'Democractic': 'Democratic',  # Typo fix
+            'D': 'Democratic',
+            
+            # Republican variations
+            'Rep': 'Republican',
+            'Republican Party': 'Republican',
+            'R': 'Republican',
+            'G.o.p.': 'Republican',
+            'Gop': 'Republican',
+            'G.o.p': 'Republican',
+            'Grand Old': 'Republican',
+            'The Republican': 'Republican',
+            
+            # Independent/Nonpartisan variations
+            'Ind': 'Independent',
+            'I': 'Independent',
+            'Non-partisan': 'Nonpartisan',
+            'Non Partisan': 'Nonpartisan',
+            'Non': 'Nonpartisan',
+            'Np': 'Nonpartisan',
+            'Nonaffiliated': 'Nonpartisan',
+            'Unaffiliated': 'Nonpartisan',
+            'Una': 'Nonpartisan',
+            'No Party': 'Nonpartisan',
+            'No Party Preference': 'Nonpartisan',
+            'States No Party Preference': 'Nonpartisan',
+            'No Affiliation': 'Nonpartisan',
+            'Undeclared': 'Nonpartisan',
+            
+            # Libertarian variations
+            'Lib': 'Libertarian',
+            'Lbt': 'Libertarian',
+            
+            # Green variations
+            'Green Party': 'Green',
+            'Grn': 'Green',
+            'Gre': 'Green',
+            
+            # Constitution variations
+            'Constitution Party': 'Constitution',
+            'Constitution Party Nominee': 'Constitution',
+            'Constitution Party Of Illinois': 'Constitution',
+            'Con': 'Constitution',
+            'Cst': 'Constitution',
+        }
+        
+        # Apply mapping if party exists in mapping
+        return party_mapping.get(party, party)
     
     def _apply_office_standardization(self, df: pd.DataFrame) -> pd.DataFrame:
         """

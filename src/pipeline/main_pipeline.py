@@ -342,16 +342,96 @@ class MainPipeline:
             # Move old final files to OLD folder
             self._archive_old_final_files()
             
-            # Save new final file
+            # Save new final file with robust Excel writing
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             output_file = os.path.join(self.final_dir, f"candidate_filings_FINAL_{timestamp}.xlsx")
-            final_data.to_excel(output_file, index=False)
-            logger.info(f"✅ Final output saved to: {output_file}")
-            logger.info(f"📊 Final dataset: {len(final_data)} records")
-            logger.info(f"📋 Final columns: {list(final_data.columns)}")
+            
+            # Use robust Excel writing with error handling
+            success = self._save_excel_robust(final_data, output_file)
+            
+            if success:
+                logger.info(f"✅ Final output saved to: {output_file}")
+                logger.info(f"📊 Final dataset: {len(final_data)} records")
+                logger.info(f"📋 Final columns: {list(final_data.columns)}")
+            else:
+                logger.error(f"❌ Failed to save final output to: {output_file}")
+                # Try CSV as fallback
+                csv_output = output_file.replace('.xlsx', '.csv')
+                final_data.to_csv(csv_output, index=False)
+                logger.info(f"📄 Saved as CSV fallback: {csv_output}")
         
         logger.info("Pipeline complete! (Staging skipped)")
         return final_data
+    
+    def _save_excel_robust(self, df: pd.DataFrame, output_file: str) -> bool:
+        """
+        Robust Excel file saving with error handling and validation.
+        
+        Args:
+            df: DataFrame to save
+            output_file: Output file path
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            logger.info(f"Starting robust Excel save for {len(df):,} records...")
+            
+            # Step 1: Create temporary file first
+            temp_file = output_file.replace('.xlsx', '_temp.xlsx')
+            
+            # Step 2: Save with explicit engine and options
+            with pd.ExcelWriter(temp_file, engine='openpyxl', mode='w') as writer:
+                df.to_excel(writer, sheet_name='Data', index=False)
+                # Context manager automatically closes the writer
+            
+            # Step 3: Validate the temporary file
+            if not os.path.exists(temp_file):
+                logger.error("Temporary file was not created")
+                return False
+            
+            temp_size = os.path.getsize(temp_file)
+            if temp_size == 0:
+                logger.error("Temporary file is empty")
+                os.remove(temp_file)
+                return False
+            
+            # Step 4: Test read the temporary file
+            try:
+                test_df = pd.read_excel(temp_file, engine='openpyxl')
+                if len(test_df) != len(df):
+                    logger.error(f"Temporary file record count mismatch: {len(test_df)} vs {len(df)}")
+                    os.remove(temp_file)
+                    return False
+                logger.info("Temporary file validation successful")
+            except Exception as e:
+                logger.error(f"Temporary file validation failed: {e}")
+                os.remove(temp_file)
+                return False
+            
+            # Step 5: Move temporary file to final location
+            import shutil
+            shutil.move(temp_file, output_file)
+            
+            # Step 6: Final validation
+            final_size = os.path.getsize(output_file)
+            if final_size != temp_size:
+                logger.error(f"File size changed during move: {temp_size} -> {final_size}")
+                return False
+            
+            logger.info(f"Excel file saved successfully: {output_file} ({final_size:,} bytes)")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Robust Excel save failed: {e}")
+            # Clean up any temporary files
+            temp_file = output_file.replace('.xlsx', '_temp.xlsx')
+            if os.path.exists(temp_file):
+                try:
+                    os.remove(temp_file)
+                except:
+                    pass
+            return False
     
     def _run_structural_cleaners(self) -> Dict[str, pd.DataFrame]:
         """Phase 1: Extract structured data from messy raw files"""
@@ -367,8 +447,16 @@ class MainPipeline:
                 if not df.empty:
                     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                     output_file = os.path.join(self.structured_dir, f"{state}_structured_{timestamp}.xlsx")
-                    df.to_excel(output_file, index=False)
-                    logger.info(f"Saved structured data for {state} to: {output_file}")
+                    
+                    # Use robust Excel writing
+                    success = self._save_excel_robust(df, output_file)
+                    if success:
+                        logger.info(f"Saved structured data for {state} to: {output_file}")
+                    else:
+                        logger.warning(f"Failed to save Excel for {state}, using CSV fallback")
+                        csv_output = output_file.replace('.xlsx', '.csv')
+                        df.to_csv(csv_output, index=False)
+                        logger.info(f"Saved structured data for {state} to: {csv_output}")
                 
                 logger.info(f"Structural cleaning complete for {state}: {len(df)} records")
             except Exception as e:
@@ -1026,6 +1114,44 @@ class MainPipeline:
             
         except Exception as e:
             logger.warning(f"Error during name case conversion: {e}")
+        
+        # Convert email addresses to lowercase
+        try:
+            logger.info("Converting email addresses to lowercase...")
+            
+            if 'email' in df.columns:
+                # Convert emails to lowercase and handle NaN values
+                df['email'] = df['email'].astype(str).str.lower()
+                # Convert 'nan' strings back to actual NaN
+                df['email'] = df['email'].replace('nan', None)
+                logger.info("Converted email addresses to lowercase")
+            
+            logger.info("Email case conversion completed successfully")
+            
+        except Exception as e:
+            logger.warning(f"Error during email case conversion: {e}")
+        
+        # Clean address formatting (fix float street numbers, etc.)
+        try:
+            logger.info("Cleaning address formatting...")
+            
+            if 'address' in df.columns:
+                # Fix float street numbers (e.g., "123.0 Main St" -> "123 Main St")
+                df['address'] = df['address'].astype(str).str.replace(r'^(\d+)\.0\b', r'\1', regex=True)
+                
+                # Fix other common address formatting issues
+                df['address'] = df['address'].str.replace(r'\s+', ' ', regex=True)  # Multiple spaces to single
+                df['address'] = df['address'].str.replace(r'^\s+|\s+$', '', regex=True)  # Trim whitespace
+                
+                # Convert 'nan' strings back to actual NaN
+                df['address'] = df['address'].replace('nan', None)
+                
+                logger.info("Cleaned address formatting")
+            
+            logger.info("Address cleaning completed successfully")
+            
+        except Exception as e:
+            logger.warning(f"Error during address cleaning: {e}")
 
         # Backfill missing stable_id deterministically from core fields
         try:
