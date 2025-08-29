@@ -304,6 +304,7 @@ class DatabaseManager:
                 election_year INTEGER,
                 election_type VARCHAR(50),
                 office TEXT,
+                source_office TEXT,
                 district VARCHAR(100),
                 full_name_display TEXT,
                 first_name VARCHAR(100),
@@ -374,6 +375,43 @@ class DatabaseManager:
             
         except Exception as e:
             logger.error(f"Failed to recreate staging table: {e}")
+            return False
+    
+    def add_source_office_to_filings(self) -> bool:
+        """Add source_office column to the filings table if it doesn't exist."""
+        try:
+            if not self.engine:
+                logger.error("No database connection available")
+                return False
+            
+            # Check if source_office column already exists
+            check_query = """
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name = 'filings' AND column_name = 'source_office'
+            """
+            result = self.execute_query(check_query)
+            
+            if not result.empty:
+                logger.info("source_office column already exists in filings table")
+                return True
+            
+            # Add source_office column
+            logger.info("Adding source_office column to filings table...")
+            add_column_query = """
+            ALTER TABLE filings 
+            ADD COLUMN source_office TEXT
+            """
+            
+            with self.engine.connect() as conn:
+                conn.execute(text(add_column_query))
+                conn.commit()
+            
+            logger.info("✅ source_office column added to filings table successfully")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to add source_office column to filings table: {e}")
             return False
 
 # Global database manager instance

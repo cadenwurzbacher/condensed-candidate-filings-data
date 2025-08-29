@@ -1,26 +1,35 @@
 #!/usr/bin/env python3
 """
-Office Standardizer
+Enhanced Office Standardizer for CandidateFilings.com Data Processing
 
-This module handles the standardization of office names across all states.
-It maps various office names to standardized categories and preserves the original
+This module provides comprehensive office name standardization, mapping various
+raw office names to standardized categories while preserving the original
 office name in a source_office column for reference and debugging.
 """
 
-import re
 import pandas as pd
-from typing import Dict, List, Tuple, Optional
+import re
 import logging
+from typing import Optional, Dict, List
 
 logger = logging.getLogger(__name__)
 
 class OfficeStandardizer:
     """
-    Standardizes office names to predefined categories while preserving original names.
+    Standardizes office names to predefined categories with safety validation.
+    
+    Target standardized office names:
+    - US President, US House, US Senate
+    - State House, State Senate, Governor
+    - State Attorney General, State Treasurer, Lieutenant Governor, Secretary of State
+    - City Council, City Commission, County Commission, School Board
+    - Judicial: Justice of the Peace, Circuit Judge, District Judge, County Judge
+    - County: Sheriff, Constable, Coroner, Surveyor, County Clerk, County Attorney
+    - Special: Soil Conservation Officer, Property Valuation Administrator, Jailer
     """
     
     def __init__(self):
-        """Initialize the office standardizer with mapping rules."""
+        """Initialize the office standardizer with comprehensive mappings."""
         self.office_mappings = self._build_office_mappings()
         self.district_patterns = self._build_district_patterns()
         
@@ -41,81 +50,84 @@ class OfficeStandardizer:
             'president and vice president': 'US President',
             
             # US House variations
-            'house of representatives': 'US House',
-            'house representative': 'US House',
-            'u.s. house': 'US House',
-            'us house': 'US House',
-            'united states house': 'US House',
-            'congress': 'US House',
-            'congressional': 'US House',
             'u.s. representative': 'US House',
             'us representative': 'US House',
             'united states representative': 'US House',
+            'u.s. house': 'US House',
+            'us house': 'US House',
+            'united states house': 'US House',
+            'u.s. house of representatives': 'US House',
+            'us house of representatives': 'US House',
+            'united states house of representatives': 'US House',
             
             # US Senate variations
-            'senate': 'US Senate',
-            'u.s. senate': 'US Senate',
-            'us senate': 'US Senate',
-            'united states senate': 'US Senate',
             'u.s. senator': 'US Senate',
             'us senator': 'US Senate',
             'united states senator': 'US Senate',
+            'u.s. senate': 'US Senate',
+            'us senate': 'US Senate',
+            'united states senate': 'US Senate',
             
             # State House variations
-            'state house': 'State House',
             'state representative': 'State House',
+            'state house': 'State House',
             'state house of representatives': 'State House',
-            'house of delegates': 'State House',
-            'assembly': 'State House',
-            'general assembly': 'State House',
             'house of representatives': 'State House',
             'representative': 'State House',
-            'delegate': 'State House',
+            'house member': 'State House',
+            'state house member': 'State House',
             
             # State Senate variations
-            'state senate': 'State Senate',
             'state senator': 'State Senate',
+            'state senate': 'State Senate',
             'senator': 'State Senate',
+            'senate member': 'State Senate',
+            'state senate member': 'State Senate',
             
             # Governor variations
             'governor': 'Governor',
-            'state governor': 'Governor',
-            
-            # State Attorney General variations
-            'attorney general': 'State Attorney General',
-            'state attorney general': 'State Attorney General',
-            'ag': 'State Attorney General',
-            
-            # State Treasurer variations
-            'treasurer': 'State Treasurer',
-            'state treasurer': 'State Treasurer',
+            'governor / lt. governor': 'Governor',
+            'governor and lieutenant governor': 'Governor',
             
             # Lieutenant Governor variations
             'lieutenant governor': 'Lieutenant Governor',
             'lt. governor': 'Lieutenant Governor',
             'lt governor': 'Lieutenant Governor',
             
+            # State Attorney General variations
+            'attorney general': 'State Attorney General',
+            'nc attorney general': 'State Attorney General',
+            'attorney general - statewide': 'State Attorney General',
+            'solicitor general - state court': 'State Attorney General',
+            
+            # State Treasurer variations
+            'state treasurer': 'State Treasurer',
+            'treasurer': 'State Treasurer',
+            'state treasurer - statewide': 'State Treasurer',
+            
             # Secretary of State variations
             'secretary of state': 'Secretary of State',
             'state secretary': 'Secretary of State',
             
             # City Council variations
-            'city council': 'City Council',
             'city council member': 'City Council',
-            'council member': 'City Council',
-            'councilman': 'City Council',
-            'councilwoman': 'City Council',
+            'city council': 'City Council',
             'alderman': 'City Council',
-            'alderwoman': 'City Council',
+            'member town council': 'City Council',
+            'member city council': 'City Council',
+            'council member': 'City Council',
+            'city councilman': 'City Council',
+            'city councilwoman': 'City Council',
             
             # City Commission variations
             'city commission': 'City Commission',
             'city commissioner': 'City Commission',
-            'commissioner': 'City Commission',
+            'member city commission': 'City Commission',
             
             # County Commission variations
             'county commission': 'County Commission',
             'county commissioner': 'County Commission',
+            'member county commission': 'County Commission',
             'county board': 'County Commission',
             'county board member': 'County Commission',
             
@@ -124,113 +136,118 @@ class OfficeStandardizer:
             'school board member': 'School Board',
             'board of education': 'School Board',
             'board member': 'School Board',
+            'ind school board member': 'School Board',
+            'university board of regents': 'School Board',
             
-            # Judicial Office variations
+            # Judicial Office variations (enhanced)
             'justice of the peace': 'Justice of the Peace',
             'judge of the court of common pleas': 'Judge of the Court of Common Pleas',
             'judge of the orphans court': 'Judge of the Orphans Court',
             'judge of the orphans\' court': 'Judge of the Orphans Court',
             'judge of the municipal court': 'Judge of the Municipal Court',
-            'judge of the circuit court': 'Judge of the Circuit Court',
+            'judge of the circuit court': 'Circuit Judge',
+            'circuit judge': 'Circuit Judge',
+            'district court judge': 'District Judge',
+            'district judge': 'District Judge',
+            'district magistrate judge': 'District Magistrate Judge',
             'magistrate': 'Magistrate',
             'judge': 'Judge',
             
-            # Other common offices
+            # County Office variations (enhanced)
             'constable': 'Constable',
             'sheriff': 'Sheriff',
-            'mayor': 'Mayor',
             'county judge executive': 'County Judge Executive',
+            'county judge': 'County Judge',
+            'county clerk': 'County Clerk',
+            'county attorney': 'County Attorney',
+            'coroner': 'Coroner',
+            'surveyor': 'Surveyor',
+            'jailer': 'Jailer',
+            
+            # Special District variations (enhanced)
+            'soil conservation officer': 'Soil Conservation Officer',
+            'soil and water conservation district supervisor': 'Soil Conservation Officer',
+            'soil and water conservation director': 'Soil Conservation Officer',
+            'property valuation administrator': 'Property Valuation Administrator',
+            
+            # Mayor variations
+            'mayor': 'Mayor',
+            'city mayor': 'Mayor',
+            'town mayor': 'Mayor',
         }
         
         return mappings
     
-    def _build_district_patterns(self) -> List[Tuple[str, str]]:
+    def _build_district_patterns(self) -> List[str]:
         """
-        Build patterns to remove district numbers from office names.
+        Build regex patterns for district number removal.
         
         Returns:
-            List of (pattern, replacement) tuples
+            List of regex patterns for district identification
         """
         patterns = [
-            # Remove district numbers and related text
-            (r'\s*district\s*\d+', ''),
-            (r'\s*#\s*\d+', ''),
-            (r'\s*number\s*\d+', ''),
-            (r'\s*seat\s*\d+', ''),
-            (r'\s*position\s*\d+', ''),
-            (r'\s*place\s*\d+', ''),
-            (r'\s*ward\s*\d+', ''),
-            (r'\s*precinct\s*\d+', ''),
-            (r'\s*area\s*\d+', ''),
-            (r'\s*zone\s*\d+', ''),
-            (r'\s*region\s*\d+', ''),
-            (r'\s*division\s*\d+', ''),
-            (r'\s*section\s*\d+', ''),
-            (r'\s*part\s*\d+', ''),
-            (r'\s*portion\s*\d+', ''),
-            
-            # Remove specific district formats
-            (r'\s*1st\s*district', ''),
-            (r'\s*2nd\s*district', ''),
-            (r'\s*3rd\s*district', ''),
-            (r'\s*\d+th\s*district', ''),
-            (r'\s*first\s*district', ''),
-            (r'\s*second\s*district', ''),
-            (r'\s*third\s*district', ''),
-            (r'\s*\d+st\s*district', ''),
-            (r'\s*\d+nd\s*district', ''),
-            (r'\s*\d+rd\s*district', ''),
-            
-            # Clean up extra whitespace
-            (r'\s+', ' '),
-            (r'^\s+|\s+$', ''),
+            r'\s*-\s*\d+[a-z]*\s*district\s*$',  # " - 3rd District"
+            r'\s*district\s*\d+[a-z]*\s*$',      # "District 3"
+            r'\s*,\s*district\s*\d+[a-z]*\s*$',  # ", District 3"
+            r'\s*\(\d+[a-z]*\)\s*$',             # "(3rd)"
+            r'\s*\d+[a-z]*\s*district\s*$',      # "3rd District"
+            r'\s*position\s*\d+\s*$',            # "Position 12"
+            r'\s*division\s*[a-z]-\d+\s*$',     # "Division A-3"
         ]
-        
         return patterns
     
     def _clean_office_name(self, office: str) -> str:
         """
-        Clean office name by removing district numbers and standardizing format.
+        Clean office name by removing district numbers and basic cleaning.
         
         Args:
-            office: Raw office name
+            office: Original office name
             
         Returns:
-            Cleaned office name without district numbers
+            Cleaned office name
         """
-        if pd.isna(office) or not isinstance(office, str):
+        if not office or pd.isna(office):
             return office
-            
-        cleaned = office.lower().strip()
         
-        # Apply district removal patterns
-        for pattern, replacement in self.district_patterns:
-            cleaned = re.sub(pattern, replacement, cleaned, flags=re.IGNORECASE)
+        office_str = str(office).strip()
+        
+        # Remove district patterns
+        for pattern in self.district_patterns:
+            office_str = re.sub(pattern, '', office_str, flags=re.IGNORECASE)
+        
+        # Remove party indicators in parentheses
+        office_str = re.sub(r'\s*\([rd]\)\s*$', '', office_str, flags=re.IGNORECASE)
+        office_str = re.sub(r'\s*for\s+', '', office_str, flags=re.IGNORECASE)
+        
+        # Remove county prefixes
+        office_str = re.sub(r'^[a-z\s]+county\s+', '', office_str, flags=re.IGNORECASE)
         
         # Clean up extra whitespace
-        cleaned = re.sub(r'\s+', ' ', cleaned).strip()
+        office_str = re.sub(r'\s+', ' ', office_str).strip()
         
-        return cleaned
+        return office_str
     
     def _find_best_match(self, office: str) -> Optional[str]:
         """
         Find the best matching standardized office name.
         
         Args:
-            office: Cleaned office name
+            office: Original office name
             
         Returns:
             Standardized office name or None if no match found
         """
-        if not office:
+        if not office or pd.isna(office):
             return None
-            
+        
+        office_str = str(office).strip()
+        
         # Try exact match first
-        if office in self.office_mappings:
-            return self.office_mappings[office]
+        if office_str in self.office_mappings:
+            return self.office_mappings[office_str]
         
         # Try exact word matches (more precise)
-        office_words = set(office.lower().split())
+        office_words = set(office_str.lower().split())
         
         for source, target in self.office_mappings.items():
             source_words = set(source.lower().split())
@@ -241,7 +258,7 @@ class OfficeStandardizer:
                 len(source_words) <= len(office_words) + 1):
                 
                 # Additional safety checks for specific office types
-                if self._is_safe_match(office, source, target):
+                if self._is_safe_match(office_str, source, target):
                     return target
         
         return None
@@ -288,76 +305,72 @@ class OfficeStandardizer:
     
     def standardize_offices(self, df: pd.DataFrame) -> pd.DataFrame:
         """
-        Standardize office names in the dataframe.
+        Standardize office names in the DataFrame.
         
         Args:
-            df: Input dataframe with 'office' column
+            df: Input DataFrame with 'office' column
             
         Returns:
-            Dataframe with standardized 'office' and new 'source_office' columns
+            DataFrame with standardized 'office' and new 'source_office' columns
         """
         if 'office' not in df.columns:
-            logger.warning("No 'office' column found in dataframe")
+            logger.warning("No 'office' column found, skipping office standardization")
             return df
         
-        # Create a copy to avoid modifying the original
+        logger.info(f"Starting office standardization for {len(df):,} records...")
+        
+        # Make a copy to avoid modifying original
         result_df = df.copy()
         
         # Add source_office column to preserve original names
         result_df['source_office'] = result_df['office']
         
-        # Standardize office names
-        standardized_offices = []
-        match_counts = {}
+        # Track standardization results
+        total_records = len(result_df)
+        standardized_count = 0
+        unmatched_offices = set()
         
-        for idx, office in enumerate(result_df['office']):
-            if pd.isna(office):
-                standardized_offices.append(office)
+        # Apply standardization
+        for idx, row in result_df.iterrows():
+            original_office = row['office']
+            if pd.isna(original_office):
                 continue
-                
+            
             # Clean the office name
-            cleaned_office = self._clean_office_name(office)
+            cleaned_office = self._clean_office_name(original_office)
             
             # Find best match
-            standardized = self._find_best_match(cleaned_office)
+            standardized_office = self._find_best_match(cleaned_office)
             
-            if standardized:
-                standardized_offices.append(standardized)
-                match_counts[standardized] = match_counts.get(standardized, 0) + 1
+            if standardized_office:
+                result_df.at[idx, 'office'] = standardized_office
+                standardized_count += 1
             else:
-                # Keep original if no match found
-                standardized_offices.append(office)
+                # Keep original office name if no match found
+                unmatched_offices.add(cleaned_office)
         
-        # Update the office column
-        result_df['office'] = standardized_offices
-        
-        # Log standardization results
-        total_records = len(result_df)
-        matched_records = sum(match_counts.values())
-        match_rate = (matched_records / total_records) * 100 if total_records > 0 else 0
-        
+        # Log results
         logger.info(f"Office standardization completed:")
         logger.info(f"  Total records: {total_records:,}")
-        logger.info(f"  Matched records: {matched_records:,}")
-        logger.info(f"  Match rate: {match_rate:.1f}%")
+        logger.info(f"  Standardized: {standardized_count:,} ({standardized_count/total_records*100:.1f}%)")
+        logger.info(f"  Unmatched: {len(unmatched_offices):,} unique office types")
         
-        # Log top standardized offices
-        if match_counts:
-            logger.info("  Top standardized offices:")
-            for office, count in sorted(match_counts.items(), key=lambda x: x[1], reverse=True)[:10]:
-                logger.info(f"    {office}: {count:,} records")
+        if unmatched_offices:
+            logger.info("Sample unmatched offices:")
+            for office in list(unmatched_offices)[:10]:
+                logger.info(f"  - {office}")
         
         return result_df
     
     def get_unmatched_offices(self, df: pd.DataFrame) -> pd.DataFrame:
         """
-        Get offices that couldn't be standardized for analysis.
+        Get summary of unmatched offices for analysis.
         
         Args:
             df: Dataframe with 'office' and 'source_office' columns
             
         Returns:
-            Dataframe with unmatched offices and their counts
+            DataFrame with unmatched office summary
         """
         if 'source_office' not in df.columns:
             logger.warning("No 'source_office' column found. Run standardize_offices first.")
@@ -366,16 +379,11 @@ class OfficeStandardizer:
         # Find offices that weren't standardized (source_office != office)
         unmatched = df[df['source_office'] != df['office']]
         
-        if len(unmatched) == 0:
-            logger.info("All offices were successfully standardized!")
+        if unmatched.empty:
             return pd.DataFrame()
         
-        # Group by source office and count
+        # Group by source_office and count
         unmatched_summary = unmatched.groupby('source_office').size().reset_index(name='count')
         unmatched_summary = unmatched_summary.sort_values('count', ascending=False)
-        
-        logger.info(f"Found {len(unmatched_summary):,} unmatched office types:")
-        for _, row in unmatched_summary.head(20).iterrows():
-            logger.info(f"  {row['source_office']}: {row['count']:,} records")
         
         return unmatched_summary
