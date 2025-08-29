@@ -172,7 +172,7 @@ class DelawareCleaner(BaseStateCleaner):
         if 'candidate_name' in df.columns:
             df['full_name_display'] = df['candidate_name']
         
-        # Delaware name parsing - handles coastal region naming patterns
+        # Delaware name parsing - handles "Last, First Middle" format common in official records
         for idx, row in df.iterrows():
             candidate_name = row.get('candidate_name')
             if pd.notna(candidate_name) and str(candidate_name).strip():
@@ -200,13 +200,18 @@ class DelawareCleaner(BaseStateCleaner):
                 # Split remaining name into parts
                 parts = [p.strip() for p in name_str.split() if p.strip()]
                 
-                if len(parts) >= 1:
-                    df.at[idx, 'first_name'] = parts[0]
                 if len(parts) >= 2:
-                    df.at[idx, 'last_name'] = parts[-1]
-                if len(parts) > 2:
-                    # Middle names are everything between first and last
-                    df.at[idx, 'middle_name'] = ' '.join(parts[1:-1])
+                    # ALL Delaware names follow "Last, First Middle" format
+                    # First part is LAST NAME, second part is FIRST NAME
+                    df.at[idx, 'last_name'] = parts[0]
+                    df.at[idx, 'first_name'] = parts[1]
+                    
+                    if len(parts) > 2:
+                        # Everything after the first two parts is middle name(s)
+                        df.at[idx, 'middle_name'] = ' '.join(parts[2:])
+                elif len(parts) == 1:
+                    # Single name - treat as first name
+                    df.at[idx, 'first_name'] = parts[0]
         
         return df
     

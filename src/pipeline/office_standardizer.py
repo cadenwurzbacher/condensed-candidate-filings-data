@@ -420,7 +420,7 @@ class OfficeStandardizer:
         
         Args:
             df: Input DataFrame with 'office' column
-            
+        
         Returns:
             DataFrame with standardized 'office' and new 'source_office' columns
         """

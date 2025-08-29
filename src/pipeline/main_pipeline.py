@@ -726,26 +726,30 @@ class MainPipeline:
                 try:
                     logger.info(f"Running data cleaner for {state}")
                     cleaner = self.state_cleaners[state]
-                    # Call the appropriate method for each state
-                    method_name = f"clean_{state}_data"
-                    if hasattr(cleaner, method_name):
-                        cleaned_df = getattr(cleaner, method_name)(df)
+                    # Call the clean_data method from BaseStateCleaner
+                    if hasattr(cleaner, 'clean_data'):
+                        cleaned_df = cleaner.clean_data(df)
                     else:
-                        # Try alternative method names
-                        alt_methods = [
-                            f"clean_{state}_candidates",
-                            "clean",
-                            "process"
-                        ]
-                        method_found = False
-                        for alt_method in alt_methods:
-                            if hasattr(cleaner, alt_method):
-                                cleaned_df = getattr(cleaner, alt_method)(df)
-                                method_found = True
-                                break
-                        if not method_found:
-                            logger.warning(f"No cleaning method found for {state}, using original data")
-                            cleaned_df = df
+                        # Fallback to alternative methods if clean_data doesn't exist
+                        method_name = f"clean_{state}_data"
+                        if hasattr(cleaner, method_name):
+                            cleaned_df = getattr(cleaner, method_name)(df)
+                        else:
+                            # Try other alternative method names
+                            alt_methods = [
+                                f"clean_{state}_candidates",
+                                "clean",
+                                "process"
+                            ]
+                            method_found = False
+                            for alt_method in alt_methods:
+                                if hasattr(cleaner, alt_method):
+                                    cleaned_df = getattr(cleaner, alt_method)(df)
+                                    method_found = True
+                                    break
+                            if not method_found:
+                                logger.warning(f"No cleaning method found for {state}, using original data")
+                                cleaned_df = df
                     logger.info(f"Cleaner returned type: {type(cleaned_df)}")
                     cleaned_data[state] = cleaned_df
                     
@@ -998,6 +1002,30 @@ class MainPipeline:
                 logger.warning(f"Fallback ZIP extraction also failed: {e2}")
 
         # State normalization and backfill now handled by AddressParser module
+
+        # Initialize nickname column if it doesn't exist (state cleaners don't create this)
+        try:
+            if 'nickname' not in df.columns:
+                df['nickname'] = None
+                logger.info("Initialized missing nickname column")
+        except Exception as e:
+            logger.warning(f"Error initializing nickname column: {e}")
+        
+        # Convert name columns from ALL CAPS to proper case
+        try:
+            logger.info("Converting name columns to proper case...")
+            
+            name_columns = ['first_name', 'middle_name', 'last_name', 'prefix', 'suffix']
+            for col in name_columns:
+                if col in df.columns:
+                    # Convert to proper case (first letter capitalized, rest lowercase)
+                    df[col] = df[col].astype(str).str.title()
+                    logger.info(f"Converted {col} to proper case")
+            
+            logger.info("Name case conversion completed successfully")
+            
+        except Exception as e:
+            logger.warning(f"Error during name case conversion: {e}")
 
         # Backfill missing stable_id deterministically from core fields
         try:
