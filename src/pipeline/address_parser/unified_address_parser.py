@@ -73,6 +73,13 @@ class UnifiedAddressParser:
             df['city'] = result_df['city']
             df['street_address'] = result_df['address']  # Use the parsed street address from result_df
             
+            # Clean up ZIP codes (remove .0 suffix)
+            if 'zip_code' in df.columns:
+                df['zip_code'] = df['zip_code'].apply(
+                    lambda x: str(x).replace('.0', '') if pd.notna(x) and str(x).endswith('.0') else x
+                )
+                logger.info("Cleaned ZIP codes (removed .0 suffix)")
+            
             # Only populate address_state if there's actually a valid address
             # Check if the address field has meaningful content (not just empty/NaN)
             valid_address_mask = (
@@ -84,6 +91,14 @@ class UnifiedAddressParser:
             
             # Only update address_state for rows with valid addresses
             df.loc[valid_address_mask, 'address_state'] = result_df.loc[valid_address_mask, 'address_state']
+            
+            # For records with valid addresses but no extracted address_state, use the election state
+            no_address_state_mask = valid_address_mask & df['address_state'].isna()
+            if no_address_state_mask.any():
+                df.loc[no_address_state_mask, 'address_state'] = df.loc[no_address_state_mask, 'state'].apply(
+                    lambda x: self._get_state_abbreviation(x) if pd.notna(x) else None
+                )
+                logger.info(f"Backfilled address_state with election state for {no_address_state_mask.sum()} records")
             
             # Clear address_state for rows without valid addresses
             df.loc[~valid_address_mask, 'address_state'] = None
@@ -344,3 +359,19 @@ class UnifiedAddressParser:
         
         logger.info("State backfilling completed")
         return df
+    
+    def _get_state_abbreviation(self, state_name: str) -> Optional[str]:
+        """
+        Convert full state name to abbreviation.
+        
+        Args:
+            state_name: Full state name
+            
+        Returns:
+            State abbreviation or None
+        """
+        if pd.isna(state_name) or not state_name:
+            return None
+        
+        # Use the existing normalization logic
+        return self._normalize_state_code(state_name)
