@@ -217,7 +217,12 @@ class WyomingStructuralCleaner:
             # Look for district patterns like "District 1", "Ward 2", etc.
             district_match = re.search(r'(?:District|Ward)\s*(\d+)', office, re.IGNORECASE)
             if district_match:
-                return district_match.group(0)
+                return district_match.group(1)
+            
+            # Wyoming-specific pattern: "STATE REPRESENTATIVE XX" or "STATE SENATOR XX"
+            wy_district_match = re.search(r'(?:STATE\s+(?:REPRESENTATIVE|SENATOR))\s+(\d+)', office, re.IGNORECASE)
+            if wy_district_match:
+                return wy_district_match.group(1)
         return None
     
     def _extract_address(self, row: pd.Series) -> str:
