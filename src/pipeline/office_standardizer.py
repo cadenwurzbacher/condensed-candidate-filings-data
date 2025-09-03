@@ -65,6 +65,14 @@ class OfficeStandardizer:
             'city commissioner/council': 'City Council',
             'City Commissioner/council': 'City Council',
             
+            # Additional / variations
+            'officer (mayor/chair/attorney)': 'Officer',
+            'Officer (mayor/chair/attorney)': 'Officer',
+            'clerk/treasurer': 'Clerk/Treasurer',
+            'Clerk/treasurer': 'Clerk/Treasurer',
+            'comissioner chairman/person': 'Commissioner',
+            'Comissioner Chairman/person': 'Commissioner',
+            
             # US House variations
             'u.s. representative': 'US House',
             'us representative': 'US House',

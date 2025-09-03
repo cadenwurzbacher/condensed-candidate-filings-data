@@ -400,7 +400,10 @@ class NationalStandards:
                 'iv': 'IV',
                 'vi': 'VI',
                 'sr': 'Sr.',
-                'jr': 'Jr.'
+                'jr': 'Jr.',
+                # Add uppercase variations
+                'SR': 'Sr.',
+                'JR': 'Jr.'
             }
             df['suffix'] = df['suffix'].apply(
                 lambda x: suffix_mappings.get(str(x), str(x)) if pd.notna(x) and str(x).strip() else x
@@ -472,7 +475,12 @@ class NationalStandards:
                 'N, K': 'New Castle, Kent',
                 'N,K': 'New Castle, Kent',
                 'N/K': 'New Castle/Kent',
-                'NK': 'New Castle, Kent'
+                'NK': 'New Castle, Kent',
+                # Add missing variations
+                'Nk': 'New Castle',
+                'Ks': 'Kent',
+                'N,k': 'New Castle, Kent',
+                'N/k': 'New Castle/Kent'
             }
             
             df['county'] = df['county'].apply(
@@ -496,6 +504,8 @@ class NationalStandards:
             df['phone'] = df['phone'].apply(
                 lambda x: re.sub(r'[^\d]', '', str(x)) if pd.notna(x) and str(x).strip() and str(x) != 'nan' else None
             )
+            # Ensure it stays as string type
+            df['phone'] = df['phone'].astype('object')
             logger.info("Standardized phone numbers to digits only")
         
         return df
