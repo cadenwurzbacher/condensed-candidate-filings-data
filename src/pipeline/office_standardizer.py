@@ -2094,6 +2094,76 @@ class OfficeStandardizer:
             'house district 40': 'State House',
             'HOUSE DISTRICT 40': 'State House',
             'House District 40': 'State House',
+            
+            # Alaska-specific State Senate mappings
+            'senate district a': 'State Senate',
+            'senate district b': 'State Senate',
+            'senate district c': 'State Senate',
+            'senate district d': 'State Senate',
+            'senate district e': 'State Senate',
+            'senate district f': 'State Senate',
+            'senate district g': 'State Senate',
+            'senate district h': 'State Senate',
+            'senate district i': 'State Senate',
+            'senate district j': 'State Senate',
+            'senate district k': 'State Senate',
+            'senate district l': 'State Senate',
+            'senate district m': 'State Senate',
+            'senate district n': 'State Senate',
+            'senate district o': 'State Senate',
+            'senate district p': 'State Senate',
+            'senate district q': 'State Senate',
+            'senate district r': 'State Senate',
+            'senate district s': 'State Senate',
+            'senate district t': 'State Senate',
+            # Uppercase variations
+            'Senate District A': 'State Senate',
+            'Senate District B': 'State Senate',
+            'Senate District C': 'State Senate',
+            'Senate District D': 'State Senate',
+            'Senate District E': 'State Senate',
+            'Senate District F': 'State Senate',
+            'Senate District G': 'State Senate',
+            'Senate District H': 'State Senate',
+            'Senate District I': 'State Senate',
+            'Senate District J': 'State Senate',
+            'Senate District K': 'State Senate',
+            'Senate District L': 'State Senate',
+            'Senate District M': 'State Senate',
+            'Senate District N': 'State Senate',
+            'Senate District O': 'State Senate',
+            'Senate District P': 'State Senate',
+            'Senate District Q': 'State Senate',
+            'Senate District R': 'State Senate',
+            'Senate District S': 'State Senate',
+            'Senate District T': 'State Senate',
+            'house district 32': 'State House',
+            'HOUSE DISTRICT 32': 'State House',
+            'House District 32': 'State House',
+            'house district 33': 'State House',
+            'HOUSE DISTRICT 33': 'State House',
+            'House District 33': 'State House',
+            'house district 34': 'State House',
+            'HOUSE DISTRICT 34': 'State House',
+            'House District 34': 'State House',
+            'house district 35': 'State House',
+            'HOUSE DISTRICT 35': 'State House',
+            'House District 35': 'State House',
+            'house district 36': 'State House',
+            'HOUSE DISTRICT 36': 'State House',
+            'House District 36': 'State House',
+            'house district 37': 'State House',
+            'HOUSE DISTRICT 37': 'State House',
+            'House District 37': 'State House',
+            'house district 38': 'State House',
+            'HOUSE DISTRICT 38': 'State House',
+            'House District 38': 'State House',
+            'house district 39': 'State House',
+            'HOUSE DISTRICT 39': 'State House',
+            'House District 39': 'State House',
+            'house district 40': 'State House',
+            'HOUSE DISTRICT 40': 'State House',
+            'House District 40': 'State House',
         }
         
         return mappings
@@ -2305,6 +2375,9 @@ class OfficeStandardizer:
             r',\s*dist\s+([ivxlcdm]+)',  # ", DIST VII" (Roman numerals)
             r'dist\s+(\d+)',  # "DIST 11"
             r'dist\s+([ivxlcdm]+)',  # "DIST VII" (Roman numerals)
+            # Alaska-specific Senate district patterns
+            r'senate\s+district\s+([a-z])',  # "Senate District A", "senate district a"
+            r'SENATE\s+DISTRICT\s+([A-Z])',  # "SENATE DISTRICT A"
         ]
         
         for pattern in district_patterns:
