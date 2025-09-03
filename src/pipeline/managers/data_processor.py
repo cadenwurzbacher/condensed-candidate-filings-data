@@ -747,6 +747,27 @@ class DataProcessor:
             except Exception as e:
                 logger.warning(f"Error during phone standardization backup: {e}")
             
+            # Fix phone number data types (ensure string type and remove .0 suffix)
+            try:
+                logger.info("Fixing phone number data types...")
+                
+                if 'phone' in data.columns:
+                    # Convert to string and remove .0 suffix
+                    data['phone'] = data['phone'].astype(str)
+                    data['phone'] = data['phone'].apply(
+                        lambda x: x.replace('.0', '') if pd.notna(x) and str(x).endswith('.0') else x
+                    )
+                    # Convert 'nan' strings back to None
+                    data['phone'] = data['phone'].apply(
+                        lambda x: None if pd.isna(x) or str(x) == 'nan' else x
+                    )
+                    # Ensure it stays as string type
+                    data['phone'] = data['phone'].astype('object')
+                    logger.info("Phone number data type fix completed")
+                
+            except Exception as e:
+                logger.warning(f"Error during phone number data type fix: {e}")
+            
             # Fix ZIP code formatting (remove .0 suffix and ensure string type)
             try:
                 logger.info("Fixing ZIP code formatting...")
@@ -782,7 +803,7 @@ class DataProcessor:
                     # Set district to None for statewide offices with district 0 or 0.0
                     statewide_mask = (
                         data['office'].isin(statewide_offices) & 
-                        (data['district'] == 0) | (data['district'] == 0.0)
+                        ((data['district'] == 0) | (data['district'] == 0.0))
                     )
                     
                     if statewide_mask.any():
