@@ -2303,6 +2303,10 @@ class OfficeStandardizer:
             '58th Senate': 'State Senate',
             '59th Senate': 'State Senate',
             '60th Senate': 'State Senate',
+            
+            # Kansas-specific Senate mapping
+            'kansas senate': 'State Senate',
+            'Kansas Senate': 'State Senate',
             'house district 32': 'State House',
             'HOUSE DISTRICT 32': 'State House',
             'House District 32': 'State House',
