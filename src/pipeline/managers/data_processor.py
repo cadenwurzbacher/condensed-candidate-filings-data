@@ -941,6 +941,9 @@ class DataProcessor:
             logger.info(f"States represented: {data['state'].nunique()}")
             logger.info(f"Offices represented: {data['office'].nunique()}")
             
+            # Apply final data fixes
+            data = self._apply_final_fixes(data)
+            
             return data
             
         except Exception as e:
@@ -948,6 +951,81 @@ class DataProcessor:
             if not self.config.continue_on_phase_error:
                 raise
             return data
+    
+    def _apply_final_fixes(self, data: pd.DataFrame) -> pd.DataFrame:
+        """Apply final data fixes for phone, ZIP, and district issues."""
+        logger.info("Applying final data fixes...")
+        
+        # Fix phone number data types (ensure string type and remove .0 suffix)
+        try:
+            logger.info("Fixing phone number data types...")
+            
+            if 'phone' in data.columns:
+                # Convert to string and remove .0 suffix
+                data['phone'] = data['phone'].astype(str)
+                data['phone'] = data['phone'].apply(
+                    lambda x: x.replace('.0', '') if pd.notna(x) and str(x).endswith('.0') else x
+                )
+                # Convert 'nan' strings back to None
+                data['phone'] = data['phone'].apply(
+                    lambda x: None if pd.isna(x) or str(x) == 'nan' else x
+                )
+                # Ensure it stays as string type
+                data['phone'] = data['phone'].astype('object')
+                logger.info("Phone number data type fix completed")
+            
+        except Exception as e:
+            logger.warning(f"Error during phone number data type fix: {e}")
+        
+        # Fix ZIP code formatting (remove .0 suffix and ensure string type)
+        try:
+            logger.info("Fixing ZIP code formatting...")
+            
+            if 'zip_code' in data.columns:
+                # Convert to string and remove .0 suffix
+                data['zip_code'] = data['zip_code'].astype(str)
+                data['zip_code'] = data['zip_code'].apply(
+                    lambda x: x.replace('.0', '') if pd.notna(x) and str(x).endswith('.0') else x
+                )
+                # Convert 'nan' strings back to None
+                data['zip_code'] = data['zip_code'].apply(
+                    lambda x: None if pd.isna(x) or str(x) == 'nan' else x
+                )
+                # Ensure it stays as string type
+                data['zip_code'] = data['zip_code'].astype('object')
+                logger.info("ZIP code formatting fix completed")
+            
+        except Exception as e:
+            logger.warning(f"Error during ZIP code formatting fix: {e}")
+        
+        # Fix district values for statewide offices
+        try:
+            logger.info("Fixing district values for statewide offices...")
+            
+            if 'district' in data.columns and 'office' in data.columns:
+                # Define statewide offices that shouldn't have districts
+                statewide_offices = [
+                    'Governor', 'Secretary of State', 'State Attorney General', 
+                    'State Treasurer', 'US Senate', 'US President'
+                ]
+                
+                # Set district to None for statewide offices with district 0 or 0.0
+                statewide_mask = (
+                    data['office'].isin(statewide_offices) & 
+                    ((data['district'] == 0) | (data['district'] == 0.0))
+                )
+                
+                if statewide_mask.any():
+                    data.loc[statewide_mask, 'district'] = None
+                    logger.info(f"Cleared district for {statewide_mask.sum()} statewide office records")
+                
+                logger.info("District value fix completed")
+            
+        except Exception as e:
+            logger.warning(f"Error during district value fix: {e}")
+        
+        logger.info("Final data fixes completed")
+        return data
     
     def add_processing_metadata(self, data: pd.DataFrame) -> pd.DataFrame:
         """Add processing metadata to the dataframe."""
