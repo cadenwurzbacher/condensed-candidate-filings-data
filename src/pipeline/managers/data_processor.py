@@ -768,6 +768,32 @@ class DataProcessor:
             except Exception as e:
                 logger.warning(f"Error during ZIP code formatting fix: {e}")
             
+            # Fix district values for statewide offices
+            try:
+                logger.info("Fixing district values for statewide offices...")
+                
+                if 'district' in data.columns and 'office' in data.columns:
+                    # Define statewide offices that shouldn't have districts
+                    statewide_offices = [
+                        'Governor', 'Secretary of State', 'State Attorney General', 
+                        'State Treasurer', 'US Senate', 'US President'
+                    ]
+                    
+                    # Set district to None for statewide offices with district 0 or 0.0
+                    statewide_mask = (
+                        data['office'].isin(statewide_offices) & 
+                        (data['district'] == 0) | (data['district'] == 0.0)
+                    )
+                    
+                    if statewide_mask.any():
+                        data.loc[statewide_mask, 'district'] = None
+                        logger.info(f"Cleared district for {statewide_mask.sum()} statewide office records")
+                    
+                    logger.info("District value fix completed")
+                
+            except Exception as e:
+                logger.warning(f"Error during district value fix: {e}")
+            
             # Clean address formatting
             try:
                 logger.info("Cleaning address formatting...")
