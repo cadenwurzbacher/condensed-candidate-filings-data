@@ -762,6 +762,7 @@ class NationalStandards:
             'No Party Preference': 'Nonpartisan',
             'States No Party Preference': 'Nonpartisan',
             'No Party Affiliation (nonpartisan Offices)': 'Nonpartisan',
+            'No Party Affiliation (nonpartisan offices)': 'Nonpartisan',
             'No Party Affiliation (partisan)': 'Nonpartisan',
             'No Party Affiliation': 'Nonpartisan',
             'No Affiliation': 'Nonpartisan',

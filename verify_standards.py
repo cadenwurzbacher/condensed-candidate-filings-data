@@ -14,7 +14,7 @@ def verify_all_standards():
     """Verify all new standards are working correctly."""
     
     # Load the latest data
-    df = pd.read_csv('data/final/candidate_filings_FINAL_20250903_005733.csv')
+    df = pd.read_csv('data/final/candidate_filings_FINAL_20250903_134419.csv')
     
     print("=== COMPREHENSIVE STANDARDS VERIFICATION ===\n")
     
