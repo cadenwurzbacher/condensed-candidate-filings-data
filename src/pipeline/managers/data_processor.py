@@ -740,10 +740,33 @@ class DataProcessor:
                     data['phone'] = data['phone'].apply(
                         lambda x: re.sub(r'[^\d]', '', str(x)) if pd.notna(x) and str(x).strip() and str(x) != 'nan' else None
                     )
+                    # Ensure it stays as string type
+                    data['phone'] = data['phone'].astype('object')
                     logger.info("Phone standardization backup completed")
                 
             except Exception as e:
                 logger.warning(f"Error during phone standardization backup: {e}")
+            
+            # Fix ZIP code formatting (remove .0 suffix and ensure string type)
+            try:
+                logger.info("Fixing ZIP code formatting...")
+                
+                if 'zip_code' in data.columns:
+                    # Convert to string and remove .0 suffix
+                    data['zip_code'] = data['zip_code'].astype(str)
+                    data['zip_code'] = data['zip_code'].apply(
+                        lambda x: x.replace('.0', '') if pd.notna(x) and str(x).endswith('.0') else x
+                    )
+                    # Convert 'nan' strings back to None
+                    data['zip_code'] = data['zip_code'].apply(
+                        lambda x: None if pd.isna(x) or str(x) == 'nan' else x
+                    )
+                    # Ensure it stays as string type
+                    data['zip_code'] = data['zip_code'].astype('object')
+                    logger.info("ZIP code formatting fix completed")
+                
+            except Exception as e:
+                logger.warning(f"Error during ZIP code formatting fix: {e}")
             
             # Clean address formatting
             try:
