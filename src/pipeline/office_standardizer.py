@@ -1177,6 +1177,10 @@ class OfficeStandardizer:
             'member, state board of education': 'State Board of Education',
             'Member, State Board of Education': 'State Board of Education',
             
+            # Kansas-specific House mapping
+            'kansas house of representatives': 'State House',
+            'Kansas House of Representatives': 'State House',
+            
             # Delaware-specific office mappings
             # Levy Court mappings
             '1st lc dist': 'Levy Court',
