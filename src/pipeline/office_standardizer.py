@@ -1173,6 +1173,10 @@ class OfficeStandardizer:
             'state board of education member - congressional district 8': 'State Board of Education',
             'State Board of Education Member - Congressional District 8': 'State Board of Education',
             
+            # Kansas-specific State Board of Education mapping
+            'member, state board of education': 'State Board of Education',
+            'Member, State Board of Education': 'State Board of Education',
+            
             # Delaware-specific office mappings
             # Levy Court mappings
             '1st lc dist': 'Levy Court',
