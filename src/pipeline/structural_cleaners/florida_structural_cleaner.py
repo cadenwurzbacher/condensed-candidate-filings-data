@@ -335,7 +335,7 @@ class FloridaStructuralCleaner:
                     
                     if district_parts:
                         # For US Senate, mark as statewide
-                        if 'USS' in str(office_code) or 'senator' in str(office_desc).lower():
+                        if 'USS' in str(office_code) or 'united states senator' in str(office_desc).lower():
                             record[target_col] = 'Statewide'
                         else:
                             record[target_col] = ' - '.join(district_parts) if len(district_parts) > 1 else district_parts[0]
