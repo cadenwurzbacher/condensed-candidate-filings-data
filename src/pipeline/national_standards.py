@@ -86,6 +86,19 @@ class NationalStandards:
         # Apply state standardization
         df_standardized = self._apply_state_standardization(df_standardized)
         
+        # Fix missing last names for single-word names
+        if 'first_name' in df.columns and 'last_name' in df.columns:
+            # Find records where first_name exists but last_name is missing
+            missing_last_mask = df['first_name'].notna() & df['last_name'].isna()
+            
+            if missing_last_mask.any():
+                # For single-word names, treat them as last names
+                single_word_mask = missing_last_mask & (df['first_name'].str.count(' ') == 0)
+                if single_word_mask.any():
+                    df.loc[single_word_mask, 'last_name'] = df.loc[single_word_mask, 'first_name']
+                    df.loc[single_word_mask, 'first_name'] = None
+                    logger.info(f"Fixed {single_word_mask.sum()} single-word names by treating as last names")
+        
         # Apply name standardization
         df_standardized = self._apply_name_standardization(df_standardized)
         
@@ -742,6 +755,7 @@ class NationalStandards:
             'Dem': 'Democratic', 
             'DEM': 'Democratic',
             'Democratic Party': 'Democratic',
+            'Florida Democratic Party': 'Democratic',
             'Democractic': 'Democratic',  # Typo fix
             'D': 'Democratic',
             
@@ -749,6 +763,7 @@ class NationalStandards:
             'Rep': 'Republican',
             'REP': 'Republican',
             'Republican Party': 'Republican',
+            'Republican Party Of Florida': 'Republican',
             'R': 'Republican',
             'G.o.p.': 'Republican',
             'Gop': 'Republican',
@@ -777,6 +792,9 @@ class NationalStandards:
             'No Party Affiliation': 'Nonpartisan',
             'No Affiliation': 'Nonpartisan',
             'Undeclared': 'Nonpartisan',
+            'Write-in': 'Write-in',
+            'Constitution': 'Constitution',
+            'Nonpartisan Special': 'Nonpartisan',
             
             # Libertarian variations
             'Lib': 'Libertarian',

@@ -1640,6 +1640,8 @@ class OfficeStandardizer:
             # Secretary of State variations
             'secretary of state': 'Secretary of State',
             'state secretary': 'Secretary of State',
+            'nc secretary of state': 'Secretary of State',
+            'NC SECRETARY OF STATE': 'Secretary of State',
             
             # Add exact matches
             'Secretary of State': 'Secretary of State',
@@ -1680,6 +1682,8 @@ class OfficeStandardizer:
             'member county commission': 'County Commission',
             'county board': 'County Commission',
             'county board member': 'County Commission',
+            'county board of commissioners': 'County Commission',
+            'COUNTY BOARD OF COMMISSIONERS': 'County Commission',
             
             # Add exact matches
             'County Commission': 'County Commission',
@@ -1691,11 +1695,15 @@ class OfficeStandardizer:
             'board member': 'School Board',
             'ind school board member': 'School Board',
             'university board of regents': 'School Board',
+            'board of education member': 'School Board',
+            'BOARD OF EDUCATION': 'School Board',
             
             # Judicial Office variations (enhanced)
             'justice of the peace': 'Justice of the Peace',
             'justice of peace': 'Justice of the Peace',
             'jop': 'Justice of the Peace',
+            'state district court': 'District Judge',
+            'STATE DISTRICT COURT': 'District Judge',
             
             # National Convention Delegate (preserve original)
             'national convention delegate': 'National Convention Delegate',
