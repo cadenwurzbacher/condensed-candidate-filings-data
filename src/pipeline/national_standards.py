@@ -86,13 +86,6 @@ class NationalStandards:
         # Apply state standardization
         df_standardized = self._apply_state_standardization(df_standardized)
         
-        # Fix election date formatting (remove -GEN suffix and format properly)
-        if 'election_date' in df.columns:
-            df['election_date'] = df['election_date'].apply(
-                lambda x: self._format_election_date(x) if pd.notna(x) and str(x).strip() else x
-            )
-            logger.info("Fixed election date formatting")
-        
         # Fix county abbreviations
         if 'county' in df.columns:
             df['county'] = df['county'].apply(
@@ -809,7 +802,11 @@ class NationalStandards:
             'Write-in': '',  # Map to blank party column
             'Constitution': 'Constitution',
             'Nonpartisan Special': 'Nonpartisan',
-            'Nonpartisan Special': 'Nonpartisan',
+            
+            # Additional party mappings
+            'Judicial': 'Nonpartisan',
+            'Progressive': 'Progressive',
+            'Libertarian Party Of Florida': 'Libertarian',
             
             # Libertarian variations
             'Lib': 'Libertarian',
@@ -834,32 +831,6 @@ class NationalStandards:
         
         # Apply mapping if party exists in mapping
         return party_mapping.get(party, party)
-    
-    def _format_election_date(self, date_str: str) -> str:
-        """
-        Format election date by removing -GEN suffix and converting to proper format
-        
-        Args:
-            date_str: Date string like "20201103-GEN"
-            
-        Returns:
-            Formatted date string like "2020-11-03"
-        """
-        if pd.isna(date_str) or not isinstance(date_str, str):
-            return date_str
-        
-        # Remove -GEN suffix
-        date_str = date_str.replace('-GEN', '').strip()
-        
-        # Handle YYYYMMDD format
-        if re.match(r'^\d{8}$', date_str):
-            year = date_str[:4]
-            month = date_str[4:6]
-            day = date_str[6:8]
-            return f"{year}-{month}-{day}"
-        
-        # Handle other formats (keep as-is if not YYYYMMDD)
-        return date_str
     
     def _standardize_county(self, county: str) -> str:
         """
@@ -889,6 +860,49 @@ class NationalStandards:
             'Man': 'Manatee County',
             'Stj': 'St. Johns County',
             'Cll': 'Collier County',
+            'Vol': 'Volusia County',
+            'Pin': 'Pinellas County',
+            'Pol': 'Polk County',
+            'Bre': 'Brevard County',
+            'Esc': 'Escambia County',
+            'Bay': 'Bay County',
+            'Mar': 'Marion County',
+            'Cit': 'Citrus County',
+            'Her': 'Hernando County',
+            'Cha': 'Charlotte County',
+            'Sar': 'Sarasota County',
+            'Des': 'DeSoto County',
+            'Har': 'Hardee County',
+            'High': 'Highlands County',
+            'Oka': 'Okaloosa County',
+            'Wal': 'Walton County',
+            'Hol': 'Holmes County',
+            'Wak': 'Wakulla County',
+            'Gad': 'Gadsden County',
+            'Lib': 'Liberty County',
+            'Cal': 'Calhoun County',
+            'Gul': 'Gulf County',
+            'Frank': 'Franklin County',
+            'Jeff': 'Jefferson County',
+            'Mad': 'Madison County',
+            'Ham': 'Hamilton County',
+            'Laf': 'Lafayette County',
+            'Suw': 'Suwannee County',
+            'Col': 'Columbia County',
+            'Gil': 'Gilchrist County',
+            'Levy': 'Levy County',
+            'Dix': 'Dixie County',
+            'Ala': 'Alachua County',
+            'Put': 'Putnam County',
+            'Stl': 'St. Lucie County',
+            'Mar': 'Martin County',
+            'Ind': 'Indian River County',
+            'Oke': 'Okeechobee County',
+            'Gla': 'Glades County',
+            'Hen': 'Hendry County',
+            'Lee': 'Lee County',
+            'Col': 'Collier County',
+            'Mon': 'Monroe County',
             # Add more as needed
         }
         

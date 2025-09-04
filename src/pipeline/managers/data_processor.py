@@ -941,10 +941,17 @@ class DataProcessor:
             logger.info(f"States represented: {data['state'].nunique()}")
             logger.info(f"Offices represented: {data['office'].nunique()}")
             
-            # Apply final data fixes
-            data = self._apply_final_fixes(data)
-            
-            return data
+                    # Apply final data fixes
+        data = self._apply_final_fixes(data)
+        
+        # Fix election date formatting (remove -GEN suffix and format properly)
+        if 'election_date' in data.columns:
+            data['election_date'] = data['election_date'].apply(
+                lambda x: self._format_election_date(x) if pd.notna(x) and str(x).strip() else x
+            )
+            logger.info("Fixed election date formatting")
+        
+        return data
             
         except Exception as e:
             logger.error(f"Final processing failed: {e}")
@@ -1031,6 +1038,32 @@ class DataProcessor:
         
         logger.info("Final data fixes completed")
         return data
+    
+    def _format_election_date(self, date_str: str) -> str:
+        """
+        Format election date by removing -GEN suffix and converting to proper format
+        
+        Args:
+            date_str: Date string like "20201103-GEN"
+            
+        Returns:
+            Formatted date string like "2020-11-03"
+        """
+        if pd.isna(date_str) or not isinstance(date_str, str):
+            return date_str
+        
+        # Remove -GEN suffix
+        date_str = date_str.replace('-GEN', '').strip()
+        
+        # Handle YYYYMMDD format
+        if re.match(r'^\d{8}$', date_str):
+            year = date_str[:4]
+            month = date_str[4:6]
+            day = date_str[6:8]
+            return f"{year}-{month}-{day}"
+        
+        # Handle other formats (keep as-is if not YYYYMMDD)
+        return date_str
     
     def add_processing_metadata(self, data: pd.DataFrame) -> pd.DataFrame:
         """Add processing metadata to the dataframe."""
