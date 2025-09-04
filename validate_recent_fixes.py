@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 
 # Load the latest pipeline output
-df = pd.read_csv('data/final/candidate_filings_FINAL_20250903_173536.csv')
+df = pd.read_csv('data/final/candidate_filings_FINAL_20250904_121825.csv', dtype={'phone': str, 'zip_code': str})
 
 print("🔍 COMPREHENSIVE VALIDATION OF RECENT FIXES")
 print("=" * 60)
@@ -54,18 +54,38 @@ print("\n3️⃣ PHONE NUMBER DATA TYPE FIX")
 phone_dtype = df['phone'].dtype
 print(f"Phone column data type: {phone_dtype}")
 
+# Check if phone numbers are strings and don't have .0 suffix
+phone_with_dot_zero = df['phone'].astype(str).str.endswith('.0').sum()
+total_phones = df['phone'].notna().sum()
+
+print(f"Phone numbers with .0 suffix: {phone_with_dot_zero}")
+print(f"Total phone numbers: {total_phones}")
+
 if phone_dtype == 'object' or str(phone_dtype) == 'string':
     print("✅ Phone number data type fix: SUCCESS - String type")
 else:
     print(f"❌ Phone number data type fix: FAILED - Still {phone_dtype}")
 
+if phone_with_dot_zero < 100:  # Should be very low now
+    print("✅ Phone number formatting fix: SUCCESS")
+else:
+    print(f"❌ Phone number formatting fix: FAILED - {phone_with_dot_zero} still have .0 suffix")
+
 # 4. ZIP CODE FORMATTING FIX
 print("\n4️⃣ ZIP CODE FORMATTING FIX")
+zip_dtype = df['zip_code'].dtype
+print(f"ZIP column data type: {zip_dtype}")
+
 zip_with_dot_zero = df['zip_code'].astype(str).str.endswith('.0').sum()
 total_zip_codes = df['zip_code'].notna().sum()
 
 print(f"ZIP codes with .0 suffix: {zip_with_dot_zero}")
 print(f"Total ZIP codes: {total_zip_codes}")
+
+if zip_dtype == 'object' or str(zip_dtype) == 'string':
+    print("✅ ZIP code data type fix: SUCCESS - String type")
+else:
+    print(f"❌ ZIP code data type fix: FAILED - Still {zip_dtype}")
 
 if zip_with_dot_zero < 100:  # Should be very low now
     print("✅ ZIP code formatting fix: SUCCESS")

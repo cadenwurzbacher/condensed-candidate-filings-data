@@ -1012,7 +1012,7 @@ class DataProcessor:
                 # Set district to None for statewide offices with district 0 or 0.0
                 statewide_mask = (
                     data['office'].isin(statewide_offices) & 
-                    ((data['district'] == 0) | (data['district'] == 0.0))
+                    (data['district'].astype(float) == 0.0)
                 )
                 
                 if statewide_mask.any():
