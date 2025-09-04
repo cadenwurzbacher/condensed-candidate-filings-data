@@ -363,7 +363,30 @@ class DataManager:
             file_path = os.path.join(self.final_dir, filename)
             
             # Use CSV for faster processing
-            data.to_csv(file_path, index=False)
+            # Ensure phone and ZIP columns are properly formatted as strings
+            data_to_save = data.copy()
+            
+            # Fix phone numbers (remove .0 suffix and ensure string type)
+            if 'phone' in data_to_save.columns:
+                data_to_save['phone'] = data_to_save['phone'].astype(str)
+                data_to_save['phone'] = data_to_save['phone'].apply(
+                    lambda x: x.replace('.0', '') if pd.notna(x) and str(x).endswith('.0') else x
+                )
+                data_to_save['phone'] = data_to_save['phone'].apply(
+                    lambda x: '' if pd.isna(x) or str(x) == 'nan' else x
+                )
+            
+            # Fix ZIP codes (remove .0 suffix and ensure string type)
+            if 'zip_code' in data_to_save.columns:
+                data_to_save['zip_code'] = data_to_save['zip_code'].astype(str)
+                data_to_save['zip_code'] = data_to_save['zip_code'].apply(
+                    lambda x: x.replace('.0', '') if pd.notna(x) and str(x).endswith('.0') else x
+                )
+                data_to_save['zip_code'] = data_to_save['zip_code'].apply(
+                    lambda x: '' if pd.isna(x) or str(x) == 'nan' else x
+                )
+            
+            data_to_save.to_csv(file_path, index=False)
             logger.info(f"✅ Final output saved as CSV: {len(data)} records")
             logger.info(f"📄 File saved: {file_path}")
                 

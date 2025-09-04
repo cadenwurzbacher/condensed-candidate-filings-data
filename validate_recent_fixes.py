@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 
 # Load the latest pipeline output
-df = pd.read_csv('data/final/candidate_filings_FINAL_20250903_171552.csv')
+df = pd.read_csv('data/final/candidate_filings_FINAL_20250903_173536.csv')
 
 print("🔍 COMPREHENSIVE VALIDATION OF RECENT FIXES")
 print("=" * 60)
