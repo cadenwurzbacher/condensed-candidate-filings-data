@@ -386,6 +386,17 @@ class DataManager:
                     lambda x: '' if pd.isna(x) or str(x) == 'nan' else x
                 )
             
+            # Fix district values for statewide offices
+            if 'district' in data_to_save.columns and 'office' in data_to_save.columns:
+                statewide_offices = ['Governor', 'Secretary of State', 'State Attorney General', 'State Treasurer', 'US Senate', 'US President']
+                statewide_mask = (
+                    data_to_save['office'].isin(statewide_offices) & 
+                    (data_to_save['district'].astype(str).isin(['0', '0.0']))
+                )
+                if statewide_mask.any():
+                    data_to_save.loc[statewide_mask, 'district'] = ''
+                    print(f"Fixed {statewide_mask.sum()} statewide office districts in CSV writing")
+            
             data_to_save.to_csv(file_path, index=False)
             logger.info(f"✅ Final output saved as CSV: {len(data)} records")
             logger.info(f"📄 File saved: {file_path}")
