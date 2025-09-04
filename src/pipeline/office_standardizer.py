@@ -1684,6 +1684,8 @@ class OfficeStandardizer:
             'county board member': 'County Commission',
             'county board of commissioners': 'County Commission',
             'COUNTY BOARD OF COMMISSIONERS': 'County Commission',
+            'board of county commissioners': 'County Commission',
+            'Board of County Commissioners': 'County Commission',
             
             # Add exact matches
             'County Commission': 'County Commission',
@@ -1704,6 +1706,22 @@ class OfficeStandardizer:
             'jop': 'Justice of the Peace',
             'state district court': 'District Judge',
             'STATE DISTRICT COURT': 'District Judge',
+            'public defender': 'Public Defender',
+            'Public Defender': 'Public Defender',
+            'district court of appeal': 'District Court of Appeal',
+            'District Court of Appeal': 'District Court of Appeal',
+            'clerk of the circuit court': 'Clerk of the Circuit Court',
+            'Clerk of the Circuit Court': 'Clerk of the Circuit Court',
+            'library district': 'Library District',
+            'Library District': 'Library District',
+            'county officer (mayor/chair/attorney)': 'County Officer',
+            'County Officer (Mayor/Chair/Attorney)': 'County Officer',
+            'state attorney': 'State Attorney',
+            'State Attorney': 'State Attorney',
+            'attorney general': 'State Attorney General',
+            'Attorney General': 'State Attorney General',
+            'county development': 'County Development',
+            'County Development': 'County Development',
             
             # National Convention Delegate (preserve original)
             'national convention delegate': 'National Convention Delegate',

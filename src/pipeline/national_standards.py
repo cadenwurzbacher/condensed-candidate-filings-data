@@ -86,6 +86,20 @@ class NationalStandards:
         # Apply state standardization
         df_standardized = self._apply_state_standardization(df_standardized)
         
+        # Fix election date formatting (remove -GEN suffix and format properly)
+        if 'election_date' in df.columns:
+            df['election_date'] = df['election_date'].apply(
+                lambda x: self._format_election_date(x) if pd.notna(x) and str(x).strip() else x
+            )
+            logger.info("Fixed election date formatting")
+        
+        # Fix county abbreviations
+        if 'county' in df.columns:
+            df['county'] = df['county'].apply(
+                lambda x: self._standardize_county(x) if pd.notna(x) and str(x).strip() else x
+            )
+            logger.info("Fixed county abbreviations")
+        
         # Fix missing last names for single-word names
         if 'first_name' in df.columns and 'last_name' in df.columns:
             # Find records where first_name exists but last_name is missing
@@ -792,8 +806,9 @@ class NationalStandards:
             'No Party Affiliation': 'Nonpartisan',
             'No Affiliation': 'Nonpartisan',
             'Undeclared': 'Nonpartisan',
-            'Write-in': 'Write-in',
+            'Write-in': '',  # Map to blank party column
             'Constitution': 'Constitution',
+            'Nonpartisan Special': 'Nonpartisan',
             'Nonpartisan Special': 'Nonpartisan',
             
             # Libertarian variations
@@ -819,6 +834,65 @@ class NationalStandards:
         
         # Apply mapping if party exists in mapping
         return party_mapping.get(party, party)
+    
+    def _format_election_date(self, date_str: str) -> str:
+        """
+        Format election date by removing -GEN suffix and converting to proper format
+        
+        Args:
+            date_str: Date string like "20201103-GEN"
+            
+        Returns:
+            Formatted date string like "2020-11-03"
+        """
+        if pd.isna(date_str) or not isinstance(date_str, str):
+            return date_str
+        
+        # Remove -GEN suffix
+        date_str = date_str.replace('-GEN', '').strip()
+        
+        # Handle YYYYMMDD format
+        if re.match(r'^\d{8}$', date_str):
+            year = date_str[:4]
+            month = date_str[4:6]
+            day = date_str[6:8]
+            return f"{year}-{month}-{day}"
+        
+        # Handle other formats (keep as-is if not YYYYMMDD)
+        return date_str
+    
+    def _standardize_county(self, county: str) -> str:
+        """
+        Standardize county abbreviations to full names
+        
+        Args:
+            county: County name or abbreviation
+            
+        Returns:
+            Standardized county name
+        """
+        if pd.isna(county) or not isinstance(county, str):
+            return county
+        
+        county = county.strip()
+        
+        # Common county abbreviations (add more as needed)
+        county_mappings = {
+            # Florida counties
+            'Lee': 'Lee County',
+            'Hil': 'Hillsborough County',
+            'Dad': 'Dade County',
+            'Bro': 'Broward County',
+            'Pal': 'Palm Beach County',
+            'Pas': 'Pasco County',
+            'Ora': 'Orange County',
+            'Man': 'Manatee County',
+            'Stj': 'St. Johns County',
+            'Cll': 'Collier County',
+            # Add more as needed
+        }
+        
+        return county_mappings.get(county, county)
     
     def _apply_office_standardization(self, df: pd.DataFrame) -> pd.DataFrame:
         """

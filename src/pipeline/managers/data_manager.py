@@ -397,6 +397,18 @@ class DataManager:
                     data_to_save.loc[statewide_mask, 'district'] = ''
                     print(f"Fixed {statewide_mask.sum()} statewide office districts in CSV writing")
             
+            # Fix other numeric columns with .0 suffix
+            numeric_columns = ['row_index', 'pipeline_version']
+            for col in numeric_columns:
+                if col in data_to_save.columns:
+                    data_to_save[col] = data_to_save[col].astype(str)
+                    data_to_save[col] = data_to_save[col].apply(
+                        lambda x: x.replace('.0', '') if pd.notna(x) and str(x).endswith('.0') else x
+                    )
+                    data_to_save[col] = data_to_save[col].apply(
+                        lambda x: '' if pd.isna(x) or str(x) == 'nan' else x
+                    )
+            
             data_to_save.to_csv(file_path, index=False)
             logger.info(f"✅ Final output saved as CSV: {len(data)} records")
             logger.info(f"📄 File saved: {file_path}")
