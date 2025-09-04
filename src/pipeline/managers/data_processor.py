@@ -1010,9 +1010,14 @@ class DataProcessor:
                 ]
                 
                 # Set district to None for statewide offices with district 0 or 0.0
+                # Handle both numeric and string district values
                 statewide_mask = (
                     data['office'].isin(statewide_offices) & 
-                    (data['district'].astype(float) == 0.0)
+                    (
+                        (data['district'].astype(str) == '0') | 
+                        (data['district'].astype(str) == '0.0') |
+                        (pd.to_numeric(data['district'], errors='coerce') == 0.0)
+                    )
                 )
                 
                 if statewide_mask.any():
