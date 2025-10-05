@@ -10,6 +10,9 @@ pip install -r requirements.txt
 
 # Run the full pipeline
 python run_pipeline.py
+
+# Run without changing db
+python run_pipeline.py --no-db
 ```
 
 ## 📋 Overview

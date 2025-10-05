@@ -8,7 +8,7 @@ into a clean, testable, and maintainable module.
 
 import pandas as pd
 import logging
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 from .party_mappings import PartyMappings
 from .party_inference import PartyInference
 

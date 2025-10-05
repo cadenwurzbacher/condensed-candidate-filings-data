@@ -6,7 +6,6 @@ This script runs the main CandidateFilings pipeline with configurable options.
 """
 
 import sys
-import os
 import argparse
 from pathlib import Path
 

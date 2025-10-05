@@ -4,7 +4,6 @@ Test script to verify structured directory clearing functionality
 """
 
 import sys
-import os
 from pathlib import Path
 
 # Add src directory to Python path

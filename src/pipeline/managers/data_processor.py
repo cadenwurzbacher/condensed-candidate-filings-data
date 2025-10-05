@@ -9,7 +9,7 @@ including structural cleaning, state cleaning, and national standardization.
 import pandas as pd
 import logging
 import re
-from typing import Dict, Optional
+from typing import Dict
 from datetime import datetime
 
 logger = logging.getLogger(__name__)

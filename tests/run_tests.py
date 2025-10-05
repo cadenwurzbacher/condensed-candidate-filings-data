@@ -5,7 +5,6 @@ Test runner for CandidateFilings pipeline tests.
 
 import sys
 import subprocess
-import os
 from pathlib import Path
 
 def run_tests():

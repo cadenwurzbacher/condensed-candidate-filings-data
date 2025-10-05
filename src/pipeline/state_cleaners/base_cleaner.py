@@ -9,7 +9,7 @@ eliminating code duplication while preserving state-specific logic.
 import pandas as pd
 import logging
 from abc import ABC, abstractmethod
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 
 class BaseStateCleaner(ABC):
     """
@@ -60,7 +60,6 @@ class BaseStateCleaner(ABC):
     
     def _initialize_standard_columns(self):
         """Initialize standard columns with default values."""
-        pass
     
     def clean_data(self, df: pd.DataFrame) -> pd.DataFrame:
         """
@@ -123,7 +122,6 @@ class BaseStateCleaner(ABC):
         Returns:
             DataFrame with state-specific structure cleaned
         """
-        pass
     
     @abstractmethod
     def _clean_state_specific_content(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -141,7 +139,6 @@ class BaseStateCleaner(ABC):
         Returns:
             DataFrame with state-specific content cleaned
         """
-        pass
     
     @abstractmethod
     def _parse_names(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -160,7 +157,6 @@ class BaseStateCleaner(ABC):
         Returns:
             DataFrame with parsed name components
         """
-        pass
     
     def _ensure_standard_columns(self, df: pd.DataFrame) -> pd.DataFrame:
         """

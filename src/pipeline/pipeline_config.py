@@ -6,8 +6,6 @@ This module provides centralized configuration for all pipeline toggles and opti
 allowing flexible control over database operations, file outputs, and processing phases.
 """
 
-from typing import Optional
-
 class PipelineConfig:
     """
     Centralized configuration for all pipeline toggles and options.

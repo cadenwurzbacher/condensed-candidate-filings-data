@@ -8,7 +8,7 @@ binary columns for better data quality and easier querying.
 
 import pandas as pd
 import logging
-from typing import Dict, List, Tuple
+from typing import Dict
 import re
 
 logger = logging.getLogger(__name__)
