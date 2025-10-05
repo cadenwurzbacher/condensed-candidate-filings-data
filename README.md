@@ -8,11 +8,8 @@ A comprehensive data processing pipeline for candidate filing data from all 50 U
 # Install dependencies
 pip install -r requirements.txt
 
-# Run the full pipeline (no database)
+# Run the full pipeline
 python run_pipeline.py
-
-# Run with database integration
-python run_pipeline.py --with-db
 ```
 
 ## 📋 Overview
