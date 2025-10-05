@@ -217,21 +217,7 @@ The pipeline tracks and reports on:
 ```bash
 # Run all tests
 python -m pytest tests/
-
-# Run specific state tests
-python -m pytest tests/test_hawaii_integration.py
-
-# Run data quality tests
-python -m pytest tests/test_data_quality.py
 ```
-
-## 📚 Documentation
-
-- [Technical Architecture](docs/TECHNICAL_ARCHITECTURE.md) - Detailed system design
-- [State Integration Guide](docs/STATE_INTEGRATION_GUIDE.md) - Adding new states
-- [Data Standards Guide](docs/DATA_STANDARDS_GUIDE.md) - Formatting standards
-- [API Reference](docs/API_REFERENCE.md) - Code documentation
-- [Troubleshooting Guide](docs/TROUBLESHOOTING.md) - Common issues and solutions
 
 ## 🤝 Contributing
 
@@ -244,16 +230,3 @@ python -m pytest tests/test_data_quality.py
 ## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🆘 Support
-
-For questions or issues:
-- Check the [Troubleshooting Guide](docs/TROUBLESHOOTING.md)
-- Review the [API Reference](docs/API_REFERENCE.md)
-- Open an issue on GitHub
-
----
-
-**Last Updated**: December 2024  
-**Version**: 2.0.0  
-**Status**: Production Ready
