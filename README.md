@@ -5,14 +5,17 @@ A comprehensive data processing pipeline for candidate filing data from all 50 U
 ## 🚀 Quick Start
 
 ```bash
-# Install dependencies
-pip install -r requirements.txt
+# Install dependencies with uv
+uv sync
 
 # Run the full pipeline
-python run_pipeline.py
+uv run main.py
 
 # Run without changing db
-python run_pipeline.py --no-db
+uv run main.py --no-db
+
+# Install dev dependencies (pytest, etc.)
+uv sync --extra dev
 ```
 
 ## 📋 Overview
@@ -215,8 +218,11 @@ The pipeline tracks and reports on:
 ## 🧪 Testing
 
 ```bash
+# Install dev dependencies
+uv sync --extra dev
+
 # Run all tests
-python -m pytest tests/
+uv run pytest -v
 ```
 
 ## 🤝 Contributing

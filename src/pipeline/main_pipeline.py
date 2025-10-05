@@ -31,7 +31,7 @@ from .smart_staging_manager import SmartStagingManager
 from .national_standards import NationalStandards
 
 # Import database utilities
-from config.database import get_db_connection
+from src.config.database import get_db_connection
 
 # Import new pipeline infrastructure
 from .pipeline_config import PipelineConfig

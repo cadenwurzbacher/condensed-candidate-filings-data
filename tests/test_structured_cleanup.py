@@ -6,11 +6,11 @@ Test script to verify structured directory clearing functionality
 import sys
 from pathlib import Path
 
-# Add src directory to Python path
-src_path = Path(__file__).parent / "src"
-sys.path.append(str(src_path))
+# Add project root to Python path
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
 
-from pipeline.main_pipeline import MainPipeline
+from src.pipeline.main_pipeline import MainPipeline
 
 def test_structured_cleanup():
     """Test the structured directory clearing functionality"""
