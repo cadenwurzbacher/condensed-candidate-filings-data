@@ -8,7 +8,6 @@ cities, and states have been extracted, providing clean street addresses.
 
 import re
 import logging
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +24,6 @@ class AddressCleaner:
     
     def __init__(self):
         """Initialize the address cleaner."""
-        pass
     
     def clean_street_address(self, address: str) -> str:
         """

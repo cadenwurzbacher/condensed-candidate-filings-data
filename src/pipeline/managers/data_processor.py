@@ -9,7 +9,7 @@ including structural cleaning, state cleaning, and national standardization.
 import pandas as pd
 import logging
 import re
-from typing import Dict, Optional
+from typing import Dict
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
@@ -940,19 +940,19 @@ class DataProcessor:
             logger.info(f"Final dataset: {len(data)} records")
             logger.info(f"States represented: {data['state'].nunique()}")
             logger.info(f"Offices represented: {data['office'].nunique()}")
-            
-                    # Apply final data fixes
-        data = self._apply_final_fixes(data)
-        
-        # Fix election date formatting (remove -GEN suffix and format properly)
-        if 'election_date' in data.columns:
-            data['election_date'] = data['election_date'].apply(
-                lambda x: self._format_election_date(x) if pd.notna(x) and str(x).strip() else x
-            )
-            logger.info("Fixed election date formatting")
-        
-        return data
-            
+
+            # Apply final data fixes
+            data = self._apply_final_fixes(data)
+
+            # Fix election date formatting (remove -GEN suffix and format properly)
+            if 'election_date' in data.columns:
+                data['election_date'] = data['election_date'].apply(
+                    lambda x: self._format_election_date(x) if pd.notna(x) and str(x).strip() else x
+                )
+                logger.info("Fixed election date formatting")
+
+            return data
+
         except Exception as e:
             logger.error(f"Final processing failed: {e}")
             if not self.config.continue_on_phase_error:

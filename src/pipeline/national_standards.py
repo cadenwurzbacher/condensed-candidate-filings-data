@@ -1,8 +1,6 @@
 import pandas as pd
 import logging
 import re
-from typing import Dict, List, Tuple
-import hashlib
 
 # Import processors
 from .office_standardizer import OfficeStandardizer
@@ -10,13 +8,12 @@ from .election_type_standardizer import ElectionTypeStandardizer
 
 # Import database utilities
 try:
-    from config.database import get_db_connection
+    pass
 except ImportError:
     # Fallback for when running as module
     import sys
     from pathlib import Path
     sys.path.append(str(Path(__file__).parent.parent))
-    from config.database import get_db_connection
 
 logger = logging.getLogger(__name__)
 

@@ -6,8 +6,6 @@ This module provides centralized configuration for all pipeline toggles and opti
 allowing flexible control over database operations, file outputs, and processing phases.
 """
 
-from typing import Optional
-
 class PipelineConfig:
     """
     Centralized configuration for all pipeline toggles and options.
@@ -82,28 +80,6 @@ class PipelineConfig:
         self.enable_staging_table = False
         self.enable_production_table = False
         self.enable_smart_staging = False
-    
-    def set_debug_mode(self):
-        """Configure for debug mode (save all intermediate files)."""
-        self.save_structured_files = True
-        self.save_cleaned_files = True
-        self.save_audit_reports = True
-        self.save_logs = True
-        self.enable_data_audit = True
-    
-    def set_memory_only_mode(self):
-        """Configure for memory-only processing (minimal file output)."""
-        self.save_structured_files = False
-        self.save_cleaned_files = False
-        self.save_audit_reports = False
-        self.save_final_file = True  # Keep final output
-    
-    def set_file_based_mode(self):
-        """Configure for file-based processing (save all files)."""
-        self.save_structured_files = True
-        self.save_cleaned_files = True
-        self.save_final_file = True
-        self.save_audit_reports = True
     
     def get_enabled_phases(self) -> list:
         """Get list of enabled pipeline phases."""
