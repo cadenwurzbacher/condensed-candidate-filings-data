@@ -9,7 +9,7 @@ into a clean, testable, and maintainable module.
 import pandas as pd
 import re
 import logging
-from typing import Tuple, Optional, Dict, Any
+from typing import Tuple, Optional
 from .zip_extractor import ZipExtractor
 from .state_extractor import StateExtractor
 from .city_extractor import CityExtractor

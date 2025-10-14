@@ -5,14 +5,17 @@ A comprehensive data processing pipeline for candidate filing data from all 50 U
 ## 🚀 Quick Start
 
 ```bash
-# Install dependencies
-pip install -r requirements.txt
+# Install dependencies with uv
+uv sync
 
-# Run the full pipeline (no database)
-python run_pipeline.py
+# Run the full pipeline
+uv run main.py
 
-# Run with database integration
-python run_pipeline.py --with-db
+# Run without changing db
+uv run main.py --no-db
+
+# Install dev dependencies (pytest, etc.)
+uv sync --extra dev
 ```
 
 ## 📋 Overview
@@ -225,14 +228,11 @@ The pipeline tracks and reports on:
 ## 🧪 Testing
 
 ```bash
+# Install dev dependencies
+uv sync --extra dev
+
 # Run all tests
-python -m pytest tests/
-
-# Run specific state tests
-python -m pytest tests/test_hawaii_integration.py
-
-# Run data quality tests
-python -m pytest tests/test_data_quality.py
+uv run pytest -v
 ```
 
 ## 📚 Documentation
@@ -252,16 +252,3 @@ python -m pytest tests/test_data_quality.py
 ## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🆘 Support
-
-For questions or issues:
-- Check the [Troubleshooting Guide](docs/TROUBLESHOOTING.md)
-- Review the [API Reference](docs/API_REFERENCE.md)
-- Open an issue on GitHub
-
----
-
-**Last Updated**: December 2024  
-**Version**: 2.0.0  
-**Status**: Production Ready

@@ -7,9 +7,7 @@ thousands of lines of duplicate code while preserving state-specific logic.
 """
 
 import pandas as pd
-import logging
 import re
-from typing import Dict, Any
 from .base_cleaner import BaseStateCleaner
 
 class SouthCarolinaCleaner(BaseStateCleaner):

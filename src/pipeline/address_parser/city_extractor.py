@@ -26,7 +26,6 @@ class CityExtractor:
     
     def __init__(self):
         """Initialize the city extractor."""
-        pass
     
     def extract_city(self, address: str, extracted_state: Optional[str] = None) -> Optional[str]:
         """

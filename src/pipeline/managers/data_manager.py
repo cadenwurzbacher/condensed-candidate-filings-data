@@ -11,7 +11,7 @@ import os
 import logging
 from pathlib import Path
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Dict, List
 import glob
 
 logger = logging.getLogger(__name__)
