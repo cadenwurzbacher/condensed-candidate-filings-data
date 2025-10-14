@@ -218,12 +218,14 @@ class DataProcessor:
         
         for state, df in raw_data.items():
             try:
-                if state in self.structural_cleaners:
-                    logger.info(f"Running structural cleaner for {state}")
-                    cleaner = self.structural_cleaners[state]
-                    
-                    # Set the data directory for the cleaner
+                # Try to get structural cleaner from dynamic importer first
+                try:
+                    from ..dynamic_imports import dynamic_importer
+                    cleaner_class = dynamic_importer.get_structural_cleaner(state)
+                    cleaner = cleaner_class()
                     cleaner.data_dir = self.config.data_dir
+                    
+                    logger.info(f"Running structural cleaner for {state}")
                     
                     # Run the cleaner with DataFrame (new pipeline)
                     if hasattr(cleaner, 'clean_dataframe'):
@@ -234,9 +236,24 @@ class DataProcessor:
                     structured_data[state] = structured_df
                     
                     logger.info(f"Structural cleaning complete for {state}: {len(structured_df)} records")
-                else:
-                    logger.warning(f"No structural cleaner found for {state}, using raw data")
-                    structured_data[state] = df
+                    
+                except ValueError:
+                    # No structural cleaner found, try fallback to self.structural_cleaners
+                    if state in self.structural_cleaners:
+                        logger.info(f"Running structural cleaner for {state} (fallback)")
+                        cleaner = self.structural_cleaners[state]
+                        cleaner.data_dir = self.config.data_dir
+                        
+                        if hasattr(cleaner, 'clean_dataframe'):
+                            structured_df = cleaner.clean_dataframe(df)
+                        else:
+                            structured_df = cleaner.clean()
+                        structured_data[state] = structured_df
+                        
+                        logger.info(f"Structural cleaning complete for {state}: {len(structured_df)} records")
+                    else:
+                        logger.warning(f"No structural cleaner found for {state}, using raw data")
+                        structured_data[state] = df
                     
             except Exception as e:
                 logger.error(f"Structural cleaning failed for {state}: {e}")
@@ -941,17 +958,17 @@ class DataProcessor:
             logger.info(f"States represented: {data['state'].nunique()}")
             logger.info(f"Offices represented: {data['office'].nunique()}")
             
-                    # Apply final data fixes
-        data = self._apply_final_fixes(data)
-        
-        # Fix election date formatting (remove -GEN suffix and format properly)
-        if 'election_date' in data.columns:
-            data['election_date'] = data['election_date'].apply(
-                lambda x: self._format_election_date(x) if pd.notna(x) and str(x).strip() else x
-            )
-            logger.info("Fixed election date formatting")
-        
-        return data
+            # Apply final data fixes
+            data = self._apply_final_fixes(data)
+            
+            # Fix election date formatting (remove -GEN suffix and format properly)
+            if 'election_date' in data.columns:
+                data['election_date'] = data['election_date'].apply(
+                    lambda x: self._format_election_date(x) if pd.notna(x) and str(x).strip() else x
+                )
+                logger.info("Fixed election date formatting")
+            
+            return data
             
         except Exception as e:
             logger.error(f"Final processing failed: {e}")

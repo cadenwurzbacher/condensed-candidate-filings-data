@@ -60,15 +60,25 @@ This pipeline processes raw candidate filing data from state election offices an
 ### Directory Structure
 
 ```
-src/pipeline/
-├── structural_cleaners/     # Phase 1: Raw data extraction
-├── id_generator/           # Phase 2: Unique ID generation
-├── state_cleaners/         # Phase 3: State-specific cleaning
-├── national_standards/     # Phase 4: Cross-state standardization
-├── output_generator/       # Phase 5: Final output
-├── party_standardizer/     # Party name standardization
-├── office_standardizer.py  # Office name standardization
-└── main_pipeline.py        # Main orchestration
+├── src/                    # Source code
+│   ├── pipeline/           # Main pipeline modules
+│   │   ├── structural_cleaners/     # Phase 1: Raw data extraction
+│   │   ├── state_cleaners/         # Phase 3: State-specific cleaning
+│   │   ├── national_standards/     # Phase 4: Cross-state standardization
+│   │   ├── party_standardizer/     # Party name standardization
+│   │   ├── office_standardizer.py  # Office name standardization
+│   │   └── main_pipeline.py        # Main orchestration
+│   └── config/             # Configuration modules
+├── scripts/               # Analysis and validation scripts
+├── docs/                   # Documentation
+├── tests/                  # Test suite
+├── data/                   # Data directories
+│   ├── raw/               # Raw input data
+│   ├── processed/         # Intermediate processing files
+│   ├── final/             # Final output files
+│   └── logs/              # Pipeline logs
+├── run_pipeline.py         # Main entry point
+└── requirements.txt       # Python dependencies
 ```
 
 ## 📊 Data Format Standards
@@ -227,11 +237,9 @@ python -m pytest tests/test_data_quality.py
 
 ## 📚 Documentation
 
-- [Technical Architecture](docs/TECHNICAL_ARCHITECTURE.md) - Detailed system design
-- [State Integration Guide](docs/STATE_INTEGRATION_GUIDE.md) - Adding new states
-- [Data Standards Guide](docs/DATA_STANDARDS_GUIDE.md) - Formatting standards
-- [API Reference](docs/API_REFERENCE.md) - Code documentation
-- [Troubleshooting Guide](docs/TROUBLESHOOTING.md) - Common issues and solutions
+- [Complete Pipeline Flow](docs/COMPLETE_PIPELINE_FLOW.md) - Detailed pipeline architecture and flow
+- [Data Standards](docs/DATA_STANDARDS.md) - Data format standards and conventions
+- [Scripts Documentation](scripts/README.md) - Analysis and validation scripts
 
 ## 🤝 Contributing
 
