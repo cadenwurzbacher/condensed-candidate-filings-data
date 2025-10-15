@@ -61,138 +61,77 @@ class DataProcessor:
         self._initialize_cleaners()
     
     def _initialize_cleaners(self):
-        """Initialize structural and state cleaners."""
+        """
+        Initialize structural and state cleaners dynamically.
+
+        REFACTORED: Reduced from 130+ lines of imports to ~50 lines with dynamic loading!
+        Makes adding new states much easier - just add to the STATE_MAPPING dict.
+        """
+        import importlib
+
+        # State mapping: (state_key, StructuralClass, StateCleanerClass)
+        STATE_MAPPING = {
+            'alaska': ('AlaskaStructuralCleaner', 'AlaskaCleaner'),
+            'arizona': ('ArizonaStructuralCleaner', 'ArizonaCleaner'),
+            'arkansas': ('ArkansasStructuralCleaner', 'ArkansasCleaner'),
+            'colorado': ('ColoradoStructuralCleaner', 'ColoradoCleaner'),
+            'delaware': ('DelawareStructuralCleaner', 'DelawareCleaner'),
+            'florida': ('FloridaStructuralCleaner', 'FloridaCleaner'),
+            'georgia': ('GeorgiaStructuralCleaner', 'GeorgiaCleaner'),
+            'hawaii': ('HawaiiStructuralCleaner', 'HawaiiCleaner'),
+            'idaho': ('IdahoStructuralCleaner', 'IdahoCleaner'),
+            'illinois': ('IllinoisStructuralCleaner', 'IllinoisCleaner'),
+            'indiana': ('IndianaStructuralCleaner', 'IndianaCleaner'),
+            'iowa': ('IowaStructuralCleaner', 'IowaCleaner'),
+            'kansas': ('KansasStructuralCleaner', 'KansasCleaner'),
+            'kentucky': ('KentuckyStructuralCleaner', 'KentuckyCleaner'),
+            'louisiana': ('LouisianaStructuralCleaner', 'LouisianaCleaner'),
+            'maryland': ('MarylandStructuralCleaner', 'MarylandCleaner'),
+            'massachusetts': ('MassachusettsStructuralCleaner', 'MassachusettsCleaner'),
+            'missouri': ('MissouriStructuralCleaner', 'MissouriCleaner'),
+            'montana': ('MontanaStructuralCleaner', 'MontanaCleaner'),
+            'nebraska': ('NebraskaStructuralCleaner', 'NebraskaCleaner'),
+            'new_mexico': ('NewMexicoStructuralCleaner', 'NewMexicoCleaner'),
+            'new_york': ('NewYorkStructuralCleaner', 'NewYorkCleaner'),
+            'north_carolina': ('NorthCarolinaStructuralCleaner', 'NorthCarolinaCleaner'),
+            'north_dakota': ('NorthDakotaStructuralCleaner', 'NorthDakotaCleaner'),
+            'oklahoma': ('OklahomaStructuralCleaner', 'OklahomaCleaner'),
+            'oregon': ('OregonStructuralCleaner', 'OregonCleaner'),
+            'pennsylvania': ('PennsylvaniaStructuralCleaner', 'PennsylvaniaCleaner'),
+            'south_carolina': ('SouthCarolinaStructuralCleaner', 'SouthCarolinaCleaner'),
+            'south_dakota': ('SouthDakotaStructuralCleaner', 'SouthDakotaCleaner'),
+            'vermont': ('VermontStructuralCleaner', 'VermontCleaner'),
+            'virginia': ('VirginiaStructuralCleaner', 'VirginiaCleaner'),
+            'washington': ('WashingtonStructuralCleaner', 'WashingtonCleaner'),
+            'west_virginia': ('WestVirginiaStructuralCleaner', 'WestVirginiaCleaner'),
+            'wyoming': ('WyomingStructuralCleaner', 'WyomingCleaner'),
+        }
+
         try:
-            # Import structural cleaners
-            from ..structural_cleaners import (
-                AlaskaStructuralCleaner, ArizonaStructuralCleaner, ArkansasStructuralCleaner,
-                ColoradoStructuralCleaner, DelawareStructuralCleaner, FloridaStructuralCleaner,
-                GeorgiaStructuralCleaner, HawaiiStructuralCleaner, IdahoStructuralCleaner, IllinoisStructuralCleaner,
-                IndianaStructuralCleaner, IowaStructuralCleaner, KansasStructuralCleaner,
-                KentuckyStructuralCleaner, LouisianaStructuralCleaner, MarylandStructuralCleaner,
-                MassachusettsStructuralCleaner, MissouriStructuralCleaner, MontanaStructuralCleaner,
-                NebraskaStructuralCleaner, NewMexicoStructuralCleaner, NewYorkStructuralCleaner,
-                NorthCarolinaStructuralCleaner, NorthDakotaStructuralCleaner, OklahomaStructuralCleaner, OregonStructuralCleaner,
-                PennsylvaniaStructuralCleaner, SouthCarolinaStructuralCleaner, SouthDakotaStructuralCleaner,
-                VermontStructuralCleaner, VirginiaStructuralCleaner, WashingtonStructuralCleaner, WestVirginiaStructuralCleaner,
-                WyomingStructuralCleaner
-            )
-            
-            # Import state cleaners individually since __init__.py doesn't export them
-            from ..state_cleaners.alaska_cleaner_refactored import AlaskaCleaner
-            from ..state_cleaners.arizona_cleaner_refactored import ArizonaCleaner
-            from ..state_cleaners.arkansas_cleaner_refactored import ArkansasCleaner
-            from ..state_cleaners.colorado_cleaner_refactored import ColoradoCleaner
-            from ..state_cleaners.delaware_cleaner_refactored import DelawareCleaner
-            from ..state_cleaners.florida_cleaner_refactored import FloridaCleaner
-            from ..state_cleaners.georgia_cleaner_refactored import GeorgiaCleaner
-            from ..state_cleaners.hawaii_cleaner_refactored import HawaiiCleaner
-            from ..state_cleaners.idaho_cleaner_refactored import IdahoCleaner
-            from ..state_cleaners.illinois_cleaner_refactored import IllinoisCleaner
-            from ..state_cleaners.indiana_cleaner_refactored import IndianaCleaner
-            from ..state_cleaners.iowa_cleaner_refactored import IowaCleaner
-            from ..state_cleaners.kansas_cleaner_refactored import KansasCleaner
-            from ..state_cleaners.kentucky_cleaner_refactored import KentuckyCleaner
-            from ..state_cleaners.louisiana_cleaner_refactored import LouisianaCleaner
-            from ..state_cleaners.maryland_cleaner_refactored import MarylandCleaner
-            from ..state_cleaners.massachusetts_cleaner_refactored import MassachusettsCleaner
-            from ..state_cleaners.missouri_cleaner_refactored import MissouriCleaner
-            from ..state_cleaners.montana_cleaner_refactored import MontanaCleaner
-            from ..state_cleaners.nebraska_cleaner_refactored import NebraskaCleaner
-            from ..state_cleaners.new_mexico_cleaner_refactored import NewMexicoCleaner
-            from ..state_cleaners.new_york_cleaner_refactored import NewYorkCleaner
-            from ..state_cleaners.north_carolina_cleaner_refactored import NorthCarolinaCleaner
-            from ..state_cleaners.oklahoma_cleaner_refactored import OklahomaCleaner
-            from ..state_cleaners.oregon_cleaner_refactored import OregonCleaner
-            from ..state_cleaners.pennsylvania_cleaner_refactored import PennsylvaniaCleaner
-            from ..state_cleaners.south_carolina_cleaner_refactored import SouthCarolinaCleaner
-            from ..state_cleaners.south_dakota_cleaner_refactored import SouthDakotaCleaner
-            from ..state_cleaners.vermont_cleaner_refactored import VermontCleaner
-            from ..state_cleaners.virginia_cleaner_refactored import VirginiaCleaner
-            from ..state_cleaners.washington_cleaner_refactored import WashingtonCleaner
-            from ..state_cleaners.west_virginia_cleaner_refactored import WestVirginiaCleaner
-            from ..state_cleaners.wyoming_cleaner_refactored import WyomingCleaner
-            from ..state_cleaners.north_dakota_cleaner_refactored import NorthDakotaCleaner
-            
-            # Structural cleaner mapping
-            self.structural_cleaners = {
-                'alaska': AlaskaStructuralCleaner(),
-                'arizona': ArizonaStructuralCleaner(),
-                'arkansas': ArkansasStructuralCleaner(),
-                'colorado': ColoradoStructuralCleaner(),
-                'delaware': DelawareStructuralCleaner(),
-                'florida': FloridaStructuralCleaner(),
-                'georgia': GeorgiaStructuralCleaner(),
-                'hawaii': HawaiiStructuralCleaner(),
-                'idaho': IdahoStructuralCleaner(),
-                'illinois': IllinoisStructuralCleaner(),
-                'indiana': IndianaStructuralCleaner(),
-                'iowa': IowaStructuralCleaner(),
-                'kansas': KansasStructuralCleaner(),
-                'kentucky': KentuckyStructuralCleaner(),
-                'louisiana': LouisianaStructuralCleaner(),
-                'maryland': MarylandStructuralCleaner(),
-                'massachusetts': MassachusettsStructuralCleaner(),
-                'missouri': MissouriStructuralCleaner(),
-                'montana': MontanaStructuralCleaner(),
-                'nebraska': NebraskaStructuralCleaner(),
-                'new_mexico': NewMexicoStructuralCleaner(),
-                'new_york': NewYorkStructuralCleaner(),
-                'north_carolina': NorthCarolinaStructuralCleaner(),
-                'oklahoma': OklahomaStructuralCleaner(),
-                'oregon': OregonStructuralCleaner(),
-                'pennsylvania': PennsylvaniaStructuralCleaner(),
-                'south_carolina': SouthCarolinaStructuralCleaner(),
-                'vermont': VermontStructuralCleaner(),
-                'virginia': VirginiaStructuralCleaner(),
-                'washington': WashingtonStructuralCleaner(),
-                'west_virginia': WestVirginiaStructuralCleaner(),
-                'wyoming': WyomingStructuralCleaner(),
-                'south_dakota': SouthDakotaStructuralCleaner(),
-                'north_dakota': NorthDakotaStructuralCleaner(),
-            }
-            
-            # State cleaner mapping
-            self.state_cleaners = {
-                'alaska': AlaskaCleaner(),
-                'arizona': ArizonaCleaner(),
-                'arkansas': ArkansasCleaner(),
-                'colorado': ColoradoCleaner(),
-                'delaware': DelawareCleaner(),
-                'florida': FloridaCleaner(),
-                'georgia': GeorgiaCleaner(),
-                'hawaii': HawaiiCleaner(),
-                'idaho': IdahoCleaner(),
-                'illinois': IllinoisCleaner(),
-                'indiana': IndianaCleaner(),
-                'iowa': IowaCleaner(),
-                'kansas': KansasCleaner(),
-                'kentucky': KentuckyCleaner(),
-                'louisiana': LouisianaCleaner(),
-                'maryland': MarylandCleaner(),
-                'massachusetts': MassachusettsCleaner(),
-                'missouri': MissouriCleaner(),
-                'montana': MontanaCleaner(),
-                'nebraska': NebraskaCleaner(),
-                'new_mexico': NewMexicoCleaner(),
-                'new_york': NewYorkCleaner(),
-                'north_carolina': NorthCarolinaCleaner(),
-                'oklahoma': OklahomaCleaner(),
-                'oregon': OregonCleaner(),
-                'pennsylvania': PennsylvaniaCleaner(),
-                'south_carolina': SouthCarolinaCleaner(),
-                'south_dakota': SouthDakotaCleaner(),
-                'vermont': VermontCleaner(),
-                'virginia': VirginiaCleaner(),
-                'washington': WashingtonCleaner(),
-                'west_virginia': WestVirginiaCleaner(),
-                'wyoming': WyomingCleaner(),
-                'north_dakota': NorthDakotaCleaner()
-            }
-            
+            self.structural_cleaners = {}
+            self.state_cleaners = {}
+
+            for state_key, (structural_class_name, state_class_name) in STATE_MAPPING.items():
+                try:
+                    # Import and instantiate structural cleaner
+                    structural_module_name = f"..structural_cleaners.{state_key}_structural_cleaner"
+                    structural_module = importlib.import_module(structural_module_name, package=__package__)
+                    structural_class = getattr(structural_module, structural_class_name)
+                    self.structural_cleaners[state_key] = structural_class()
+
+                    # Import and instantiate state cleaner
+                    state_module_name = f"..state_cleaners.{state_key}_cleaner"
+                    state_module = importlib.import_module(state_module_name, package=__package__)
+                    state_class = getattr(state_module, state_class_name)
+                    self.state_cleaners[state_key] = state_class()
+
+                except Exception as e:
+                    logger.warning(f"Failed to load cleaners for {state_key}: {e}")
+                    continue
+
             logger.info(f"Initialized {len(self.structural_cleaners)} structural cleaners")
             logger.info(f"Initialized {len(self.state_cleaners)} state cleaners")
-            
+
         except Exception as e:
             logger.error(f"Failed to initialize cleaners: {e}")
             self.structural_cleaners = {}

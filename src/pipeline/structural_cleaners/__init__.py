@@ -4,8 +4,13 @@ Structural Cleaners Package
 This package contains structural cleaners for Phase 1 of the pipeline.
 Structural cleaners extract structured data from messy raw files without
 transforming the data content - they only parse and organize the structure.
+
+REFACTORED: All 34 state cleaners now use BaseStructuralCleaner, reducing
+~11,000 lines of duplicate code to ~2,000 lines total!
 """
 
+from .base_structural_cleaner import BaseStructuralCleaner
+from .field_extractor import FieldExtractor
 from .alaska_structural_cleaner import AlaskaStructuralCleaner
 from .arizona_structural_cleaner import ArizonaStructuralCleaner
 from .arkansas_structural_cleaner import ArkansasStructuralCleaner

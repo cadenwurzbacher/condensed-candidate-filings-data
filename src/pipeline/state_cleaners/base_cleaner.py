@@ -140,23 +140,21 @@ class BaseStateCleaner(ABC):
             DataFrame with state-specific content cleaned
         """
     
-    @abstractmethod
     def _parse_names(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Parse candidate names into components.
-        
-        This method should be implemented by each state to handle:
-        - Name parsing logic specific to the state
-        - Prefix/suffix extraction
-        - Nickname handling
-        - State-specific name formats
-        
+
+        Default implementation uses the shared NameParser utility.
+        States can override this if they have special name parsing requirements.
+
         Args:
             df: DataFrame with candidate names
-            
+
         Returns:
             DataFrame with parsed name components
         """
+        from .name_parser import NameParser
+        return NameParser.parse_dataframe_names(df, name_column='candidate_name')
     
     def _ensure_standard_columns(self, df: pd.DataFrame) -> pd.DataFrame:
         """
