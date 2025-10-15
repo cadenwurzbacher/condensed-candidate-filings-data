@@ -71,56 +71,6 @@ class MassachusettsCleaner(BaseStateCleaner):
         
         return df
     
-    def _parse_names(self, df: pd.DataFrame) -> pd.DataFrame:
-        """
-        Parse candidate names into first, middle, last, prefix, suffix components.
-        Massachusetts-specific name parsing logic.
-        """
-        name_columns = ['first_name', 'middle_name', 'last_name', 'prefix', 'suffix', 'nickname', 'full_name_display']
-        for col in name_columns:
-            if col not in df.columns:
-                df[col] = None
-
-        if 'candidate_name' in df.columns:
-            df['full_name_display'] = df['candidate_name']
-
-        for idx, row in df.iterrows():
-            candidate_name = row.get('candidate_name')
-            if pd.notna(candidate_name) and str(candidate_name).strip():
-                name_str = str(candidate_name).strip()
-
-                # Handle suffixes
-                suffix_pattern = r'\b(Jr|Sr|II|III|IV|V|VI|VII|VIII|IX|X)\b'
-                suffix_match = re.search(suffix_pattern, name_str, re.IGNORECASE)
-                if suffix_match:
-                    suffix = suffix_match.group(1)
-                    df.at[idx, 'suffix'] = suffix
-                    name_str = re.sub(suffix_pattern, '', name_str, flags=re.IGNORECASE).strip()
-                else:
-                    df.at[idx, 'suffix'] = None
-
-                # Handle prefixes
-                prefix_pattern = r'^(Dr|Mr|Mrs|Ms|Miss|Prof|Rev|Hon|Sen|Rep|Gov|Lt|Col|Gen|Adm|Capt|Maj|Sgt|Cpl|Pvt)\.?\s+'
-                prefix_match = re.match(prefix_pattern, name_str, re.IGNORECASE)
-                if prefix_match:
-                    prefix = prefix_match.group(1)
-                    df.at[idx, 'prefix'] = prefix
-                    name_str = re.sub(prefix_pattern, '', name_str, flags=re.IGNORECASE).strip()
-                else:
-                    df.at[idx, 'prefix'] = None
-
-                # Split remaining name parts
-                parts = [p.strip() for p in name_str.split() if p.strip()]
-
-                if len(parts) >= 1:
-                    df.at[idx, 'first_name'] = parts[0]
-                if len(parts) >= 2:
-                    df.at[idx, 'last_name'] = parts[-1]
-                if len(parts) > 2:
-                    df.at[idx, 'middle_name'] = ' '.join(parts[1:-1])
-        
-        return df
-    
     def _clean_massachusetts_district(self, df: pd.DataFrame) -> pd.DataFrame:
         """Clean district information for Massachusetts"""
         if 'district' in df.columns:

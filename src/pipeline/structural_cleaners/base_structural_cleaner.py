@@ -290,23 +290,30 @@ class BaseStructuralCleaner(ABC):
 
     def _is_valid_candidate_row(self, row: pd.Series) -> bool:
         """Check if a row contains valid candidate data."""
-        # Skip rows that are likely headers or summaries
-        row_str = ' '.join(str(val) for val in row.values if pd.notna(val)).lower()
-
-        # Skip if it looks like a header or summary
-        skip_indicators = [
-            'total', 'count', 'summary', 'header', 'name', 'office', 'party',
-            'candidate', 'filing', 'election', 'date', 'address'
-        ]
-
-        # If the row contains mostly header-like text, skip it
-        header_matches = sum(1 for indicator in skip_indicators if indicator in row_str)
-        if header_matches >= 3:
-            return False
-
         # Skip if all values are empty or very short
         non_empty_values = [str(val) for val in row.values if pd.notna(val) and str(val).strip()]
         if len(non_empty_values) < 2:
+            return False
+
+        # Join all cell values to check for header patterns
+        row_str = ' '.join(str(val) for val in row.values if pd.notna(val)).lower()
+
+        # Skip rows that look like column headers (must match ALL criteria)
+        # Headers typically have multiple short column-name-like words in sequence
+        header_words = ['name', 'office', 'party', 'district', 'county', 'address',
+                       'city', 'state', 'zip', 'phone', 'email', 'filing', 'election']
+
+        # Count how many header words appear as standalone words (not partial matches)
+        header_word_count = sum(1 for word in header_words
+                               if re.search(rf'\b{word}\b', row_str))
+
+        # If row has 5+ header words AND most values are short, it's likely a header
+        avg_length = sum(len(str(val)) for val in non_empty_values) / len(non_empty_values)
+        if header_word_count >= 5 and avg_length < 15:
+            return False
+
+        # Skip obvious summary/total rows
+        if row_str.startswith(('total', 'summary', 'count', 'grand total')):
             return False
 
         return True

@@ -35,13 +35,14 @@ class DynamicImporter:
             logger.warning(f"State cleaners directory not found: {state_cleaners_dir}")
             return
         
-        # Find all *_cleaner_refactored.py files
-        cleaner_files = list(state_cleaners_dir.glob("*_cleaner_refactored.py"))
-        
+        # Find all *_cleaner.py files (excluding base_cleaner.py)
+        cleaner_files = [f for f in state_cleaners_dir.glob("*_cleaner.py")
+                        if f.stem != "base_cleaner"]
+
         for file_path in cleaner_files:
             try:
-                # Extract state name from filename (e.g., "alaska_cleaner_refactored.py" -> "alaska")
-                state_name = file_path.stem.replace("_cleaner_refactored", "")
+                # Extract state name from filename (e.g., "alaska_cleaner.py" -> "alaska")
+                state_name = file_path.stem.replace("_cleaner", "")
                 
                 # Import the module using relative import
                 module_name = f"src.pipeline.state_cleaners.{file_path.stem}"
@@ -74,9 +75,10 @@ class DynamicImporter:
             logger.warning(f"Structural cleaners directory not found: {structural_cleaners_dir}")
             return
         
-        # Find all *_structural_cleaner.py files
-        cleaner_files = list(structural_cleaners_dir.glob("*_structural_cleaner.py"))
-        
+        # Find all *_structural_cleaner.py files (excluding base_structural_cleaner.py)
+        cleaner_files = [f for f in structural_cleaners_dir.glob("*_structural_cleaner.py")
+                        if f.stem != "base_structural_cleaner"]
+
         for file_path in cleaner_files:
             try:
                 # Extract state name from filename (e.g., "alaska_structural_cleaner.py" -> "alaska")
@@ -87,11 +89,13 @@ class DynamicImporter:
                 module = importlib.import_module(module_name)
                 
                 # Find the cleaner class (should be named like "AlaskaStructuralCleaner")
+                # Must be defined in this module (not imported from base)
                 cleaner_class = None
                 for name, obj in inspect.getmembers(module):
-                    if (inspect.isclass(obj) and 
+                    if (inspect.isclass(obj) and
                         name.endswith("StructuralCleaner") and
-                        (hasattr(obj, 'clean') or hasattr(obj, 'clean_data'))):
+                        name != "BaseStructuralCleaner" and
+                        obj.__module__ == module.__name__):
                         cleaner_class = obj
                         break
                 

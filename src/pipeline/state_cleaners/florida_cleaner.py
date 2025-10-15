@@ -20,10 +20,6 @@ class FloridaCleaner(BaseStateCleaner):
     
     def __init__(self):
         super().__init__("Florida")
-        
-        # County mappings removed - not needed
-        
-        # Office mappings removed - handled by national standards
     
     def _clean_state_specific_structure(self, df: pd.DataFrame) -> pd.DataFrame:
         """
@@ -70,18 +66,7 @@ class FloridaCleaner(BaseStateCleaner):
         Returns:
             DataFrame with Florida-specific content cleaned
         """
-        self.logger.info("Cleaning Florida-specific content")
-        
-        # County standardization removed - not needed
-        
-        # Standardize offices - MOVED TO NATIONAL STANDARDS PHASE
-        # if 'office' in df.columns:
-        #     df['office'] = df['office'].map(self.office_mappings).fillna(df['office'])
-        
-        # Florida-specific party cleaning - MOVED TO NATIONAL STANDARDS PHASE
-        # if 'party' in df.columns:
-        #     df['party'] = df['party'].apply(self._clean_florida_party)
-        
+        self.logger.info(f"Cleaning Florida-specific content")
         return df
     
     def _clean_florida_name(self, name: str) -> str:

@@ -20,11 +20,6 @@ class ArizonaCleaner(BaseStateCleaner):
     
     def __init__(self):
         super().__init__("Arizona")
-        
-        # County mappings removed - not needed
-        
-        # Arizona-specific office mappings (kept state-specific as intended)
-        # Office mappings removed - handled by national standards
     
     def _clean_state_specific_structure(self, df: pd.DataFrame) -> pd.DataFrame:
         """
@@ -71,73 +66,7 @@ class ArizonaCleaner(BaseStateCleaner):
         Returns:
             DataFrame with Arizona-specific content cleaned
         """
-        self.logger.info("Cleaning Arizona-specific content")
-        
-        # County standardization removed - not needed
-        
-        # Standardize offices - MOVED TO NATIONAL STANDARDS PHASE
-        # # if 'office' in df.columns:
-        #     df['office'] = df['office'].map(self.office_mappings).fillna(df['office'])
-        
-        # Arizona-specific formatting
-        df = self._apply_arizona_formatting(df)
-        
-        return df
-    
-    def _parse_names(self, df: pd.DataFrame) -> pd.DataFrame:
-        """
-        Parse candidate names into first, middle, last, prefix, suffix, nickname components.
-        Arizona-specific name parsing logic.
-        """
-        # Initialize name columns
-        name_columns = ['first_name', 'middle_name', 'last_name', 'prefix', 'suffix', 'nickname', 'full_name_display']
-        for col in name_columns:
-            if col not in df.columns:
-                df[col] = None
-        
-        # Use candidate_name as full_name_display if available
-        if 'candidate_name' in df.columns:
-            df['full_name_display'] = df['candidate_name']
-        
-        # Basic name parsing for Arizona
-        for idx, row in df.iterrows():
-            candidate_name = row.get('candidate_name')
-            if pd.notna(candidate_name) and str(candidate_name).strip():
-                name_str = str(candidate_name).strip()
-                
-                # Extract suffix from the end
-                suffix_pattern = r'\b(Jr|Sr|II|III|IV|V|VI|VII|VIII|IX|X)\b'
-                suffix_match = re.search(suffix_pattern, name_str, re.IGNORECASE)
-                if suffix_match:
-                    suffix = suffix_match.group(1)
-                    df.at[idx, 'suffix'] = suffix
-                    # Remove suffix from name for further processing
-                    name_str = re.sub(suffix_pattern, '', name_str, flags=re.IGNORECASE).strip()
-                else:
-                    df.at[idx, 'suffix'] = None
-                
-                # Extract prefix from the beginning
-                prefix_pattern = r'^(Dr|Mr|Mrs|Ms|Miss|Prof|Rev|Hon|Sen|Rep|Gov|Lt|Col|Gen|Adm|Capt|Maj|Sgt|Cpl|Pvt)\.?\s+'
-                prefix_match = re.match(prefix_pattern, name_str, re.IGNORECASE)
-                if prefix_match:
-                    prefix = prefix_match.group(1)
-                    df.at[idx, 'prefix'] = prefix
-                    # Remove prefix from name for further processing
-                    name_str = re.sub(prefix_pattern, '', name_str, flags=re.IGNORECASE).strip()
-                else:
-                    df.at[idx, 'prefix'] = None
-                
-                # Split remaining name into parts
-                parts = [p.strip() for p in name_str.split() if p.strip()]
-                
-                if len(parts) >= 1:
-                    df.at[idx, 'first_name'] = parts[0]
-                if len(parts) >= 2:
-                    df.at[idx, 'last_name'] = parts[-1]
-                if len(parts) > 2:
-                    # Middle names are everything between first and last
-                    df.at[idx, 'middle_name'] = ' '.join(parts[1:-1])
-        
+        self.logger.info(f"Cleaning Arizona-specific content")
         return df
     
     def _clean_arizona_name(self, name: str) -> str:
@@ -173,37 +102,7 @@ class ArizonaCleaner(BaseStateCleaner):
     # _clean_arizona_address method removed - now handled centrally
     
     def _clean_arizona_district(self, district: str) -> str:
-        """
-        Clean Arizona-specific district formats.
-        
-        Args:
-            district: Raw district string
-            
-        Returns:
-            Cleaned district string
-        """
+        """Clean Arizona-specific district formats."""
         if pd.isna(district) or not district:
             return None
-        
-        # Arizona-specific district cleaning logic
-        district = str(district).strip()
-        
-        # Handle common Arizona district patterns
-        # (e.g., "District 1", "LD 1", etc.)
-        
-        return district
-    
-    def _apply_arizona_formatting(self, df: pd.DataFrame) -> pd.DataFrame:
-        """
-        Apply Arizona-specific formatting rules.
-        
-        Args:
-            df: DataFrame to format
-            
-        Returns:
-            Formatted DataFrame
-        """
-        # Arizona-specific formatting logic
-        # (e.g., date formats, phone number formats, etc.)
-        
-        return df
+        return str(district).strip()

@@ -20,13 +20,6 @@ class AlaskaCleaner(BaseStateCleaner):
     
     def __init__(self):
         super().__init__("Alaska")
-        
-        # County mappings removed - not needed
-        
-        # Alaska-specific office mappings
-        
-        # Alaska-specific office mappings
-        # Office mappings removed - handled by national standards
     
     def clean_data(self, df: pd.DataFrame) -> pd.DataFrame:
         """
