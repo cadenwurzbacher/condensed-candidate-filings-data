@@ -48,14 +48,14 @@ class ColoradoCleaner(BaseStateCleaner):
         
         # Clean candidate names (Colorado-specific logic)
         if 'candidate_name' in df.columns:
-            df['candidate_name'] = df['candidate_name'].apply(self._clean_colorado_name)
+            df['candidate_name'] = df['candidate_name'].apply(self._standard_name_cleaning)
         
         # Clean addresses (moved to unified address parser)
         # Address processing now handled in Phase 4 by UnifiedAddressParser
         
         # Clean districts (Colorado-specific logic)
         if 'district' in df.columns:
-            df['district'] = df['district'].apply(self._clean_colorado_district)
+            df['district'] = df['district'].apply(self._standard_district_cleaning)
         
         return df
     
@@ -80,33 +80,5 @@ class ColoradoCleaner(BaseStateCleaner):
         # Standardize offices - MOVED TO NATIONAL STANDARDS PHASE
         return df
     
-    def _parse_names(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Parse candidate names into components using base class standard parsing."""
-        name_columns = ['first_name', 'middle_name', 'last_name', 'prefix', 'suffix', 'nickname', 'full_name_display']
-        for col in name_columns:
-            if col not in df.columns:
-                df[col] = None
 
-        for idx, row in df.iterrows():
-            candidate_name = row.get('candidate_name')
-            if pd.notna(candidate_name) and str(candidate_name).strip():
-                first, middle, last, prefix, suffix, nickname = self._parse_name_parts(candidate_name)
-                df.at[idx, 'first_name'] = first
-                df.at[idx, 'middle_name'] = middle
-                df.at[idx, 'last_name'] = last
-                df.at[idx, 'prefix'] = prefix
-                df.at[idx, 'suffix'] = suffix
-                df.at[idx, 'nickname'] = nickname
-                df.at[idx, 'full_name_display'] = self._build_display_name(first, middle, last, prefix, suffix, nickname)
 
-        return df
-    
-    def _clean_colorado_name(self, name: str) -> str:
-        """Clean Colorado name formats using standard base class logic."""
-        return self._standard_name_cleaning(name)
-
-    def _clean_colorado_district(self, district: str) -> str:
-        """Clean Colorado district - just basic cleanup."""
-        if pd.isna(district) or not district:
-            return None
-        return str(district).strip()

@@ -141,23 +141,40 @@ class BaseStateCleaner(ABC):
             DataFrame with state-specific content cleaned
         """
     
-    @abstractmethod
     def _parse_names(self, df: pd.DataFrame) -> pd.DataFrame:
         """
-        Parse candidate names into components.
-        
-        This method should be implemented by each state to handle:
-        - Name parsing logic specific to the state
-        - Prefix/suffix extraction
-        - Nickname handling
-        - State-specific name formats
-        
+        Parse candidate names into components using standard parsing logic.
+
+        Most states can use this default implementation. Override this method
+        only if your state requires custom name parsing logic (e.g., Alaska).
+
         Args:
             df: DataFrame with candidate names
-            
+
         Returns:
             DataFrame with parsed name components
         """
+        # Initialize name columns
+        name_columns = ['first_name', 'middle_name', 'last_name', 'prefix', 'suffix', 'nickname', 'full_name_display']
+        for col in name_columns:
+            if col not in df.columns:
+                df[col] = None
+
+        # Parse each name using base class helper
+        for idx, row in df.iterrows():
+            candidate_name = row.get('candidate_name')
+            if pd.notna(candidate_name) and str(candidate_name).strip():
+                first, middle, last, prefix, suffix, nickname = self._parse_name_parts(candidate_name)
+
+                df.at[idx, 'first_name'] = first
+                df.at[idx, 'middle_name'] = middle
+                df.at[idx, 'last_name'] = last
+                df.at[idx, 'prefix'] = prefix
+                df.at[idx, 'suffix'] = suffix
+                df.at[idx, 'nickname'] = nickname
+                df.at[idx, 'full_name_display'] = self._build_display_name(first, middle, last, prefix, suffix, nickname)
+
+        return df
     
     def _ensure_standard_columns(self, df: pd.DataFrame) -> pd.DataFrame:
         """
@@ -410,6 +427,20 @@ class BaseStateCleaner(ABC):
             display_parts.append(f'"{nickname}"')
 
         return ' '.join(display_parts).strip() if display_parts else None
+
+    def _standard_district_cleaning(self, district: str) -> str:
+        """
+        Standard district cleaning that works for most states.
+
+        Args:
+            district: Raw district string
+
+        Returns:
+            Cleaned district string
+        """
+        if pd.isna(district) or not district:
+            return None
+        return str(district).strip()
 
     def _standard_name_cleaning(self, name: str) -> str:
         """

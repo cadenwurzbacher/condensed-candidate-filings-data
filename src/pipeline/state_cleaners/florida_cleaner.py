@@ -45,14 +45,14 @@ class FloridaCleaner(BaseStateCleaner):
         
         # Clean candidate names (Florida-specific logic)
         if 'candidate_name' in df.columns:
-            df['candidate_name'] = df['candidate_name'].apply(self._clean_florida_name)
+            df['candidate_name'] = df['candidate_name'].apply(self._standard_name_cleaning)
         
         # Clean addresses (moved to unified address parser)
         # Address processing now handled in Phase 4 by UnifiedAddressParser
         
         # Clean districts (Florida-specific logic)
         if 'district' in df.columns:
-            df['district'] = df['district'].apply(self._clean_florida_district)
+            df['district'] = df['district'].apply(self._standard_district_cleaning)
         
         return df
     
@@ -85,43 +85,11 @@ class FloridaCleaner(BaseStateCleaner):
         
         return df
     
-    def _clean_florida_name(self, name: str) -> str:
-        """Clean Florida name formats using standard base class logic."""
-        return self._standard_name_cleaning(name)
-    
+
     # Address cleaning moved to UnifiedAddressParser (Phase 4)
     # _clean_florida_address method removed - now handled centrally
     
-    def _clean_florida_district(self, district: str) -> str:
-        """
-        Clean Florida-specific district formats.
-        
-        Args:
-            district: Raw district string
-            
-        Returns:
-            str: Cleaned district
-        """
-        if pd.isna(district) or not isinstance(district, str):
-            return district
-        
-        district = str(district).strip()
-        
-        # Extract district number from common Florida formats
-        # Examples: "District 1", "Dist. 1", "1st District", etc.
-        patterns = [
-            r'(\d+)(?:st|nd|rd|th)?\s*(?:district|dist\.?)',
-            r'(?:district|dist\.?)\s*(\d+)',
-            r'(\d+)',
-        ]
-        
-        for pattern in patterns:
-            match = re.search(pattern, district, re.IGNORECASE)
-            if match:
-                return match.group(1)
-        
-        return district
-    
+
     def _clean_florida_party(self, party: str) -> str:
         """
         Clean Florida-specific party formats - MOVED TO NATIONAL STANDARDS.
@@ -135,26 +103,3 @@ class FloridaCleaner(BaseStateCleaner):
         # Party standardization moved to national standards phase
         return party
     
-    def _parse_names(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Parse candidate names into components using base class standard parsing."""
-        # Initialize name columns
-        name_columns = ['first_name', 'middle_name', 'last_name', 'prefix', 'suffix', 'nickname', 'full_name_display']
-        for col in name_columns:
-            if col not in df.columns:
-                df[col] = None
-
-        # Parse each name using base class helper
-        for idx, row in df.iterrows():
-            candidate_name = row.get('candidate_name')
-            if pd.notna(candidate_name) and str(candidate_name).strip():
-                first, middle, last, prefix, suffix, nickname = self._parse_name_parts(candidate_name)
-
-                df.at[idx, 'first_name'] = first
-                df.at[idx, 'middle_name'] = middle
-                df.at[idx, 'last_name'] = last
-                df.at[idx, 'prefix'] = prefix
-                df.at[idx, 'suffix'] = suffix
-                df.at[idx, 'nickname'] = nickname
-                df.at[idx, 'full_name_display'] = self._build_display_name(first, middle, last, prefix, suffix, nickname)
-
-        return df

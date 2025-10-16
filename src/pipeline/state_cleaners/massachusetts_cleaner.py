@@ -36,13 +36,14 @@ class MassachusettsCleaner(BaseStateCleaner):
         
         # Parse names from the Name field
         df = self._parse_names(df)
-        
+
         # Clean district information
-        df = self._clean_massachusetts_district(df)
-        
+        if 'district' in df.columns:
+            df['district'] = df['district'].apply(self._standard_district_cleaning)
+
         # Clean party information - MOVED TO NATIONAL STANDARDS PHASE
         # df = self._clean_massachusetts_party(df)
-        
+
         # Clean office information
         df = self._clean_massachusetts_office(df)
         
@@ -71,27 +72,7 @@ class MassachusettsCleaner(BaseStateCleaner):
         
         return df
     
-    def _parse_names(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Parse candidate names into components using base class standard parsing."""
-        name_columns = ['first_name', 'middle_name', 'last_name', 'prefix', 'suffix', 'nickname', 'full_name_display']
-        for col in name_columns:
-            if col not in df.columns:
-                df[col] = None
 
-        for idx, row in df.iterrows():
-            candidate_name = row.get('candidate_name')
-            if pd.notna(candidate_name) and str(candidate_name).strip():
-                first, middle, last, prefix, suffix, nickname = self._parse_name_parts(candidate_name)
-                df.at[idx, 'first_name'] = first
-                df.at[idx, 'middle_name'] = middle
-                df.at[idx, 'last_name'] = last
-                df.at[idx, 'prefix'] = prefix
-                df.at[idx, 'suffix'] = suffix
-                df.at[idx, 'nickname'] = nickname
-                df.at[idx, 'full_name_display'] = self._build_display_name(first, middle, last, prefix, suffix, nickname)
-
-        return df
-    
     def _clean_massachusetts_district(self, df: pd.DataFrame) -> pd.DataFrame:
         """Clean district information for Massachusetts"""
         if 'district' in df.columns:
