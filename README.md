@@ -200,7 +200,7 @@ The pipeline tracks and reports on:
    - Implement `_extract_record_from_row()` method
    - Handle state-specific file formats
 
-2. **Create State Cleaner** (`state_cleaners/state_cleaner_refactored.py`)
+2. **Create State Cleaner** (`state_cleaners/state_cleaner.py`)
    - Extend `BaseStateCleaner`
    - Implement `_parse_names()` method
    - Add state-specific county mappings
