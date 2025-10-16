@@ -1,0 +1,26 @@
+2021:
+  example_file.xlsx:
+    office title: "Office Title"
+    district: "District"
+    political party: "Party"
+    name: "Candidate Name"
+    email: "Email"
+    phone: "Phone"
+    website: "Website"
+    address: "Address"
+    city: "City"
+    state: "State"
+    zip: "Zip"
+2022:
+  another_example.xlsx:
+    office title: "Office"
+    district: "District"
+    political party: "Political Party"
+    name: "Name"
+    email: "Email Address"
+    phone: "Phone Number"
+    website: "Web"
+    address: "Mailing Address"
+    city: "Municipality"
+    state: "State"
+    zip: "Postal Code" 
