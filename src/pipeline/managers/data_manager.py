@@ -117,9 +117,9 @@ class DataManager:
         return [
             'alaska', 'arizona', 'arkansas', 'colorado', 'delaware', 'florida',
             'georgia', 'hawaii', 'idaho', 'illinois', 'indiana', 'iowa', 'kansas',
-            'kentucky', 'louisiana', 'maryland', 'massachusetts', 'missouri', 'montana', 'nebraska',
+            'kentucky', 'louisiana', 'maryland', 'massachusetts', 'minnesota', 'missouri', 'montana', 'nebraska',
             'new_mexico', 'new_york', 'north_carolina', 'north_dakota', 'oklahoma', 'oregon', 'pennsylvania', 'south_carolina',
-            'south_dakota', 'vermont', 'virginia', 'washington', 'west_virginia', 'wyoming'
+            'south_dakota', 'utah', 'vermont', 'virginia', 'washington', 'west_virginia', 'wyoming'
         ]
     
     def _get_state_abbreviation(self, state: str) -> str:
@@ -203,56 +203,80 @@ class DataManager:
                         logger.error(f"Failed to read {file_path} with any encoding")
                         continue
                 elif file_ext == '.txt':
-                    # Handle Florida .txt files
-                    logger.info(f"Processing Florida .txt file: {os.path.basename(file_path)}")
+                    # Handle .txt files - check if it's Minnesota or Florida
+                    filename = os.path.basename(file_path).lower()
                     
-                    # Try different encodings for Florida files
-                    for encoding in ['latin-1', 'cp1252', 'iso-8859-1', 'utf-8']:
+                    if 'minnesota' in filename or 'mn' in filename:
+                        # Handle Minnesota .txt files (semicolon-delimited)
+                        logger.info(f"Processing Minnesota .txt file: {os.path.basename(file_path)}")
+                        
                         try:
-                            # Florida files are tab-delimited with specific columns
-                            df = pd.read_csv(file_path, sep='\t', encoding=encoding)
+                            # Minnesota files are semicolon-delimited with no headers
+                            df = pd.read_csv(file_path, sep=';', header=None, encoding='utf-8')
                             
-                            # Map Florida columns to standard format
-                            column_mapping = {
-                                'NameLast': 'last_name',
-                                'NameFirst': 'first_name', 
-                                'NameMiddle': 'middle_name',
-                                'OfficeDesc': 'office',
-                                'PartyDesc': 'party',
-                                'Addr1': 'address',
-                                'City': 'city',
-                                'State': 'address_state',
-                                'Zip': 'zip_code',
-                                'County': 'county',
-                                'Phone': 'phone',
-                                'Email': 'email',
-                                'ElectionID': 'election_year'
-                            }
+                            # Add metadata columns
+                            df['_source_file'] = os.path.basename(file_path)
+                            df['_source_state'] = state
                             
-                            # Rename columns that exist
-                            existing_columns = {k: v for k, v in column_mapping.items() if k in df.columns}
-                            df = df.rename(columns=existing_columns)
-                            
-                            # Create candidate_name from components
-                            if 'first_name' in df.columns and 'last_name' in df.columns:
-                                df['candidate_name'] = df['first_name'].fillna('') + ' ' + df['last_name'].fillna('')
-                                df['candidate_name'] = df['candidate_name'].str.strip()
-                            
-                            # Extract election year from ElectionID
-                            if 'election_year' in df.columns:
-                                df['election_year'] = df['election_year'].str[:4]
-                            
-                            logger.info(f"Successfully processed Florida file with {encoding} encoding: {len(df)} records")
-                            break
-                            
-                        except UnicodeDecodeError:
+                            logger.info(f"Loaded Minnesota .txt file: {len(df)} rows")
+                            state_dataframes.append(df)
                             continue
+                            
                         except Exception as e:
-                            logger.error(f"Failed to read {file_path} with {encoding} encoding: {e}")
+                            logger.error(f"Failed to read Minnesota .txt file {file_path}: {e}")
                             continue
+                    
                     else:
-                        logger.error(f"Failed to read {file_path} with any encoding")
-                        continue
+                        # Handle Florida .txt files (tab-delimited)
+                        logger.info(f"Processing Florida .txt file: {os.path.basename(file_path)}")
+                        
+                        # Try different encodings for Florida files
+                        for encoding in ['latin-1', 'cp1252', 'iso-8859-1', 'utf-8']:
+                            try:
+                                # Florida files are tab-delimited with specific columns
+                                df = pd.read_csv(file_path, sep='\t', encoding=encoding)
+                                
+                                # Map Florida columns to standard format
+                                column_mapping = {
+                                    'NameLast': 'last_name',
+                                    'NameFirst': 'first_name', 
+                                    'NameMiddle': 'middle_name',
+                                    'OfficeDesc': 'office',
+                                    'PartyDesc': 'party',
+                                    'Addr1': 'address',
+                                    'City': 'city',
+                                    'State': 'address_state',
+                                    'Zip': 'zip_code',
+                                    'County': 'county',
+                                    'Phone': 'phone',
+                                    'Email': 'email',
+                                    'ElectionID': 'election_year'
+                                }
+                                
+                                # Rename columns that exist
+                                existing_columns = {k: v for k, v in column_mapping.items() if k in df.columns}
+                                df = df.rename(columns=existing_columns)
+                                
+                                # Create candidate_name from components
+                                if 'first_name' in df.columns and 'last_name' in df.columns:
+                                    df['candidate_name'] = df['first_name'].fillna('') + ' ' + df['last_name'].fillna('')
+                                    df['candidate_name'] = df['candidate_name'].str.strip()
+                                
+                                # Extract election year from ElectionID
+                                if 'election_year' in df.columns:
+                                    df['election_year'] = df['election_year'].str[:4]
+                                
+                                logger.info(f"Successfully processed Florida file with {encoding} encoding: {len(df)} records")
+                                break
+                                
+                            except UnicodeDecodeError:
+                                continue
+                            except Exception as e:
+                                logger.error(f"Failed to read {file_path} with {encoding} encoding: {e}")
+                                continue
+                        else:
+                            logger.error(f"Failed to read {file_path} with any encoding")
+                            continue
                 else:
                     logger.warning(f"Unsupported file type: {file_ext}")
                     continue
