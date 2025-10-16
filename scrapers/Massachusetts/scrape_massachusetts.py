@@ -454,7 +454,9 @@ class MassachusettsCandidateScraper:
             
         if filename is None:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"massachusetts_candidates_{timestamp}.xlsx"
+            raw_dir = os.path.join('data', 'raw')
+            os.makedirs(raw_dir, exist_ok=True)
+            filename = os.path.join(raw_dir, f"massachusetts_candidates_{timestamp}.xlsx")
             
         try:
             df = pd.DataFrame(self.candidates_data)
@@ -473,7 +475,9 @@ class MassachusettsCandidateScraper:
             
         if filename is None:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"massachusetts_candidates_2024_test_{timestamp}.csv"
+            raw_dir = os.path.join('data', 'raw')
+            os.makedirs(raw_dir, exist_ok=True)
+            filename = os.path.join(raw_dir, f"massachusetts_candidates_2024_test_{timestamp}.csv")
             
         try:
             df = pd.DataFrame(self.candidates_data)

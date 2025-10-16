@@ -221,7 +221,9 @@ def is_valid_candidate(name, office):
     return True
 
 def scrape_delaware_candidates():
-    script_dir = os.path.dirname(os.path.abspath(__file__))
+    # Ensure raw output directory exists
+    raw_dir = os.path.join('data', 'raw')
+    os.makedirs(raw_dir, exist_ok=True)
     base_url = "https://elections.delaware.gov/candidates/candidatelist/"
     try:
         print("Initializing scraper...")
@@ -314,7 +316,7 @@ def scrape_delaware_candidates():
         print("Creating Excel file...")
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         excel_file = f'delaware_candidates_{timestamp}.xlsx'
-        excel_path = os.path.join(script_dir, excel_file)
+        excel_path = os.path.join(raw_dir, excel_file)
         with pd.ExcelWriter(excel_path, engine='openpyxl') as writer:
             df.to_excel(writer, index=False, sheet_name='Candidates')
             workbook = writer.book

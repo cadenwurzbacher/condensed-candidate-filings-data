@@ -28,7 +28,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 class FloridaCandidateScraper:
-    def __init__(self, download_dir: str = "downloads"):
+    def __init__(self, download_dir: str = "data/raw"):
         self.download_dir = Path(download_dir)
         self.download_dir.mkdir(exist_ok=True)
         self.base_url = "https://dos.elections.myflorida.com/candidates/downloadcanlist.asp"

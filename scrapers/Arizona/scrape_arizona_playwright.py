@@ -4,6 +4,7 @@ import json
 import random
 import re
 from datetime import datetime
+import os
 import pandas as pd
 from playwright.async_api import async_playwright
 from bs4 import BeautifulSoup
@@ -218,9 +219,11 @@ async def scrape_arizona_vote_playwright():
             # Sort by Office and Party
             df = df.sort_values(['Office', 'Party', 'Candidate Name'])
             
-            # Generate filename with timestamp
+            # Generate filename and ensure raw output directory exists
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            filename = f'Arizona/arizona_candidates_playwright.xlsx'
+            raw_dir = os.path.join('data', 'raw')
+            os.makedirs(raw_dir, exist_ok=True)
+            filename = os.path.join(raw_dir, 'arizona_candidates_playwright.xlsx')
             
             # Create Excel writer with formatting
             with pd.ExcelWriter(filename, engine='openpyxl') as writer:

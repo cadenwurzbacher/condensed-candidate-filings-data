@@ -12,8 +12,9 @@ def extract_district(office):
     return match.group(1) if match else None
 
 def scrape_colorado_candidates():
-    # Get the directory of the script
-    script_dir = os.path.dirname(os.path.abspath(__file__))
+    # Ensure raw output directory exists
+    raw_dir = os.path.join('data', 'raw')
+    os.makedirs(raw_dir, exist_ok=True)
     
     # URL of the Colorado Secretary of State's candidate list
     url = "https://www.coloradosos.gov/pubs/elections/vote/primaryCandidates.html"
@@ -70,14 +71,14 @@ def scrape_colorado_candidates():
         df = pd.DataFrame(candidates)
         
         # Save to CSV
-        csv_path = os.path.join(script_dir, 'colorado_candidates.csv')
+        csv_path = os.path.join(raw_dir, 'colorado_candidates.csv')
         df.to_csv(csv_path, index=False)
         print(f"Successfully scraped {len(candidates)} candidates from Colorado")
         
         # Create Excel file with timestamp
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         excel_file = f'colorado_candidates_{timestamp}.xlsx'
-        excel_path = os.path.join(script_dir, excel_file)
+        excel_path = os.path.join(raw_dir, excel_file)
         
         # Create Excel writer
         with pd.ExcelWriter(excel_path, engine='openpyxl') as writer:

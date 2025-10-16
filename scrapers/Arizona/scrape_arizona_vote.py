@@ -3,6 +3,7 @@ import json
 import random
 import re
 from datetime import datetime
+import os
 import asyncio
 import pandas as pd
 import cloudscraper
@@ -207,9 +208,11 @@ def scrape_arizona_vote():
         # Sort by Office and Party
         df = df.sort_values(['Office', 'Party', 'Candidate Name'])
         
-        # Generate filename with timestamp
+        # Generate filename and ensure raw output directory exists
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        filename = f'Arizona/arizona_candidates.xlsx'
+        raw_dir = os.path.join('data', 'raw')
+        os.makedirs(raw_dir, exist_ok=True)
+        filename = os.path.join(raw_dir, 'arizona_candidates.xlsx')
         
         # Create Excel writer with formatting
         with pd.ExcelWriter(filename, engine='openpyxl') as writer:

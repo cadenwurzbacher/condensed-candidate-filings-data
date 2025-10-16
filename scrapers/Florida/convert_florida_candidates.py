@@ -44,7 +44,9 @@ def convert_candidate_list_to_excel(input_file, output_folder):
     # Create output filename with timestamp
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     output_filename = f"florida_candidates_{timestamp}.xlsx"
-    output_path = os.path.join(output_folder, output_filename)
+    raw_dir = os.path.join('data', 'raw')
+    os.makedirs(raw_dir, exist_ok=True)
+    output_path = os.path.join(raw_dir, output_filename)
     
     # Write to Excel file
     print(f"Writing to Excel file: {output_path}")

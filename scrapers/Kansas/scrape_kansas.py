@@ -175,6 +175,10 @@ def create_excel(candidates, script_dir):
     excel_path = os.path.join(script_dir, excel_file)
     
     # Create Excel writer
+    # Ensure raw output directory exists
+    raw_dir = os.path.join('data', 'raw')
+    os.makedirs(raw_dir, exist_ok=True)
+    excel_path = os.path.join(raw_dir, f'kansas_candidates_{timestamp}.xlsx')
     with pd.ExcelWriter(excel_path, engine='openpyxl') as writer:
         df.to_excel(writer, index=False, sheet_name='Candidates')
         

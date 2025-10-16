@@ -377,7 +377,9 @@ def main():
             # Save progress after each election
             if all_candidates:
                 df = pd.DataFrame(all_candidates)
-                output_file = os.path.join("illinois", "illinois_all_elections_candidates.xlsx")
+                raw_dir = os.path.join('data', 'raw')
+                os.makedirs(raw_dir, exist_ok=True)
+                output_file = os.path.join(raw_dir, "illinois_all_elections_candidates.xlsx")
                 df.to_excel(output_file, index=False)
                 print(f"\nProgress saved to {output_file}")
                 print(f"Total candidates collected so far: {len(all_candidates)}")
@@ -385,7 +387,9 @@ def main():
         # Final save
         if all_candidates:
             df = pd.DataFrame(all_candidates)
-            output_file = os.path.join("illinois", "illinois_all_elections_candidates.xlsx")
+            raw_dir = os.path.join('data', 'raw')
+            os.makedirs(raw_dir, exist_ok=True)
+            output_file = os.path.join(raw_dir, "illinois_all_elections_candidates.xlsx")
             df.to_excel(output_file, index=False)
             print(f"\nFinal data saved to {output_file}")
             print(f"Total candidates collected: {len(all_candidates)}")

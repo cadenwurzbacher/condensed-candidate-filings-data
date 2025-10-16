@@ -4,6 +4,7 @@ import json
 import random
 import re
 from datetime import datetime
+import os
 import pandas as pd
 from playwright.async_api import async_playwright
 from bs4 import BeautifulSoup
@@ -112,8 +113,10 @@ async def try_alternative_sources():
             # Create DataFrame
             df = pd.DataFrame(candidates_list)
             
-            # Generate filename
-            filename = f'Arizona/arizona_candidates_alternative.xlsx'
+            # Generate filename and ensure raw output directory exists
+            raw_dir = os.path.join('data', 'raw')
+            os.makedirs(raw_dir, exist_ok=True)
+            filename = os.path.join(raw_dir, 'arizona_candidates_alternative.xlsx')
             
             # Create Excel writer
             with pd.ExcelWriter(filename, engine='openpyxl') as writer:

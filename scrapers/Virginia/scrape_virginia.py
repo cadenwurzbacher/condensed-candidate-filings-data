@@ -356,7 +356,9 @@ def extract_and_save_candidates(links, page):
     for year, rows in year_buckets.items():
         if rows:
             out_df = pd.DataFrame(rows, columns=out_cols)
-            out_path = f'virginia_candidates_{year}.xlsx'
+            raw_dir = os.path.join('data', 'raw')
+            os.makedirs(raw_dir, exist_ok=True)
+            out_path = os.path.join(raw_dir, f'virginia_candidates_{year}.xlsx')
             out_df.to_excel(out_path, index=False)
             print(f"Saved {out_path}")
 

@@ -64,7 +64,9 @@ def combine_kentucky_files():
     # Create the combined file
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     combined_filename = f'kentucky_candidates_combined_{timestamp}.xlsx'
-    combined_path = os.path.join(script_dir, combined_filename)
+    raw_dir = os.path.join('data', 'raw')
+    os.makedirs(raw_dir, exist_ok=True)
+    combined_path = os.path.join(raw_dir, combined_filename)
     
     print(f"\nCreating combined file: {combined_filename}")
     

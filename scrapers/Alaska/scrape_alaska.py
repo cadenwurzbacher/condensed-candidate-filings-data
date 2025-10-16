@@ -4,7 +4,7 @@ import pandas as pd
 from playwright.async_api import async_playwright
 import os
 
-OUTPUT_FILE = os.path.join(os.path.dirname(__file__), 'alaska_candidates.xlsx')
+OUTPUT_FILE = os.path.join('data', 'raw', 'alaska_candidates.xlsx')
 URL = 'https://www.elections.alaska.gov/candidates/?election=24genr'
 
 # Normalize party names
@@ -109,6 +109,7 @@ async def scrape_alaska():
         await browser.close()
     # Output to Excel
     df = pd.DataFrame(all_rows)
+    os.makedirs(os.path.join('data', 'raw'), exist_ok=True)
     df.to_excel(OUTPUT_FILE, index=False)
     print(f"Scraped {len(df)} candidates. Output written to {OUTPUT_FILE}")
 

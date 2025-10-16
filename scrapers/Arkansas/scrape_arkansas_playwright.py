@@ -161,7 +161,10 @@ async def scrape_arkansas_candidates_playwright():
             # Save to Excel
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             excel_filename = f"arkansas_candidates_{timestamp}.xlsx"
-            with pd.ExcelWriter(excel_filename, engine='openpyxl') as writer:
+            raw_dir = os.path.join('data', 'raw')
+            os.makedirs(raw_dir, exist_ok=True)
+            excel_path = os.path.join(raw_dir, excel_filename)
+            with pd.ExcelWriter(excel_path, engine='openpyxl') as writer:
                 df.to_excel(writer, sheet_name='Candidates', index=False)
                 workbook = writer.book
                 worksheet = writer.sheets['Candidates']

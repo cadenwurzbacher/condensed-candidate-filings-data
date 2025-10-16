@@ -189,7 +189,9 @@ def scrape_general_2025(script_dir):
     df = pd.DataFrame(candidates)
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     excel_filename = f'washington_candidates_2025_{timestamp}.xlsx'
-    excel_path = os.path.join(script_dir, excel_filename)
+    raw_dir = os.path.join('data', 'raw')
+    os.makedirs(raw_dir, exist_ok=True)
+    excel_path = os.path.join(raw_dir, excel_filename)
     with pd.ExcelWriter(excel_path, engine='openpyxl') as writer:
         df.to_excel(writer, index=False, sheet_name='Candidates')
     print(f"Saved {len(candidates)} candidates to {excel_filename}")
@@ -257,7 +259,9 @@ def scrape_general_2025_playwright(script_dir):
         from datetime import datetime
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         excel_filename = f'washington_candidates_2025_{timestamp}.xlsx'
-        excel_path = os.path.join(script_dir, excel_filename)
+        raw_dir = os.path.join('data', 'raw')
+        os.makedirs(raw_dir, exist_ok=True)
+        excel_path = os.path.join(raw_dir, excel_filename)
         with pd.ExcelWriter(excel_path, engine='openpyxl') as writer:
             df.to_excel(writer, index=False, sheet_name='Candidates')
         print(f"Saved {len(candidates)} candidates to {excel_filename}")
@@ -334,7 +338,9 @@ def scrape_all_elections_playwright(script_dir):
             df = pd.DataFrame(all_candidates)
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
             excel_filename = f'washington_candidates_all_{timestamp}.xlsx'
-            excel_path = os.path.join(script_dir, excel_filename)
+            raw_dir = os.path.join('data', 'raw')
+            os.makedirs(raw_dir, exist_ok=True)
+            excel_path = os.path.join(raw_dir, excel_filename)
             with pd.ExcelWriter(excel_path, engine='openpyxl') as writer:
                 df.to_excel(writer, index=False, sheet_name='Candidates')
             print(f"Saved {len(all_candidates)} candidates to {excel_filename}")

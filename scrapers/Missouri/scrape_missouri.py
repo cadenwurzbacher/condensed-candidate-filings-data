@@ -107,7 +107,9 @@ def create_excel(candidates, script_dir):
     # Create Excel file with timestamp
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     excel_file = f'missouri_candidates_{timestamp}.xlsx'
-    excel_path = os.path.join(script_dir, excel_file)
+    raw_dir = os.path.join('data', 'raw')
+    os.makedirs(raw_dir, exist_ok=True)
+    excel_path = os.path.join(raw_dir, excel_file)
     
     # Create Excel writer
     with pd.ExcelWriter(excel_path, engine='openpyxl') as writer:

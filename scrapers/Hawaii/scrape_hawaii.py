@@ -95,9 +95,11 @@ class HawaiiCandidateScraper:
             # Create DataFrame
             df = pd.DataFrame(self.candidates)
             
-            # Generate filename with timestamp
+            # Generate filename with timestamp and ensure raw dir exists
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"hawaii_candidates_{timestamp}.xlsx"
+            raw_dir = os.path.join('data', 'raw')
+            os.makedirs(raw_dir, exist_ok=True)
+            filename = os.path.join(raw_dir, f"hawaii_candidates_{timestamp}.xlsx")
             
             # Save to Excel
             df.to_excel(filename, index=False, engine='openpyxl')

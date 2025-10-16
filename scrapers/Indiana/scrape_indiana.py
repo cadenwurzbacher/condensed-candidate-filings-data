@@ -237,7 +237,9 @@ def split_name_office(text):
 
 def scrape_indiana_candidates():
     """Main function to scrape Indiana candidate information."""
-    script_dir = os.path.dirname(os.path.abspath(__file__))
+    # Ensure raw output directory exists
+    raw_dir = os.path.join('data', 'raw')
+    os.makedirs(raw_dir, exist_ok=True)
     base_url = "https://www.in.gov/sos/elections/candidate-information/"
     
     try:
@@ -475,7 +477,7 @@ def scrape_indiana_candidates():
         print("Creating Excel file...")
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         excel_file = f'indiana_candidates_{timestamp}.xlsx'
-        excel_path = os.path.join(script_dir, excel_file)
+        excel_path = os.path.join(raw_dir, excel_file)
         
         with pd.ExcelWriter(excel_path, engine='openpyxl') as writer:
             df.to_excel(writer, index=False, sheet_name='Candidates')

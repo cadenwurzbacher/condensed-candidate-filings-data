@@ -325,7 +325,9 @@ def scrape_kentucky_candidates():
         if all_candidates:
             df_all = pd.DataFrame(all_candidates)
             combined_filename = f'kentucky_candidates_{timestamp}.xlsx'
-            combined_path = os.path.join(script_dir, combined_filename)
+            raw_dir = os.path.join('data', 'raw')
+            os.makedirs(raw_dir, exist_ok=True)
+            combined_path = os.path.join(raw_dir, combined_filename)
             
             with pd.ExcelWriter(combined_path, engine='openpyxl') as writer:
                 df_all.to_excel(writer, index=False, sheet_name='Candidates')
