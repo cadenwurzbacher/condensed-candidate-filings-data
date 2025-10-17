@@ -103,7 +103,7 @@ class MichiganElectionScraper:
     
     BASE_URL = "https://www.michigan.gov/sos/elections/election-results-and-data"
     
-    def __init__(self, headless: bool = True, output_dir: str = "output"):
+    def __init__(self, headless: bool = True, output_dir: str = "data/raw"):
         """
         Initialize the scraper.
         
@@ -850,7 +850,7 @@ def main():
     # Create scraper instance
     scraper = MichiganElectionScraper(
         headless=False,  # Set to True to run without opening browser window
-        output_dir="output"
+        output_dir="data/raw"
     )
     
     # Run the scraper
