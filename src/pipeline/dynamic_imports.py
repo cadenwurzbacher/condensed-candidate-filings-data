@@ -35,13 +35,13 @@ class DynamicImporter:
             logger.warning(f"State cleaners directory not found: {state_cleaners_dir}")
             return
         
-        # Find all *_cleaner_refactored.py files
-        cleaner_files = list(state_cleaners_dir.glob("*_cleaner_refactored.py"))
-        
+        # Find all *_cleaner.py files (excluding base_cleaner.py)
+        cleaner_files = [f for f in state_cleaners_dir.glob("*_cleaner.py") if f.stem != "base_cleaner"]
+
         for file_path in cleaner_files:
             try:
-                # Extract state name from filename (e.g., "alaska_cleaner_refactored.py" -> "alaska")
-                state_name = file_path.stem.replace("_cleaner_refactored", "")
+                # Extract state name from filename (e.g., "alaska_cleaner.py" -> "alaska")
+                state_name = file_path.stem.replace("_cleaner", "")
                 
                 # Import the module using relative import
                 module_name = f"src.pipeline.state_cleaners.{file_path.stem}"

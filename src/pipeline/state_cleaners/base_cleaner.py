@@ -8,6 +8,7 @@ eliminating code duplication while preserving state-specific logic.
 
 import pandas as pd
 import logging
+import re
 from abc import ABC, abstractmethod
 from typing import Dict, Any
 
@@ -140,23 +141,40 @@ class BaseStateCleaner(ABC):
             DataFrame with state-specific content cleaned
         """
     
-    @abstractmethod
     def _parse_names(self, df: pd.DataFrame) -> pd.DataFrame:
         """
-        Parse candidate names into components.
-        
-        This method should be implemented by each state to handle:
-        - Name parsing logic specific to the state
-        - Prefix/suffix extraction
-        - Nickname handling
-        - State-specific name formats
-        
+        Parse candidate names into components using standard parsing logic.
+
+        Most states can use this default implementation. Override this method
+        only if your state requires custom name parsing logic (e.g., Alaska).
+
         Args:
             df: DataFrame with candidate names
-            
+
         Returns:
             DataFrame with parsed name components
         """
+        # Initialize name columns
+        name_columns = ['first_name', 'middle_name', 'last_name', 'prefix', 'suffix', 'nickname', 'full_name_display']
+        for col in name_columns:
+            if col not in df.columns:
+                df[col] = None
+
+        # Parse each name using base class helper
+        for idx, row in df.iterrows():
+            candidate_name = row.get('candidate_name')
+            if pd.notna(candidate_name) and str(candidate_name).strip():
+                first, middle, last, prefix, suffix, nickname = self._parse_name_parts(candidate_name)
+
+                df.at[idx, 'first_name'] = first
+                df.at[idx, 'middle_name'] = middle
+                df.at[idx, 'last_name'] = last
+                df.at[idx, 'prefix'] = prefix
+                df.at[idx, 'suffix'] = suffix
+                df.at[idx, 'nickname'] = nickname
+                df.at[idx, 'full_name_display'] = self._build_display_name(first, middle, last, prefix, suffix, nickname)
+
+        return df
     
     def _ensure_standard_columns(self, df: pd.DataFrame) -> pd.DataFrame:
         """
@@ -233,10 +251,10 @@ class BaseStateCleaner(ABC):
     def get_cleaning_stats(self, df: pd.DataFrame) -> Dict[str, Any]:
         """
         Get statistics about the cleaning process.
-        
+
         Args:
             df: DataFrame to analyze
-            
+
         Returns:
             Dictionary with cleaning statistics
         """
@@ -247,5 +265,206 @@ class BaseStateCleaner(ABC):
             'missing_data': df.isnull().sum().to_dict(),
             'data_types': df.dtypes.to_dict()
         }
-        
+
         return stats
+
+    # Common helper methods for name parsing
+
+    def _extract_prefix(self, name: str) -> tuple[str, str]:
+        """
+        Extract prefix (title) from a name.
+
+        Args:
+            name: Name string to process
+
+        Returns:
+            Tuple of (prefix, remaining_name)
+        """
+        if pd.isna(name) or not name:
+            return None, name
+
+        prefix_pattern = r'^(Dr|Mr|Mrs|Ms|Miss|Prof|Rev|Hon|Sen|Rep|Gov|Lt|Col|Gen|Adm|Capt|Maj|Sgt|Cpl|Pvt)\.?\s+'
+        prefix_match = re.match(prefix_pattern, name, re.IGNORECASE)
+
+        if prefix_match:
+            prefix = prefix_match.group(1)
+            remaining = re.sub(prefix_pattern, '', name, flags=re.IGNORECASE).strip()
+            return prefix, remaining
+
+        return None, name
+
+    def _extract_suffix(self, name: str) -> tuple[str, str]:
+        """
+        Extract suffix from a name.
+
+        Args:
+            name: Name string to process
+
+        Returns:
+            Tuple of (suffix, remaining_name)
+        """
+        if pd.isna(name) or not name:
+            return None, name
+
+        suffix_pattern = r'\s*\.?\s*\b(Jr|Sr|II|III|IV|V|VI|VII|VIII|IX|X)\b\.?'
+        suffix_match = re.search(suffix_pattern, name, re.IGNORECASE)
+
+        if suffix_match:
+            suffix = suffix_match.group(1)
+            remaining = re.sub(suffix_pattern, '', name, flags=re.IGNORECASE).strip()
+            return suffix, remaining
+
+        return None, name
+
+    def _extract_nickname(self, name: str) -> tuple[str, str]:
+        """
+        Extract nickname from a name (text in quotes).
+
+        Args:
+            name: Name string to process
+
+        Returns:
+            Tuple of (nickname, remaining_name)
+        """
+        if pd.isna(name) or not name:
+            return None, name
+
+        # Look for nicknames in quotes (including Unicode quotes)
+        nickname_pattern = r'["""\'\u201c\u201d\u2018\u2019]([^""""\'\u201c\u201d\u2018\u2019]+)["""\'\u201c\u201d\u2018\u2019]'
+        nickname_match = re.search(nickname_pattern, name)
+
+        if nickname_match:
+            nickname = nickname_match.group(1)
+            remaining = re.sub(nickname_pattern, '', name).strip()
+            return nickname, remaining
+
+        return None, name
+
+    def _parse_name_parts(self, name: str) -> tuple:
+        """
+        Parse a name string into its component parts.
+
+        This is a standard implementation that most states can use.
+        States with special requirements can override _parse_names().
+
+        Args:
+            name: Full name string
+
+        Returns:
+            Tuple of (first_name, middle_name, last_name, prefix, suffix, nickname)
+        """
+        if pd.isna(name) or not name:
+            return None, None, None, None, None, None
+
+        # Clean the name
+        name = str(name).strip().strip('"\'')
+        name = re.sub(r'\s+', ' ', name)
+
+        # Extract components in order
+        nickname, name = self._extract_nickname(name)
+        prefix, name = self._extract_prefix(name)
+        suffix, name = self._extract_suffix(name)
+
+        # Parse first, middle, last names
+        first_name = None
+        middle_name = None
+        last_name = None
+
+        # Handle comma-separated format (Last, First Middle)
+        if ',' in name:
+            parts = [part.strip() for part in name.split(',')]
+            if len(parts) >= 2:
+                last_name = parts[0]
+                first_middle = parts[1].split()
+
+                if len(first_middle) >= 1:
+                    first_name = first_middle[0]
+                if len(first_middle) >= 2:
+                    middle_name = ' '.join(first_middle[1:])
+        else:
+            # Handle space-separated format (First Middle Last)
+            parts = name.split()
+            if len(parts) == 1:
+                last_name = parts[0]
+            elif len(parts) == 2:
+                first_name = parts[0]
+                last_name = parts[1]
+            elif len(parts) >= 3:
+                first_name = parts[0]
+                last_name = parts[-1]
+                middle_name = ' '.join(parts[1:-1])
+
+        return first_name, middle_name, last_name, prefix, suffix, nickname
+
+    def _build_display_name(self, first: str, middle: str, last: str,
+                           prefix: str, suffix: str, nickname: str) -> str:
+        """
+        Build a standardized display name from components.
+
+        Args:
+            first: First name
+            middle: Middle name
+            last: Last name
+            prefix: Prefix/title
+            suffix: Suffix
+            nickname: Nickname
+
+        Returns:
+            Formatted display name
+        """
+        display_parts = []
+        if prefix:
+            display_parts.append(prefix)
+        if first:
+            display_parts.append(first)
+        if middle:
+            display_parts.append(middle)
+        if last:
+            display_parts.append(last)
+        if suffix:
+            display_parts.append(suffix)
+        if nickname:
+            display_parts.append(f'"{nickname}"')
+
+        return ' '.join(display_parts).strip() if display_parts else None
+
+    def _standard_district_cleaning(self, district: str) -> str:
+        """
+        Standard district cleaning that works for most states.
+
+        Args:
+            district: Raw district string
+
+        Returns:
+            Cleaned district string
+        """
+        if pd.isna(district) or not district:
+            return None
+        return str(district).strip()
+
+    def _standard_name_cleaning(self, name: str) -> str:
+        """
+        Standard name cleaning that works for most states.
+
+        Args:
+            name: Raw name string
+
+        Returns:
+            Cleaned name string
+        """
+        if pd.isna(name) or not name:
+            return None
+
+        name = str(name).strip()
+
+        # Handle comma-separated "Last, First" format
+        if ',' in name:
+            parts = name.split(',')
+            if len(parts) == 2:
+                last, first = parts
+                name = f"{first.strip()} {last.strip()}"
+
+        # Clean up extra whitespace
+        name = ' '.join(name.split())
+
+        return name if name else None
