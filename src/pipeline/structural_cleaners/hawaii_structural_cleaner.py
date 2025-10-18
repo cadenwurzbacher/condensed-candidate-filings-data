@@ -209,11 +209,10 @@ class HawaiiStructuralCleaner:
         # Define expected columns
         expected_columns = [
             'raw_data', 'state', 'file_source', 'row_index', 'election_year',
-            'candidate_name', 'first_name', 'last_name', 'middle_name', 
+            'candidate_name', 'first_name', 'last_name', 'middle_name',
             'prefix', 'suffix', 'party', 'office', 'district', 'county',
-            'address', 'city', 'state', 'zip_code', 'email', 'website', 'phone',
+            'address', 'city', 'zip_code', 'email', 'website', 'phone',
             'filing_date', 'election_date'
-        
         ]
         
         # Add missing columns

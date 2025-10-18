@@ -219,7 +219,7 @@ class DataManager:
                             df['_source_state'] = state
                             
                             logger.info(f"Loaded Minnesota .txt file: {len(df)} rows")
-                            state_dataframes.append(df)
+                            all_data.append(df)
                             continue
                             
                         except Exception as e:
