@@ -8,8 +8,11 @@ import pandas as pd
 import time
 import logging
 import os
-from datetime import datetime
-import openpyxl
+import sys
+
+# Add parent directory to path to import scraper_utils
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from scraper_utils import ensure_raw_data_dir, save_to_formatted_excel, clean_phone_number
 
 # Set up logging
 logging.basicConfig(
@@ -122,14 +125,9 @@ def get_candidate_data(driver, election_info):
             try:
                 cells = row.find_elements(By.TAG_NAME, "td")
                 if len(cells) >= 25:  # Ensure we have enough cells
-                    # Clean up phone numbers by removing prefixes
-                    home_phone = cells[17].text.strip()
-                    if home_phone.startswith('Home:'):
-                        home_phone = home_phone[5:].strip()
-                    
-                    cell_phone = cells[19].text.strip()
-                    if cell_phone.startswith('Cell:'):
-                        cell_phone = cell_phone[5:].strip()
+                    # Clean up phone numbers using utility function
+                    home_phone = clean_phone_number(cells[17].text)
+                    cell_phone = clean_phone_number(cells[19].text)
                     
                     candidate = {
                         'Candidate': cells[0].text.strip(),  # Full name
@@ -162,59 +160,24 @@ def create_excel(candidates, script_dir):
     if not candidates:
         logging.error("No candidates to write to Excel")
         return
-    
+
     # Create DataFrame
     df = pd.DataFrame(candidates)
-    
+
     # Sort by Election and Candidate
     df = df.sort_values(['Election', 'Candidate'], ascending=[False, True])
-    
-    # Create Excel file with timestamp
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    excel_file = f'kansas_candidates_{timestamp}.xlsx'
-    excel_path = os.path.join(script_dir, excel_file)
-    
-    # Create Excel writer
+
     # Ensure raw output directory exists
-    raw_dir = os.path.join('data', 'raw')
-    os.makedirs(raw_dir, exist_ok=True)
-    excel_path = os.path.join(raw_dir, f'kansas_candidates_{timestamp}.xlsx')
-    with pd.ExcelWriter(excel_path, engine='openpyxl') as writer:
-        df.to_excel(writer, index=False, sheet_name='Candidates')
-        
-        # Get the workbook and worksheet
-        workbook = writer.book
-        worksheet = writer.sheets['Candidates']
-        
-        # Format headers
-        header_font = openpyxl.styles.Font(bold=True, size=12)
-        header_fill = openpyxl.styles.PatternFill(start_color='4472C4', end_color='4472C4', fill_type='solid')
-        header_font_color = openpyxl.styles.Font(color='FFFFFF')
-        
-        for cell in worksheet[1]:
-            cell.font = header_font
-            cell.fill = header_fill
-            cell.font = header_font_color
-        
-        # Auto-adjust column widths
-        for column in worksheet.columns:
-            max_length = 0
-            column_letter = openpyxl.utils.get_column_letter(column[0].column)
-            
-            for cell in column:
-                try:
-                    if len(str(cell.value)) > max_length:
-                        max_length = len(str(cell.value))
-                except:
-                    pass
-            
-            adjusted_width = min(max_length + 2, 50)
-            worksheet.column_dimensions[column_letter].width = adjusted_width
-        
-        # Add filters to headers
-        worksheet.auto_filter.ref = worksheet.dimensions
-    
-    logging.info(f"Created Excel file: {excel_file}")
+    raw_dir = ensure_raw_data_dir()
+
+    # Create Excel file using utility function
+    excel_path = save_to_formatted_excel(
+        df=df,
+        state_name='kansas',
+        output_dir=raw_dir
+    )
+
+    logging.info(f"Created Excel file: {os.path.basename(excel_path)}")
     return excel_path
 
 def scrape_kansas_candidates():

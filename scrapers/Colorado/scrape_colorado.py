@@ -1,20 +1,16 @@
 import cloudscraper
 from bs4 import BeautifulSoup
 import pandas as pd
-import re
+import sys
 import os
-from datetime import datetime
-import openpyxl
 
-def extract_district(office):
-    """Extract district number from office name if it exists."""
-    match = re.search(r'District (\d+)', office)
-    return match.group(1) if match else None
+# Add parent directory to path to import scraper_utils
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from scraper_utils import ensure_raw_data_dir, save_to_formatted_excel, extract_district_from_office
 
 def scrape_colorado_candidates():
     # Ensure raw output directory exists
-    raw_dir = os.path.join('data', 'raw')
-    os.makedirs(raw_dir, exist_ok=True)
+    raw_dir = ensure_raw_data_dir()
     
     # URL of the Colorado Secretary of State's candidate list
     url = "https://www.coloradosos.gov/pubs/elections/vote/primaryCandidates.html"
@@ -58,7 +54,7 @@ def scrape_colorado_candidates():
                     continue
                     
                 # Extract district number if it exists
-                district = extract_district(office)
+                district = extract_district_from_office(office)
                 
                 candidates.append({
                     'name': name,
@@ -74,41 +70,16 @@ def scrape_colorado_candidates():
         csv_path = os.path.join(raw_dir, 'colorado_candidates.csv')
         df.to_csv(csv_path, index=False)
         print(f"Successfully scraped {len(candidates)} candidates from Colorado")
-        
-        # Create Excel file with timestamp
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        excel_file = f'colorado_candidates_{timestamp}.xlsx'
-        excel_path = os.path.join(raw_dir, excel_file)
-        
-        # Create Excel writer
-        with pd.ExcelWriter(excel_path, engine='openpyxl') as writer:
-            df.to_excel(writer, index=False, sheet_name='Candidates')
-            
-            # Get the workbook and worksheet
-            workbook = writer.book
-            worksheet = writer.sheets['Candidates']
-            
-            # Format headers
-            for cell in worksheet[1]:
-                cell.font = cell.font.copy(bold=True)
-                cell.fill = openpyxl.styles.PatternFill(start_color='CCCCCC', end_color='CCCCCC', fill_type='solid')
-            
-            # Auto-adjust column widths
-            for column in worksheet.columns:
-                max_length = 0
-                column_letter = openpyxl.utils.get_column_letter(column[0].column)
-                
-                for cell in column:
-                    try:
-                        if len(str(cell.value)) > max_length:
-                            max_length = len(str(cell.value))
-                    except:
-                        pass
-                
-                adjusted_width = (max_length + 2)
-                worksheet.column_dimensions[column_letter].width = adjusted_width
-        
-        print(f"Created Excel file: {excel_file}")
+
+        # Create Excel file with timestamp using utility function
+        excel_path = save_to_formatted_excel(
+            df=df,
+            state_name='colorado',
+            output_dir=raw_dir,
+            header_color='CCCCCC'
+        )
+
+        print(f"Created Excel file: {os.path.basename(excel_path)}")
         
     except Exception as e:
         print(f"Error: {e}")
