@@ -82,27 +82,79 @@ def extract_phone(text):
             return phone
     return ""
 
-def extract_email(text):
-    """Extract email from text."""
-    if not text:
+def decode_cloudflare_email(encoded_string):
+    """Decode Cloudflare-protected email address.
+    
+    Cloudflare encodes emails using a simple XOR cipher where the first byte
+    is the key and subsequent bytes are XORed with it.
+    
+    Args:
+        encoded_string: Hex-encoded email from href or data-cfemail attribute
+        
+    Returns:
+        Decoded email address
+    """
+    try:
+        # Remove any leading # if present
+        encoded_string = encoded_string.lstrip('#')
+        
+        # Convert hex string to bytes
+        encoded_bytes = bytes.fromhex(encoded_string)
+        
+        # First byte is the XOR key
+        key = encoded_bytes[0]
+        
+        # Decode the rest by XORing with the key
+        decoded = ''.join(chr(byte ^ key) for byte in encoded_bytes[1:])
+        
+        return decoded
+    except Exception as e:
         return ""
-    # Match email addresses, including those with common prefixes/suffixes
+
+def extract_email(html_content):
+    """Extract email from HTML content, including Cloudflare-protected emails.
+    
+    Args:
+        html_content: HTML string that may contain emails
+        
+    Returns:
+        Decoded email address
+    """
+    if not html_content:
+        return ""
+    
+    # First, try to find Cloudflare-protected emails in href attribute
+    # Pattern: href="/cdn-cgi/l/email-protection#HEXSTRING"
+    cf_href_match = re.search(r'href="/cdn-cgi/l/email-protection#([a-f0-9]+)"', html_content, re.IGNORECASE)
+    if cf_href_match:
+        encoded_email = cf_href_match.group(1)
+        decoded_email = decode_cloudflare_email(encoded_email)
+        if decoded_email and '@' in decoded_email:
+            return decoded_email.strip().lower()
+    
+    # Also try data-cfemail attribute (alternative Cloudflare encoding)
+    cf_email_match = re.search(r'data-cfemail="([a-f0-9]+)"', html_content, re.IGNORECASE)
+    if cf_email_match:
+        encoded_email = cf_email_match.group(1)
+        decoded_email = decode_cloudflare_email(encoded_email)
+        if decoded_email and '@' in decoded_email:
+            return decoded_email.strip().lower()
+    
+    # Fallback: try to find plain email addresses
     patterns = [
+        r'mailto:([\w\.-]+@[\w\.-]+\.\w+)',  # mailto: link
         r'[\w\.-]+@[\w\.-]+\.\w+',  # Standard email
-        r'mailto:[\w\.-]+@[\w\.-]+\.\w+',  # mailto: prefix
-        r'[\w\.-]+@[\w\.-]+\.\w+\s*\([^)]*\)',  # Email with description
-        r'[\w\.-]+@[\w\.-]+\.\w+\s*\[[^\]]*\]'  # Email with brackets
     ]
     
     for pattern in patterns:
-        match = re.search(pattern, text, re.IGNORECASE)
+        match = re.search(pattern, html_content, re.IGNORECASE)
         if match:
-            email = match.group(0)
-            # Remove any prefixes/suffixes
-            email = re.sub(r'^mailto:', '', email, flags=re.IGNORECASE)
-            email = re.sub(r'\s*\([^)]*\)', '', email)
-            email = re.sub(r'\s*\[[^\]]*\]', '', email)
-            return email.strip().lower()
+            # Get the email (group 1 if it exists, otherwise group 0)
+            email = match.group(1) if match.lastindex else match.group(0)
+            # Don't return if it's just the placeholder text
+            if not re.match(r'^\[?email\s+protected\]?$', email, re.IGNORECASE):
+                return email.strip().lower()
+    
     return ""
 
 def extract_website(text):
@@ -150,49 +202,95 @@ def extract_name(text):
     return name.strip()
 
 def extract_address(text):
-    """Extract address from text, using everything after the first line or comma."""
+    """Extract full address from text including street, city, state, and zip."""
     if not text:
         return ""
+    
     # Common street types
     street_types = r'(?:Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Drive|Dr|Lane|Ln|Court|Ct|Circle|Cir|Way|Place|Pl|Highway|Hwy|Parkway|Pkwy|Terrace|Ter|Square|Sq)'
     # Common state abbreviations
     states = r'(?:AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY)'
-    # Split by newlines or commas, skip the first part (name)
-    parts = [p.strip() for p in re.split(r'[\n,]', text) if p.strip()]
-    address_candidates = parts[1:] if len(parts) > 1 else []
-    address = ''
-    for part in address_candidates:
-        # Look for address patterns
-        if re.search(rf'\d+\s+[A-Za-z\s]+{street_types}', part, re.IGNORECASE) or \
-           re.search(rf'[A-Za-z\s]+,\s*{states}\s*\d{{5}}(?:-\d{{4}})?', part, re.IGNORECASE) or \
-           re.search(rf'P\.?O\.?\s+Box\s+\d+', part, re.IGNORECASE):
-            if address:
-                address += ', '
-            address += part
-    if address:
+    
+    # Split by newlines, skip the first part (name)
+    lines = [line.strip() for line in text.split('\n') if line.strip()]
+    
+    # Skip the name (first line) and any labels
+    address_lines = []
+    skip_first = True
+    
+    for line in lines:
+        # Skip name line and address labels
+        if skip_first and not re.search(r'\d', line):
+            continue
+        skip_first = False
+        
+        # Skip lines that are just labels
+        if re.match(r'^(?:Residential|Mailing)\s+Address:?\s*$', line, re.IGNORECASE):
+            continue
+        
+        # Remove label from start of line if present
+        line = re.sub(r'^(?:Residential|Mailing)\s+Address:\s*', '', line, flags=re.IGNORECASE)
+        
+        # Check if this line looks like an address component
+        is_address = (
+            re.search(rf'\d+\s+[A-Za-z\s#\.]+(?:{street_types})?', line, re.IGNORECASE) or  # Street number and name
+            re.search(rf'P\.?O\.?\s+Box\s+\d+', line, re.IGNORECASE) or  # PO Box
+            re.search(rf'[A-Za-z\s]+,\s*{states}\s*\d{{5}}(?:-\d{{4}})?', line, re.IGNORECASE) or  # City, State ZIP
+            re.search(rf'^{states}\s*\d{{5}}(?:-\d{{4}})?', line, re.IGNORECASE) or  # State ZIP (without city)
+            re.search(rf'^[A-Za-z\s]+,\s*{states}', line, re.IGNORECASE)  # City, State (without ZIP)
+        )
+        
+        if is_address and line:
+            address_lines.append(line)
+    
+    if address_lines:
+        # Join address lines with comma and space
+        address = ', '.join(address_lines)
+        # Clean up multiple spaces and commas
         address = re.sub(r'\s+', ' ', address)
         address = re.sub(r',\s*,', ',', address)
-        address = re.sub(r'^(?:Residential|Mailing)\s+Address:\s*', '', address, flags=re.IGNORECASE)
+        address = re.sub(r',\s*$', '', address)
         return address.strip()
+    
     return ""
 
-def parse_name_cell(text):
-    """Parse the name cell to extract name and contact information (no address)."""
-    if not text:
+def parse_name_cell(html_content, text_content):
+    """Parse the name cell to extract name and contact information including address and email.
+    
+    Args:
+        html_content: Full HTML content of the cell (to extract emails from mailto: links)
+        text_content: Plain text content of the cell (for name and address extraction)
+    """
+    if not html_content and not text_content:
         return {
             'name': "",
             'phone': "",
-            'website': ""
+            'website': "",
+            'email': "",
+            'address': ""
         }
-    # Extract name first
-    name = extract_name(text)
-    # Extract contact information
-    phone = extract_phone(text)
-    website = extract_website(text)
+    
+    # Use text content for most fields (name, address, phone)
+    name = extract_name(text_content) if text_content else ""
+    phone = extract_phone(text_content) if text_content else ""
+    address = extract_address(text_content) if text_content else ""
+    
+    # Use HTML content for email and website (to get mailto: and href links)
+    email = extract_email(html_content) if html_content else ""
+    website = extract_website(html_content) if html_content else ""
+    
+    # Fallback to text if HTML didn't find anything
+    if not email and text_content:
+        email = extract_email(text_content)
+    if not website and text_content:
+        website = extract_website(text_content)
+    
     return {
         'name': name,
         'phone': phone,
-        'website': website
+        'website': website,
+        'email': email,
+        'address': address
     }
 
 def is_valid_candidate(name, office):
@@ -284,8 +382,12 @@ def scrape_delaware_candidates():
                             cols = row.find_all('td')
                             if len(cols) < 2:
                                 continue
-                            name_cell = cols[col_indices['name']].text if col_indices['name'] is not None and len(cols) > col_indices['name'] else ""
-                            contact_info = parse_name_cell(name_cell)
+                            # Get the full HTML content of the name cell to preserve mailto: links
+                            name_cell_html = str(cols[col_indices['name']]) if col_indices['name'] is not None and len(cols) > col_indices['name'] else ""
+                            # Also get the text version for name extraction
+                            name_cell_text = cols[col_indices['name']].text if col_indices['name'] is not None and len(cols) > col_indices['name'] else ""
+                            # Pass both HTML and text to extract different fields appropriately
+                            contact_info = parse_name_cell(name_cell_html, name_cell_text)
                             office = clean_text(cols[col_indices['office']].text) if col_indices['office'] is not None and len(cols) > col_indices['office'] else ""
                             if not is_valid_candidate(contact_info['name'], office):
                                 continue
@@ -297,6 +399,8 @@ def scrape_delaware_candidates():
                                 'District': extract_district(office),
                                 'County': clean_text(cols[col_indices['county']].text) if col_indices['county'] is not None and len(cols) > col_indices['county'] else "",
                                 'Date Filed': clean_text(cols[col_indices['date_filed']].text) if col_indices['date_filed'] is not None and len(cols) > col_indices['date_filed'] else "",
+                                'Address': contact_info['address'],
+                                'Email': contact_info['email'],
                                 'Website': contact_info['website'],
                                 'Phone': contact_info['phone']
                             }
