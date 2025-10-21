@@ -365,6 +365,7 @@ def scrape_delaware_candidates():
                         col_indices = {
                             'name': None,
                             'office': None,
+                            'party': None,
                             'county': None,
                             'date_filed': None
                         }
@@ -374,6 +375,8 @@ def scrape_delaware_candidates():
                                 col_indices['name'] = i
                             elif 'office' in header:
                                 col_indices['office'] = i
+                            elif 'party' in header:
+                                col_indices['party'] = i
                             elif 'county' in header:
                                 col_indices['county'] = i
                             elif 'date' in header or 'filed' in header:
@@ -395,6 +398,7 @@ def scrape_delaware_candidates():
                                 'Year': year_label,
                                 'Election': election_name,
                                 'Name': contact_info['name'],
+                                'Party': clean_text(cols[col_indices['party']].text) if col_indices['party'] is not None and len(cols) > col_indices['party'] else "",
                                 'Office': office,
                                 'District': extract_district(office),
                                 'County': clean_text(cols[col_indices['county']].text) if col_indices['county'] is not None and len(cols) > col_indices['county'] else "",
