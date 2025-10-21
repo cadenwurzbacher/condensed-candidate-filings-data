@@ -69,13 +69,14 @@ class DynamicImporter:
     def _discover_structural_cleaners(self):
         """Discover all structural cleaners in the structural_cleaners directory."""
         structural_cleaners_dir = Path(__file__).parent / "structural_cleaners"
-        
+
         if not structural_cleaners_dir.exists():
             logger.warning(f"Structural cleaners directory not found: {structural_cleaners_dir}")
             return
-        
-        # Find all *_structural_cleaner.py files
-        cleaner_files = list(structural_cleaners_dir.glob("*_structural_cleaner.py"))
+
+        # Find all *_structural_cleaner.py files (excluding base_structural_cleaner.py)
+        cleaner_files = [f for f in structural_cleaners_dir.glob("*_structural_cleaner.py")
+                        if f.stem != "base_structural_cleaner"]
         
         for file_path in cleaner_files:
             try:
@@ -89,8 +90,9 @@ class DynamicImporter:
                 # Find the cleaner class (should be named like "AlaskaStructuralCleaner")
                 cleaner_class = None
                 for name, obj in inspect.getmembers(module):
-                    if (inspect.isclass(obj) and 
+                    if (inspect.isclass(obj) and
                         name.endswith("StructuralCleaner") and
+                        name != "BaseStructuralCleaner" and
                         (hasattr(obj, 'clean') or hasattr(obj, 'clean_data'))):
                         cleaner_class = obj
                         break

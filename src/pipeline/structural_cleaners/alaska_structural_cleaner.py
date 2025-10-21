@@ -2,23 +2,18 @@ import pandas as pd
 import logging
 import os
 from pathlib import Path
-import re
+from .base_structural_cleaner import BaseStructuralCleaner
 
 logger = logging.getLogger(__name__)
 
-class AlaskaStructuralCleaner:
+class AlaskaStructuralCleaner(BaseStructuralCleaner):
     """
     Alaska Structural Cleaner - Phase 1 of new pipeline
-    
+
     Focus: Extract structured data from messy raw files
     NO data transformation - just structural parsing
     Output: Clean DataFrame with consistent columns
     """
-    
-    def __init__(self, data_dir: str = "data"):
-        self.data_dir = data_dir
-        self.raw_dir = os.path.join(data_dir, "raw")
-        self.structured_dir = os.path.join(data_dir, "structured")
         
     def clean(self) -> pd.DataFrame:
         """
@@ -154,27 +149,7 @@ class AlaskaStructuralCleaner:
                 continue
         
         return None
-    
-    def _looks_like_candidate_data(self, df: pd.DataFrame) -> bool:
-        """Check if a DataFrame looks like it contains candidate data"""
-        if df.empty or len(df.columns) < 3:
-            return False
-        
-        # Look for common candidate data columns
-        column_names = [str(col).lower() for col in df.columns]
-        
-        candidate_indicators = [
-            'name', 'candidate', 'office', 'party', 'county', 'district',
-            'address', 'phone', 'email', 'filing', 'election'
-        ]
-        
-        # Count how many candidate indicators we find
-        matches = sum(1 for indicator in candidate_indicators 
-                     if any(indicator in col for col in column_names))
-        
-        # If we find at least 2-3 indicators, this looks like candidate data
-        return matches >= 2
-    
+
     def _extract_structured_data(self, df: pd.DataFrame, file_path: str) -> list:
         """
         Extract structured data from a DataFrame
@@ -205,21 +180,7 @@ class AlaskaStructuralCleaner:
                 continue
         
         return records
-    
-    def _clean_dataframe_structure(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Clean up DataFrame structure without transforming data"""
-        # Remove completely empty rows and columns
-        df = df.dropna(how='all').dropna(axis=1, how='all')
-        
-        # Reset index
-        df = df.reset_index(drop=True)
-        
-        # Clean column names
-        df.columns = [str(col).strip() if pd.notna(col) else f"col_{i}" 
-                     for i, col in enumerate(df.columns)]
-        
-        return df
-    
+
     def _extract_single_record(self, row: pd.Series, file_path: str) -> dict:
         """
         Extract a single structured record from a row
@@ -261,266 +222,17 @@ class AlaskaStructuralCleaner:
         # Only return records with essential data
         if record['candidate_name'] and record['office']:
             return record
-        
+
         return None
-    
-    def _is_valid_candidate_row(self, row: pd.Series) -> bool:
-        """Check if a row contains valid candidate data"""
-        # Skip rows that are likely headers or summaries
-        row_str = ' '.join(str(val) for val in row.values if pd.notna(val)).lower()
-        
-        # Skip if it looks like a header or summary
-        skip_indicators = [
-            'total', 'count', 'summary', 'header', 'name', 'office', 'party',
-            'candidate', 'filing', 'election', 'date', 'address'
-        ]
-        
-        # If the row contains mostly header-like text, skip it
-        header_matches = sum(1 for indicator in skip_indicators if indicator in row_str)
-        if header_matches >= 3:
-            return False
-        
-        # Skip if all values are empty or very short
-        non_empty_values = [str(val) for val in row.values if pd.notna(val) and str(val).strip()]
-        if len(non_empty_values) < 2:
-            return False
-        
-        return True
-    
-    def _extract_candidate_name(self, row: pd.Series) -> str:
-        """Extract candidate name from row"""
-        # Look for name-like columns
-        name_columns = [col for col in row.index if 'name' in str(col).lower()]
-        
-        for col in name_columns:
-            value = row[col]
-            if pd.notna(value) and str(value).strip():
-                return str(value).strip()
-        
-        # If no name column found, try first non-empty column
-        for col in row.index:
-            value = row[col]
-            if pd.notna(value) and str(value).strip():
-                return str(value).strip()
-        
-        return None
-    
-    def _extract_office(self, row: pd.Series) -> str:
-        """Extract office from row"""
-        office_columns = [col for col in row.index if 'office' in str(col).lower()]
-        
-        for col in office_columns:
-            value = row[col]
-            if pd.notna(value) and str(value).strip():
-                return str(value).strip()
-        
-        return None
-    
-    def _extract_party(self, row: pd.Series) -> str:
-        """Extract party from row"""
-        party_columns = [col for col in row.index if 'party' in str(col).lower()]
-        
-        for col in party_columns:
-            value = row[col]
-            if pd.notna(value) and str(value).strip():
-                return str(value).strip()
-        
-        return None
-    
-    def _extract_county(self, row: pd.Series) -> str:
-        """Extract county from row"""
-        county_columns = [col for col in row.index if 'county' in str(col).lower()]
-        
-        for col in county_columns:
-            value = row[col]
-            if pd.notna(value) and str(value).strip():
-                return str(value).strip()
-        
-        return None
-    
-    def _extract_district(self, row: pd.Series) -> str:
-        """Extract district from row"""
-        district_columns = [col for col in row.index if 'district' in str(col).lower()]
-        
-        for col in district_columns:
-            value = row[col]
-            if pd.notna(value) and str(value).strip():
-                return str(value).strip()
-        
-        return None
-    
-    def _extract_address(self, row: pd.Series) -> str:
-        """Extract address from row"""
-        address_columns = [col for col in row.index if 'address' in str(col).lower()]
-        
-        for col in address_columns:
-            value = row[col]
-            if pd.notna(value) and str(value).strip():
-                return str(value).strip()
-        
-        return None
-    
-    def _extract_city(self, row: pd.Series) -> str:
-        """Extract city from row"""
-        city_columns = [col for col in row.index if 'city' in str(col).lower()]
-        
-        for col in city_columns:
-            value = row[col]
-            if pd.notna(value) and str(value).strip():
-                return str(value).strip()
-        
-        return None
-    
+
     def _extract_state(self, row: pd.Series) -> str:
-        """Extract state from row"""
-        state_columns = [col for col in row.index if 'state' in str(col).lower()]
-        
-        for col in state_columns:
-            value = row[col]
-            if pd.notna(value) and str(value).strip():
-                return str(value).strip()
-        
+        """Extract state from row - Alaska specific override"""
+        result = super()._extract_state(row)
         # Default to Alaska for Alaska files
-        return "Alaska"
-    
-    def _extract_zip_code(self, row: pd.Series) -> str:
-        """Extract zip code from row"""
-        zip_columns = [col for col in row.index if 'zip' in str(col).lower()]
-        
-        for col in zip_columns:
-            value = row[col]
-            if pd.notna(value) and str(value).strip():
-                return str(value).strip()
-        
-        return None
-    
-    def _extract_phone(self, row: pd.Series) -> str:
-        """Extract phone from row"""
-        phone_columns = [col for col in row.index if 'phone' in str(col).lower()]
-        
-        for col in phone_columns:
-            value = row[col]
-            if pd.notna(value) and str(value).strip():
-                return str(value).strip()
-        
-        return None
-    
-    def _extract_email(self, row: pd.Series) -> str:
-        """Extract email from row"""
-        email_columns = [col for col in row.index if 'email' in str(col).lower()]
-        
-        for col in email_columns:
-            value = row[col]
-            if pd.notna(value) and str(value).strip():
-                return str(value).strip()
-        
-        return None
-    
-    def _extract_website(self, row: pd.Series) -> str:
-        """Extract website from row"""
-        website_columns = [col for col in row.index if 'website' in str(col).lower()]
-        
-        for col in website_columns:
-            value = row[col]
-            if pd.notna(value) and str(value).strip():
-                return str(value).strip()
-        
-        return None
-    
-    def _extract_facebook(self, row: pd.Series) -> str:
-        """Extract Facebook from row"""
-        facebook_columns = [col for col in row.index if 'facebook' in str(col).lower()]
-        
-        for col in facebook_columns:
-            value = row[col]
-            if pd.notna(value) and str(value).strip():
-                return str(value).strip()
-        
-        return None
-    
-    def _extract_twitter(self, row: pd.Series) -> str:
-        """Extract Twitter from row"""
-        twitter_columns = [col for col in row.index if 'twitter' in str(col).lower()]
-        
-        for col in twitter_columns:
-            value = row[col]
-            if pd.notna(value) and str(value).strip():
-                return str(value).strip()
-        
-        return None
-    
-    def _extract_filing_date(self, row: pd.Series) -> str:
-        """Extract filing date from row"""
-        date_columns = [col for col in row.index if 'date' in str(col).lower() or 'filing' in str(col).lower()]
-        
-        for col in date_columns:
-            value = row[col]
-            if pd.notna(value) and str(value).strip():
-                return str(value).strip()
-        
-        return None
-    
-    def _extract_election_year(self, row: pd.Series, file_path: str) -> str:
-        """Extract election year from row or filename"""
-        # Try to get from row first
-        year_columns = [col for col in row.index if 'year' in str(col).lower() or 'election' in str(col).lower()]
-        
-        for col in year_columns:
-            value = row[col]
-            if pd.notna(value) and str(value).strip():
-                # Try to extract year from value
-                year_match = re.search(r'20\d{2}', str(value))
-                if year_match:
-                    return year_match.group()
-        
-        # Try to extract from filename
-        filename = Path(file_path).name
-        year_match = re.search(r'20\d{2}', filename)
-        if year_match:
-            return year_match.group()
-        
-        return None
-    
-    def _extract_election_type(self, row: pd.Series) -> str:
-        """Extract election type from row"""
-        type_columns = [col for col in row.index if 'type' in str(col).lower() or 'election' in str(col).lower()]
-        
-        for col in type_columns:
-            value = row[col]
-            if pd.notna(value) and str(value).strip():
-                return str(value).strip()
-        
-        return None
-    
+        return result if result else "Alaska"
+
     def _extract_address_state(self, row: pd.Series) -> str:
-        """Extract address state from row"""
-        # Look for address state or state in address
-        address_state_columns = [col for col in row.index if 'address_state' in str(col).lower()]
-        
-        for col in address_state_columns:
-            value = row[col]
-            if pd.notna(value) and str(value).strip():
-                return str(value).strip()
-        
+        """Extract address state from row - Alaska specific override"""
+        result = super()._extract_address_state(row)
         # Default to Alaska for Alaska files
-        return "Alaska"
-    
-    def _ensure_consistent_columns(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Ensure DataFrame has consistent column structure"""
-        # Define expected columns
-        expected_columns = [
-            'candidate_name', 'office', 'party', 'county', 'district',
-            'address', 'city', 'state', 'zip_code', 'phone', 'email', 'website',
-            'facebook', 'twitter', 'filing_date', 'election_year', 'election_type', 'address_state',
-            'raw_data'
-        ]
-        
-        # Add missing columns with None values
-        for col in expected_columns:
-            if col not in df.columns:
-                df[col] = None
-        
-        # Reorder columns to match expected structure
-        df = df[expected_columns]
-        
-        return df
+        return result if result else "Alaska"
