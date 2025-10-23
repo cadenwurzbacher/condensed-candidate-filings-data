@@ -2,10 +2,11 @@ import pandas as pd
 import logging
 import os
 from pathlib import Path
+from .base_structural_cleaner import BaseStructuralCleaner
 
 logger = logging.getLogger(__name__)
 
-class DelawareStructuralCleaner:
+class DelawareStructuralCleaner(BaseStructuralCleaner):
     """
     Delaware Structural Cleaner - Phase 1 of new pipeline
     
@@ -14,11 +15,6 @@ class DelawareStructuralCleaner:
     Output: Clean DataFrame with consistent columns
     """
     
-    def __init__(self, data_dir: str = "data"):
-        self.data_dir = data_dir
-        self.raw_dir = os.path.join(data_dir, "raw")
-        self.structured_dir = os.path.join(data_dir, "structured")
-        
     def clean(self) -> pd.DataFrame:
         """
         Extract structured data from Delaware raw files
@@ -143,20 +139,6 @@ class DelawareStructuralCleaner:
                 continue
         return None
     
-    def _looks_like_candidate_data(self, df: pd.DataFrame) -> bool:
-        """Check if a DataFrame sample contains candidate-like columns"""
-        if df.empty or len(df.columns) < 3:
-            return False
-        
-        # Check for candidate-like column names
-        columns_lower = [col.lower() for col in df.columns]
-        candidate_indicators = ['candidate', 'name', 'office', 'party', 'district', 'year', 'election']
-        
-        matches = sum(1 for indicator in candidate_indicators 
-                     if any(indicator in col for col in columns_lower))
-        
-        return matches >= 2
-    
     def _extract_structured_data(self, df: pd.DataFrame) -> list:
         """Extract structured records from DataFrame"""
         # Clean the DataFrame structure
@@ -174,19 +156,6 @@ class DelawareStructuralCleaner:
                     records.append(record)
         
         return records
-    
-    def _clean_dataframe_structure(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Clean DataFrame structure (remove empty rows/columns, reset index)"""
-        # Remove completely empty rows and columns
-        df = df.dropna(how='all').dropna(axis=1, how='all')
-        
-        # Reset index
-        df = df.reset_index(drop=True)
-        
-        # Clean column names
-        df.columns = [str(col).strip() for col in df.columns]
-        
-        return df
     
     def _is_valid_candidate_row(self, row: pd.Series) -> bool:
         """Check if a row contains valid candidate data"""
@@ -296,21 +265,3 @@ class DelawareStructuralCleaner:
                 return 'Unknown'
         return None
     
-    def _ensure_consistent_columns(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Ensure all expected columns are present and in correct order"""
-        expected_columns = [
-            'candidate_name', 'office', 'party', 'county', 'district',
-            'address', 'city', 'state', 'zip_code', 'phone', 'email', 'website',
-            'facebook', 'twitter', 'filing_date', 'election_year', 'election_type', 'address_state', 'raw_data'
-        
-        ]
-        
-        # Add missing columns with None values
-        for col in expected_columns:
-            if col not in df.columns:
-                df[col] = None
-        
-        # Reorder columns to match expected order
-        df = df[expected_columns]
-        
-        return df

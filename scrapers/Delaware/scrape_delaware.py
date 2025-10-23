@@ -3,8 +3,7 @@ from bs4 import BeautifulSoup
 import pandas as pd
 import re
 import os
-from datetime import datetime
-import openpyxl
+import sys
 from urllib.parse import urljoin
 import time
 from selenium import webdriver
@@ -13,10 +12,9 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
-def extract_district(office):
-    """Extract district number from office name if it exists."""
-    match = re.search(r'District (\d+)', office)
-    return match.group(1) if match else None
+# Add parent directory to path to import scraper_utils
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from scraper_utils import ensure_raw_data_dir, save_to_formatted_excel, extract_district_from_office
 
 def clean_text(text):
     """Clean and format text data."""
@@ -222,8 +220,7 @@ def is_valid_candidate(name, office):
 
 def scrape_delaware_candidates():
     # Ensure raw output directory exists
-    raw_dir = os.path.join('data', 'raw')
-    os.makedirs(raw_dir, exist_ok=True)
+    raw_dir = ensure_raw_data_dir()
     base_url = "https://elections.delaware.gov/candidates/candidatelist/"
     try:
         print("Initializing scraper...")
@@ -294,7 +291,7 @@ def scrape_delaware_candidates():
                                 'Election': election_name,
                                 'Name': contact_info['name'],
                                 'Office': office,
-                                'District': extract_district(office),
+                                'District': extract_district_from_office(office),
                                 'County': clean_text(cols[col_indices['county']].text) if col_indices['county'] is not None and len(cols) > col_indices['county'] else "",
                                 'Date Filed': clean_text(cols[col_indices['date_filed']].text) if col_indices['date_filed'] is not None and len(cols) > col_indices['date_filed'] else "",
                                 'Website': contact_info['website'],
@@ -313,35 +310,17 @@ def scrape_delaware_candidates():
         df = pd.DataFrame(all_candidates)
         df = df.drop_duplicates(subset=['Name', 'Office', 'Year', 'Election'])
         df = df.sort_values(['Year', 'Name'], ascending=[False, True])
+
         print("Creating Excel file...")
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        excel_file = f'delaware_candidates_{timestamp}.xlsx'
-        excel_path = os.path.join(raw_dir, excel_file)
-        with pd.ExcelWriter(excel_path, engine='openpyxl') as writer:
-            df.to_excel(writer, index=False, sheet_name='Candidates')
-            workbook = writer.book
-            worksheet = writer.sheets['Candidates']
-            header_font = openpyxl.styles.Font(bold=True, size=12)
-            header_fill = openpyxl.styles.PatternFill(start_color='4472C4', end_color='4472C4', fill_type='solid')
-            header_font_color = openpyxl.styles.Font(color='FFFFFF')
-            for cell in worksheet[1]:
-                cell.font = header_font
-                cell.fill = header_fill
-                cell.font = header_font_color
-            for column in worksheet.columns:
-                max_length = 0
-                column_letter = openpyxl.utils.get_column_letter(column[0].column)
-                for cell in column:
-                    try:
-                        if len(str(cell.value)) > max_length:
-                            max_length = len(str(cell.value))
-                    except:
-                        pass
-                adjusted_width = min(max_length + 2, 50)
-                worksheet.column_dimensions[column_letter].width = adjusted_width
-            worksheet.auto_filter.ref = worksheet.dimensions
+        # Create Excel file using utility function
+        excel_path = save_to_formatted_excel(
+            df=df,
+            state_name='delaware',
+            output_dir=raw_dir
+        )
+
         print(f"\nSuccessfully scraped {len(all_candidates)} candidates from Delaware")
-        print(f"Created Excel file: {excel_file}")
+        print(f"Created Excel file: {os.path.basename(excel_path)}")
     except Exception as e:
         print(f"Error: {e}")
 

@@ -2,11 +2,12 @@ import pandas as pd
 import logging
 import os
 from pathlib import Path
+from .base_structural_cleaner import BaseStructuralCleaner
 import re
 
 logger = logging.getLogger(__name__)
 
-class UtahStructuralCleaner:
+class UtahStructuralCleaner(BaseStructuralCleaner):
     """
     Utah Structural Cleaner - Phase 1 of new pipeline
     
@@ -15,11 +16,6 @@ class UtahStructuralCleaner:
     Output: Clean DataFrame with consistent columns
     """
     
-    def __init__(self, data_dir: str = "data"):
-        self.data_dir = data_dir
-        self.raw_dir = os.path.join(data_dir, "raw")
-        self.structured_dir = os.path.join(data_dir, "structured")
-        
     def clean(self) -> pd.DataFrame:
         """
         Extract structured data from Utah raw files

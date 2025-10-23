@@ -2,10 +2,11 @@ import pandas as pd
 import logging
 import os
 from pathlib import Path
+from .base_structural_cleaner import BaseStructuralCleaner
 
 logger = logging.getLogger(__name__)
 
-class NorthDakotaStructuralCleaner:
+class NorthDakotaStructuralCleaner(BaseStructuralCleaner):
     """
     North Dakota Structural Cleaner - Phase 1 of new pipeline
     
@@ -14,11 +15,6 @@ class NorthDakotaStructuralCleaner:
     Output: Clean DataFrame with consistent columns
     """
     
-    def __init__(self, data_dir: str = "data"):
-        self.data_dir = data_dir
-        self.raw_dir = os.path.join(data_dir, "raw")
-        self.structured_dir = os.path.join(data_dir, "structured")
-        
     def clean(self) -> pd.DataFrame:
         """
         Extract structured data from North Dakota raw files
@@ -220,33 +216,3 @@ class NorthDakotaStructuralCleaner:
         
         return record
     
-    def _ensure_consistent_columns(self, df: pd.DataFrame) -> pd.DataFrame:
-        """
-        Ensure DataFrame has consistent column structure
-        
-        Args:
-            df: DataFrame to standardize
-            
-        Returns:
-            pd.DataFrame: DataFrame with consistent columns
-        """
-        # Define expected columns
-        expected_columns = [
-            'raw_data', 'state', 'file_source', 'row_index', 'election_year',
-            'candidate_name', 'first_name', 'last_name', 'middle_name', 
-            'prefix', 'suffix', 'party', 'office', 'district', 'county',
-            'address', 'city', 'state', 'zip_code', 'email', 'phone',
-            'filing_date', 'election_date'
-        ]
-        
-        # Add missing columns
-        for col in expected_columns:
-            if col not in df.columns:
-                df[col] = None
-        
-        # Reorder columns
-        df = df[expected_columns]
-        
-        logger.info(f"Ensured consistent column structure: {list(df.columns)}")
-        return df
-

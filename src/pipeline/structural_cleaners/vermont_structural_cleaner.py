@@ -2,11 +2,12 @@ import pandas as pd
 import logging
 import os
 from pathlib import Path
+from .base_structural_cleaner import BaseStructuralCleaner
 import re
 
 logger = logging.getLogger(__name__)
 
-class VermontStructuralCleaner:
+class VermontStructuralCleaner(BaseStructuralCleaner):
     """
     Vermont Structural Cleaner - Phase 1 of new pipeline
     
@@ -15,11 +16,6 @@ class VermontStructuralCleaner:
     Output: Clean DataFrame with consistent columns
     """
     
-    def __init__(self, data_dir: str = "data"):
-        self.data_dir = data_dir
-        self.raw_dir = os.path.join(data_dir, "raw")
-        self.structured_dir = os.path.join(data_dir, "structured")
-        
     def clean(self) -> pd.DataFrame:
         """
         Extract structured data from Vermont raw files
@@ -150,16 +146,6 @@ class VermontStructuralCleaner:
                 continue
         return records
     
-    def _clean_dataframe_structure(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Clean DataFrame structure (remove empty rows/columns, reset index)"""
-        # Remove completely empty rows and columns
-        df = df.dropna(how='all').dropna(axis=1, how='all')
-        
-        # Reset index
-        df = df.reset_index(drop=True)
-        
-        return df
-
     def _normalize_multisection_sheet(self, raw_df: pd.DataFrame) -> pd.DataFrame:
         """Detect repeated header rows (contain 'Contest') and stack sections into one DataFrame with proper headers.
         The VT sheet has introductory rows, then a header row with columns like
@@ -388,21 +374,3 @@ class VermontStructuralCleaner:
         # Default to Primary as most candidate filings are for primaries
         return 'Primary'
     
-    def _ensure_consistent_columns(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Ensure all expected columns are present and in correct order"""
-        expected_columns = [
-            'candidate_name', 'office', 'party', 'county', 'district',
-            'address', 'city', 'state', 'zip_code', 'phone', 'email', 'website',
-            'facebook', 'twitter', 'filing_date', 'election_year', 'election_type', 'address_state', 'raw_data'
-        
-        ]
-        
-        # Add missing columns with None values
-        for col in expected_columns:
-            if col not in df.columns:
-                df[col] = None
-        
-        # Reorder columns to match expected order
-        df = df[expected_columns]
-        
-        return df
